@@ -1,14 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36518.9 d17.14
+VisualStudioVersion = 17.14.36518.9
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{911E67C6-3D85-4FCE-B560-20A9C3E3FF48}") = "LastSurvivorDebugX64", "build\LastSurvivorDebugX64.exe", "{95B0133E-B96D-CD00-1552-D2477F380C66}"
 	ProjectSection(DebuggerProjectSystem) = preProject
 		PortSupplier = 00000000-0000-0000-0000-000000000000
 		Executable = C:\Users\elias\Projects\LastSurvivor\build\LastSurvivorDebugX64.exe
 		RemoteMachine = BALMORA
-		StartingDirectory = C:\Users\elias\Projects\LastSurvivor
+		StartingDirectory = C:\Users\elias\Projects\LastSurvivor\build
 		Environment = Default
 		LaunchingEngine = 00000000-0000-0000-0000-000000000000
 		UseLegacyDebugEngines = No

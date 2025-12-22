@@ -8,9 +8,13 @@ if not exist build (
 
 pushd build
 
-set compiler_options=/nologo /FC
-set preprocessor=-D"BUILD_TYPE_RELEASE=1"
+del *.pdb > NUL 2> NUL
 
-cl %compiler_options% ..\src\win32_survivor.cpp /FoLastSurvivorReleaseX64 %preprocessor% /link user32.lib
+set compiler_options=/nologo /FC
+set preprocessor=-D"BUILD_TYPE_RELEASE=1" -D"NOMINMAX=1" -D"WIN32_LEAN_AND_MEAN=1"
+set includes=-I..\external
+set libs=user32.lib opengl32.lib gdi32.lib
+
+cl %compiler_options% %includes% ..\src\win32_survivor.cpp /FoLastSurvivorReleaseX64 %preprocessor% /link %libs%
 
 popd

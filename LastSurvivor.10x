@@ -43,8 +43,12 @@
 				<DebugCommand></DebugCommand>
 				<DebuggerExe></DebuggerExe>
 				<DebugSln>LastSurvivorDebugX64.sln</DebugSln>
-				<Defines></Defines>
-				<ForceIncludes></ForceIncludes>
+				<Defines>
+					<Define>BUILD_TYPE_DEBUG=1</Define>
+				</Defines>
+				<ForceIncludes>
+					<ForceInclude>external</ForceInclude>
+				</ForceIncludes>
 				<PrioritiseFiles></PrioritiseFiles>
 			</ConfigAndPlatform>
 			<ConfigAndPlatform>
@@ -61,8 +65,12 @@
 				<DebugCommand>$(Executable)</DebugCommand>
 				<DebuggerExe></DebuggerExe>
 				<DebugSln></DebugSln>
-				<Defines></Defines>
-				<ForceIncludes></ForceIncludes>
+				<Defines>
+					<Define>BUILD_TYPE_RELEASE=1</Define>
+				</Defines>
+				<ForceIncludes>
+					<ForceInclude>external</ForceInclude>
+				</ForceIncludes>
 				<PrioritiseFiles></PrioritiseFiles>
 			</ConfigAndPlatform>
 			<Config>

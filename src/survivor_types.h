@@ -11,6 +11,8 @@ typedef int16_t  s16;
 typedef int32_t  s32;
 typedef int64_t  s64;
 typedef int32_t  b32;
+typedef float    f32;
+typedef double   f64;
 
 #define global   static
 #define internal static
@@ -27,6 +29,13 @@ typedef int32_t  b32;
         }                                                                                                              \
     } while (0)
 
+#define Log(fmt, ...)                                                                                                  \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        printf(fmt, __VA_ARGS__);                                                                                      \
+        printf("\n");                                                                                                  \
+    } while (0)
 #else
 #define Assert(expr)
+#define Log(...)
 #endif
