@@ -39,3 +39,35 @@ typedef double   f64;
 #define Assert(expr)
 #define Log(...)
 #endif
+
+#define ArrayCount(arr) sizeof(arr) / sizeof(arr[0])
+
+union v2
+{
+    struct
+    {
+        f32 x, y;
+    };
+
+    struct
+    {
+        f32 w, h;
+    };
+
+    f32 e[2];
+};
+
+union v2u
+{
+    struct
+    {
+        u32 x, y;
+    };
+
+    struct
+    {
+        u32 w, h;
+    };
+
+    u32 e[2];
+};
