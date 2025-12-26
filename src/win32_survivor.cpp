@@ -1,14 +1,14 @@
 #include <windows.h>
 #include <xinput.h>
+#include <gl/glcorearb.h>
 #include <gl/GL.h>
 #include <gl/wglext.h>
-#include <gl/glcorearb.h>
 
 #ifdef BUILD_TYPE_DEBUG
 #include <gl/glext.h>
 
 #include "survivor_types.h"
-#include "survivor_opengl.h"
+#include "survivor_renderer_opengl.h"
 #include "survivor_platform.h"
 #elif defined(BUILD_TYPE_RELEASE)
 #include "survivor.cpp"
@@ -36,12 +36,12 @@ struct Win32GameCode
 
 global Win32State gWin32State;
 
-PLATFORM_ERROR_MESSAGE(Win32ErrorMessage)
+internal PLATFORM_ERROR_MESSAGE(Win32ErrorMessage)
 {
     const char* caption = "LastSurvivor Warning";
 
     UINT mboxType = MB_OK;
-    if (errorType == PlatformErrorTypeFatal)
+    if (errorType == PlatformErrorType_Fatal)
     {
         caption = "LastSurvivor Fatal Error";
         mboxType |= MB_ICONSTOP;
@@ -53,13 +53,13 @@ PLATFORM_ERROR_MESSAGE(Win32ErrorMessage)
 
     MessageBoxEx(gWin32State.window, message, caption, mboxType, 0);
 
-    if (errorType == PlatformErrorTypeFatal)
+    if (errorType == PlatformErrorType_Fatal)
     {
         ExitProcess(1);
     }
 }
 
-PLATFORM_LOGF(Win32Log)
+internal PLATFORM_LOGF(Win32Log)
 {
 #if BUILD_TYPE_DEBUG
     va_list args;
@@ -68,6 +68,56 @@ PLATFORM_LOGF(Win32Log)
     va_end(args);
     printf("\n");
 #endif
+}
+
+internal PLATFORM_FILE_READ_ENTIRE(Win32FileReadEntire)
+{
+    FileReadResult result = { 0 };
+
+    FILE* file = fopen(filename, "rb");
+    if (file)
+    {
+        fseek(file, 0, SEEK_END);
+        long size = ftell(file);
+        if (size != -1L)
+        {
+            result.contentSize = (u64)size;
+            result.content     = malloc(sizeof(u8) * size);
+            fseek(file, 0, SEEK_SET);
+            fread(result.content, 1, result.contentSize, file);
+            fclose(file);
+        }
+        else
+        {
+            Log("Unable to reach the end of the file '%s'", filename);
+        }
+    }
+    else
+    {
+        Log("Unable to open file '%s'", filename);
+    }
+
+    return result;
+}
+
+internal PLATFORM_FILE_FREE(Win32FileFree)
+{
+    if (fileContent)
+    {
+        free(fileContent);
+    }
+}
+
+internal PLATFORM_WINDOW_GET_DIMENSION(Win32WindowGetDimension)
+{
+    v2u result;
+
+    RECT rect;
+    GetClientRect(gWin32State.window, &rect);
+    result.w = (u32)(rect.right - rect.left);
+    result.h = (u32)(rect.bottom - rect.top);
+
+    return result;
 }
 
 internal void APIENTRY Win32OpenGLDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
@@ -104,7 +154,21 @@ internal void APIENTRY Win32OpenGLDebugCallback(GLenum source, GLenum type, GLui
     }
 }
 
-internal inline FILETIME Win32GetLastWriteTime(const char* filename)
+// ----------------------------------------------------------------------------
+// Time
+internal inline LARGE_INTEGER Win32GetWallClock()
+{
+    LARGE_INTEGER result;
+    QueryPerformanceCounter(&result);
+    return result;
+}
+
+internal inline f64 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end)
+{
+    return (f64)(end.QuadPart - start.QuadPart) / (f64)gWin32State.performanceCounterFreq;
+}
+
+internal inline FILETIME Win32GetFileLastWriteTime(const char* filename)
 {
     FILETIME result = {};
 
@@ -118,12 +182,15 @@ internal inline FILETIME Win32GetLastWriteTime(const char* filename)
 
     return result;
 }
+// ----------------------------------------------------------------------------
 
+// ----------------------------------------------------------------------------
+// DLL hot reloading
 internal Win32GameCode Win32GameCodeLoad(const char* gameDLLFilename, const char* copyDLLFilename)
 {
     Win32GameCode result = {};
 
-    result.dllLastWriteTime = Win32GetLastWriteTime(gameDLLFilename);
+    result.dllLastWriteTime = Win32GetFileLastWriteTime(gameDLLFilename);
     CopyFileA(gameDLLFilename, copyDLLFilename, FALSE);
 
     result.dllHandle = LoadLibraryA(copyDLLFilename);
@@ -159,27 +226,6 @@ internal void Win32GameCodeRelease(Win32GameCode* gameCode)
     gameCode->UpdateAndRender  = 0;
 
     Sleep(100);
-}
-
-// ----------------------------------------------------------------------------
-// Time
-internal inline LARGE_INTEGER Win32GetWallClock()
-{
-    LARGE_INTEGER result;
-    QueryPerformanceCounter(&result);
-    return result;
-}
-
-internal inline f64 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end)
-{
-    return (f64)(end.QuadPart - start.QuadPart) / (f64)gWin32State.performanceCounterFreq;
-}
-
-internal inline void Win32UpdateGameButtonState(GameButtonState* buttonState, bool isDown)
-{
-    Assert(buttonState);
-
-    buttonState->isDown = isDown;
 }
 // ----------------------------------------------------------------------------
 
@@ -232,6 +278,13 @@ internal inline f32 Win32GetControllerStick(SHORT stickValue, SHORT deadzone)
 
     return value;
 }
+
+internal inline void Win32UpdateGameButtonState(GameButtonState* buttonState, b32 isDown)
+{
+    Assert(buttonState);
+
+    buttonState->isDown = isDown;
+}
 //  ----------------------------------------------------------------------------
 
 internal void Win32ProcessPendingMessages(Win32State* state)
@@ -251,10 +304,10 @@ internal void Win32ProcessPendingMessages(Win32State* state)
         case WM_KEYUP:
         case WM_KEYDOWN:
         {
-            u32  vkCode        = (u32)msg.wParam;
-            bool wasDown       = (msg.lParam >> 30) & 1;
-            bool isDown        = ((msg.lParam >> 31) & 1) == 0;
-            bool altKeyWasDown = (msg.lParam >> 29) & 1;
+            u32 vkCode        = (u32)msg.wParam;
+            b32 wasDown       = (msg.lParam >> 30) & 1;
+            b32 isDown        = ((msg.lParam >> 31) & 1) == 0;
+            b32 altKeyWasDown = (msg.lParam >> 29) & 1;
 
             if (vkCode == 'W' || vkCode == VK_UP)
             {
@@ -330,6 +383,11 @@ LRESULT WndProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
         gWin32State.running = false;
         break;
     }
+    case WM_KILLFOCUS:
+    {
+        ZeroMemory(&gWin32State.gameInput, sizeof(GameInput));
+        break;
+    }
     default:
     {
         result = DefWindowProc(window, msg, wParam, lParam);
@@ -360,7 +418,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
 
     if (!RegisterClass(&windowClass))
     {
-        Win32ErrorMessage(PlatformErrorTypeFatal, "Unable to register game window handle");
+        Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to register game window handle");
     }
 
     DWORD styles = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
@@ -369,14 +427,25 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
 
     if (!window)
     {
-        Win32ErrorMessage(PlatformErrorTypeFatal, "Unable to open game window");
+        Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to open game window");
     }
 
     Win32XInputInit();
 
-    GameMemory gameMemory            = {};
-    gameMemory.platform.ErrorMessage = Win32ErrorMessage;
-    gameMemory.platform.Logf         = Win32Log;
+    GameMemory gameMemory                  = {};
+    gameMemory.platform.ErrorMessage       = Win32ErrorMessage;
+    gameMemory.platform.Logf               = Win32Log;
+    gameMemory.platform.FileReadEntire     = Win32FileReadEntire;
+    gameMemory.platform.FileFree           = Win32FileFree;
+    gameMemory.platform.WindowGetDimension = Win32WindowGetDimension;
+
+    gameMemory.permanentStorageSize = Gigabytes(1);
+    gameMemory.permanentStorage =
+        VirtualAlloc(NULL, (size_t)gameMemory.permanentStorageSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!gameMemory.permanentStorage)
+    {
+        Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to allocate permanent storage size");
+    }
 
     // OpenGL context creation and function loading
     {
@@ -405,14 +474,14 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             HWND dummyWND = CreateWindowA(windowClass.lpszClassName, NULL, WS_POPUP, 0, 0, 0, 0, 0, 0, 0, 0);
             if (!dummyWND)
             {
-                Win32ErrorMessage(PlatformErrorTypeFatal, "Unable to register OpenGL window handle");
+                Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to register OpenGL window handle");
             }
             HDC  dummyDC     = GetWindowDC(dummyWND);
             int  pixelFormat = ChoosePixelFormat(dummyDC, &pfd);
             BOOL result      = SetPixelFormat(dummyDC, pixelFormat, &pfd);
             if (!result)
             {
-                Win32ErrorMessage(PlatformErrorTypeFatal, "Unable to set OpenGL pixel format");
+                Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to set OpenGL pixel format");
             }
 
             HGLRC dummyglRC = wglCreateContext(dummyDC);
@@ -445,7 +514,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         int glContextAttrs[] =
         {
             WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
-            WGL_CONTEXT_MINOR_VERSION_ARB, 2,
+            WGL_CONTEXT_MINOR_VERSION_ARB, 3,
             WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
 #if BUILD_TYPE_DEBUG
             WGL_CONTEXT_FLAGS_ARB,         WGL_CONTEXT_DEBUG_BIT_ARB,
@@ -460,14 +529,14 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         BOOL result = SetPixelFormat(gWin32State.deviceContext, pixelFormat, &pfd);
         if (!result)
         {
-            Win32ErrorMessage(PlatformErrorTypeFatal, "Unable to set OpenGL pixel format");
+            Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to set OpenGL pixel format");
         }
 
         gWin32State.openglContext = wglCreateContextAttribsARB(gWin32State.deviceContext, 0, glContextAttrs);
         result                    = wglMakeCurrent(gWin32State.deviceContext, gWin32State.openglContext);
         if (!result)
         {
-            Win32ErrorMessage(PlatformErrorTypeFatal, "Unable to set OpenGL context");
+            Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to set OpenGL context");
         }
 
         GLint major, minor, contextFlags;
@@ -496,12 +565,46 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, 0, GL_TRUE);
         }
 
-        PFNGLUSEPROGRAMPROC glUseProgram;
-        GL_PROC_ADDRESS(glUseProgram);
-
-        gameMemory.opengl.glClear      = glClear;
-        gameMemory.opengl.glClearColor = glClearColor;
-        gameMemory.opengl.glUseProgram = glUseProgram;
+        gameMemory.opengl.glEnable            = glEnable;
+        gameMemory.opengl.glClear             = glClear;
+        gameMemory.opengl.glClearColor        = glClearColor;
+        gameMemory.opengl.glDrawArrays        = glDrawArrays;
+        gameMemory.opengl.glDrawElements      = glDrawElements;
+        gameMemory.opengl.glCreateProgram     = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
+        gameMemory.opengl.glCreateShader      = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
+        gameMemory.opengl.glAttachShader      = (PFNGLATTACHSHADERPROC)wglGetProcAddress("glAttachShader");
+        gameMemory.opengl.glDeleteShader      = (PFNGLDELETESHADERPROC)wglGetProcAddress("glDeleteShader");
+        gameMemory.opengl.glLinkProgram       = (PFNGLLINKPROGRAMPROC)wglGetProcAddress("glLinkProgram");
+        gameMemory.opengl.glDeleteProgram     = (PFNGLDELETEPROGRAMPROC)wglGetProcAddress("glDeleteProgram");
+        gameMemory.opengl.glShaderSource      = (PFNGLSHADERSOURCEPROC)wglGetProcAddress("glShaderSource");
+        gameMemory.opengl.glUseProgram        = (PFNGLUSEPROGRAMPROC)wglGetProcAddress("glUseProgram");
+        gameMemory.opengl.glGetShaderiv       = (PFNGLGETSHADERIVPROC)wglGetProcAddress("glGetShaderiv");
+        gameMemory.opengl.glGetShaderInfoLog  = (PFNGLGETSHADERINFOLOGPROC)wglGetProcAddress("glGetShaderInfoLog");
+        gameMemory.opengl.glCompileShader     = (PFNGLCOMPILESHADERPROC)wglGetProcAddress("glCompileShader");
+        gameMemory.opengl.glGetProgramiv      = (PFNGLGETPROGRAMIVPROC)wglGetProcAddress("glGetProgramiv");
+        gameMemory.opengl.glGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)wglGetProcAddress("glGetProgramInfoLog");
+        gameMemory.opengl.glGenBuffers        = (PFNGLGENBUFFERSPROC)wglGetProcAddress("glGenBuffers");
+        gameMemory.opengl.glGenVertexArrays   = (PFNGLGENVERTEXARRAYSPROC)wglGetProcAddress("glGenVertexArrays");
+        gameMemory.opengl.glBindBuffer        = (PFNGLBINDBUFFERPROC)wglGetProcAddress("glBindBuffer");
+        gameMemory.opengl.glBindVertexArray   = (PFNGLBINDVERTEXARRAYPROC)wglGetProcAddress("glBindVertexArray");
+        gameMemory.opengl.glBufferData        = (PFNGLBUFFERDATAPROC)wglGetProcAddress("glBufferData");
+        gameMemory.opengl.glBufferSubData     = (PFNGLBUFFERSUBDATAPROC)wglGetProcAddress("glBufferSubData");
+        gameMemory.opengl.glDeleteBuffers     = (PFNGLDELETEBUFFERSPROC)wglGetProcAddress("glDeleteBuffers");
+        gameMemory.opengl.glEnableVertexAttribArray =
+            (PFNGLENABLEVERTEXATTRIBARRAYPROC)wglGetProcAddress("glEnableVertexAttribArray");
+        gameMemory.opengl.glVertexAttribPointer =
+            (PFNGLVERTEXATTRIBPOINTERPROC)wglGetProcAddress("glVertexAttribPointer");
+        gameMemory.opengl.glDeleteVertexArrays = (PFNGLDELETEVERTEXARRAYSPROC)wglGetProcAddress("glDeleteVertexArrays");
+        gameMemory.opengl.glActiveTexture      = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
+        gameMemory.opengl.glGenerateMipmap     = (PFNGLGENERATEMIPMAPPROC)wglGetProcAddress("glGenerateMipmap");
+        gameMemory.opengl.glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)wglGetProcAddress("glGetUniformLocation");
+        gameMemory.opengl.glUniformMatrix4fv   = (PFNGLUNIFORMMATRIX4FVPROC)wglGetProcAddress("glUniformMatrix4fv");
+        gameMemory.opengl.glUniform1i          = (PFNGLUNIFORM1IPROC)wglGetProcAddress("glUniform1i");
+        gameMemory.opengl.glUniform1ui         = (PFNGLUNIFORM1UIPROC)wglGetProcAddress("glUniform1ui");
+        gameMemory.opengl.glUniform1fv         = (PFNGLUNIFORM1FVPROC)wglGetProcAddress("glUniform1fv");
+        gameMemory.opengl.glUniform3fv         = (PFNGLUNIFORM3FVPROC)wglGetProcAddress("glUniform3fv");
+        gameMemory.opengl.glUniform4fv         = (PFNGLUNIFORM4FVPROC)wglGetProcAddress("glUniform4fv");
+        gameMemory.opengl.glUniform1iv         = (PFNGLUNIFORM1IVPROC)wglGetProcAddress("glUniform1iv");
     }
 
 #if BUILD_TYPE_DEBUG
@@ -516,7 +619,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
     while (gWin32State.running)
     {
 #if BUILD_TYPE_DEBUG
-        FILETIME lastGameDLLWriteTime = Win32GetLastWriteTime(gameDLLFilename);
+        FILETIME lastGameDLLWriteTime = Win32GetFileLastWriteTime(gameDLLFilename);
         if (CompareFileTime(&lastGameDLLWriteTime, &game.dllLastWriteTime) == 1)
         {
             SYSTEMTIME lastDLLWriteTime, previousDLLWriteTime;
@@ -543,6 +646,13 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             {
                 controller->buttons[buttonIndex].wasDown = controller->buttons[buttonIndex].isDown;
             }
+        }
+
+        for (u32 mouseButtonIndex = 0; mouseButtonIndex < ArrayCount(gWin32State.gameInput.mouse.buttons);
+             mouseButtonIndex++)
+        {
+            Mouse* mouse                             = &gWin32State.gameInput.mouse;
+            mouse->buttons[mouseButtonIndex].wasDown = mouse->buttons[mouseButtonIndex].isDown;
         }
 
         Win32ProcessPendingMessages(&gWin32State);

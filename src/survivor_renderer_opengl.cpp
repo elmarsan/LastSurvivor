@@ -1,0 +1,194 @@
+RenderCommandQueue* RendererFrameBegin(OpenGL* opengl)
+{
+    RenderCommandQueue* queue = &opengl->commandQueue;
+
+    queue->pushBufferBase = opengl->commandQueueBufferMemory;
+    queue->pushBufferPtr  = queue->pushBufferBase;
+    queue->pushBufferSize = sizeof(opengl->commandQueueBufferMemory);
+
+    return queue;
+}
+
+void RendererFrameEnd(OpenGL* opengl)
+{
+    RenderCommandQueue* queue = &opengl->commandQueue;
+
+    opengl->glEnable(GL_DEPTH_TEST);
+
+    for (u8* command = queue->pushBufferBase; command < queue->pushBufferPtr; /**/)
+    {
+        RenderCommandHeader* header = (RenderCommandHeader*)command;
+        command += sizeof(RenderCommandHeader);
+        void* payload = (u8*)header + sizeof(*header);
+
+        switch (header->type)
+        {
+        case RenderCommandType_FramebufferClear:
+        {
+            command += sizeof(FramebufferClear);
+            FramebufferClear* command = (FramebufferClear*)payload;
+
+            opengl->glClearColor(command->color.r, command->color.g, command->color.b, 1.0f);
+            opengl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            break;
+        }
+        case RenderCommandType_GeometryBufferDraw:
+        {
+            command += sizeof(GeometryBufferDraw);
+            GeometryBufferDraw* command = (GeometryBufferDraw*)payload;
+            GeometryBuffer*     buffer  = &command->buffer;
+
+            opengl->glBindVertexArray(buffer->VAO);
+
+            // Indexed
+            if (buffer->indexCount > 0)
+            {
+                opengl->glDrawElements(buffer->primitive, buffer->indexCount, GL_UNSIGNED_INT, 0);
+            }
+            else
+            {
+                opengl->glDrawArrays(buffer->primitive, 0, buffer->vertexCount);
+            }
+            break;
+        }
+        case RenderCommandType_ProgramUse:
+        {
+            command += sizeof(ProgramUse);
+            ProgramUse* command = (ProgramUse*)payload;
+
+            opengl->glUseProgram(command->program.id);
+            break;
+        }
+        case RenderCommandType_ProgramUploadUniformMatrix4x4:
+        {
+            command += sizeof(ProgramUploadUniformMatrix4x4);
+            ProgramUploadUniformMatrix4x4* command = (ProgramUploadUniformMatrix4x4*)payload;
+
+            GLint loc = opengl->glGetUniformLocation(command->program.id, command->name);
+            if (loc != -1)
+            {
+                opengl->glUniformMatrix4fv(loc, 1, GL_FALSE, &command->mat4x4.ptr[0]);
+            }
+            else
+            {
+                Log("Uniform '%s' not found in program '%d'", command->name, command->program.id);
+            }
+            break;
+        }
+        }
+    }
+}
+
+#define PushRenderCommand(queue, type) (type*)PushRenderCommand_(queue, sizeof(type), RenderCommandType_##type)
+inline void* PushRenderCommand_(RenderCommandQueue* queue, size_t size, RenderCommandType type)
+{
+    void*  result; // Command struct
+    size_t totalSize = size + sizeof(RenderCommandHeader);
+
+    u8* pushBufferEnd = queue->pushBufferBase + queue->pushBufferSize;
+    if ((queue->pushBufferPtr + totalSize) <= pushBufferEnd)
+    {
+        RenderCommandHeader* commandHeader = (RenderCommandHeader*)queue->pushBufferPtr;
+        queue->pushBufferPtr += totalSize;
+
+        commandHeader->type = type;
+        result              = (u8*)commandHeader + sizeof(*commandHeader);
+    }
+    else
+    {
+        Log("RenderCommandQueue run out of space");
+        InvalidCodePath;
+    }
+
+    return result;
+}
+
+void GeometryBufferInit(OpenGL* opengl, GeometryBuffer* buffer, GLenum primitive)
+{
+    opengl->glGenVertexArrays(1, &buffer->VAO);
+
+    buffer->VBO         = 0;
+    buffer->EBO         = 0;
+    buffer->vertexCount = 0;
+    buffer->indexCount  = 0;
+    buffer->primitive   = primitive;
+}
+
+void GeometryBufferVBOAlloc(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size, size_t vertexSize,
+                            GLenum usage)
+{
+    buffer->vertexCount = (u32)(size / vertexSize);
+
+    opengl->glGenBuffers(1, &buffer->VBO);
+    opengl->glBindVertexArray(buffer->VAO);
+    opengl->glBindBuffer(GL_ARRAY_BUFFER, buffer->VBO);
+    opengl->glBufferData(GL_ARRAY_BUFFER, (GLsizei)size, data, usage);
+}
+
+void GeometryBufferVBOSubdata(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size)
+{
+    opengl->glBindBuffer(GL_ARRAY_BUFFER, buffer->VBO);
+    opengl->glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
+}
+
+void GeometryBufferEBOAlloc(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size, size_t indexSize,
+                            GLenum usage)
+{
+    buffer->indexCount = (u32)(size / indexSize);
+
+    opengl->glGenBuffers(1, &buffer->EBO);
+    opengl->glBindVertexArray(buffer->VAO);
+    opengl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer->EBO);
+    opengl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizei)size, data, usage);
+}
+
+void GeometryBufferEBOSubdata(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size)
+{
+    opengl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer->EBO);
+    opengl->glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, size, data);
+}
+
+void GeometryBufferVertexAttrib(OpenGL* opengl, GeometryBuffer* buffer, u32 index, u32 size, GLenum type, size_t stride,
+                                size_t offset)
+{
+    opengl->glBindVertexArray(buffer->VAO);
+    opengl->glVertexAttribPointer((GLuint)index, (GLint)size, type, false, (GLsizei)stride, (void*)offset);
+    opengl->glEnableVertexAttribArray((GLuint)index);
+}
+
+void ProgramInit(OpenGL* opengl, Program* program) { program->id = opengl->glCreateProgram(); }
+
+void ProgramAttachShader(OpenGL* opengl, Program* program, const char* source, size_t length, GLenum type)
+{
+    GLuint shader     = opengl->glCreateShader(type);
+    GLint  sourceSize = (GLint)length;
+    opengl->glShaderSource(shader, 1, &source, &sourceSize);
+    opengl->glCompileShader(shader);
+
+    GLint ok;
+    opengl->glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    if (!ok)
+    {
+        char infoBuffer[512];
+        opengl->glGetShaderInfoLog(shader, sizeof(infoBuffer), NULL, infoBuffer);
+        Log("OpenGL compiling shader: '%s'", infoBuffer);
+        Assert(0);
+    }
+
+    opengl->glAttachShader(program->id, shader);
+}
+
+void ProgramBuild(OpenGL* opengl, Program* program)
+{
+    opengl->glLinkProgram(program->id);
+
+    GLint ok;
+    opengl->glGetProgramiv(program->id, GL_LINK_STATUS, &ok);
+    if (!ok)
+    {
+        char infoBuffer[512];
+        opengl->glGetProgramInfoLog(program->id, sizeof(infoBuffer), NULL, infoBuffer);
+        Log("OpenGL linking program: '%s'", infoBuffer);
+        Assert(0);
+    }
+}
