@@ -80,6 +80,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         state->player->position = { 0.0f, 0.0f, 0.0f };
         state->player->target   = { 0.0f, 0.0f, -1.0f };
+
+        state->pistolShot      = platform.AudioClipLoad("../data/pistol.wav", AudioClipType_Sfx);
+        state->backgroundMusic = platform.AudioClipLoad("../data/background.wav", AudioClipType_Music);
+
+        platform.AudioSetVolume(-35.0f, AudioClipType_Music);
+        platform.AudioSetVolume(-3.0f, AudioClipType_Sfx);
+        platform.AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
     }
     // ----------------------------------------------------------------------------
 
@@ -126,6 +133,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     if (input->mouse.right.isDown && !input->mouse.right.wasDown)
     {
         CameraSetPitch(camera, camera->pitch - 1.0f);
+    }
+
+    if (input->mouse.middle.isDown && !input->mouse.middle.wasDown)
+    {
+        platform.AudioClipPlay(state->pistolShot, 0);
     }
 
     if (input->mouse.middle.isDown)

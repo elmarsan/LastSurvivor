@@ -24,6 +24,8 @@ struct GameState
     Program*        program;
     Player*         player;
     Camera*         camera;
+    AudioClip*      pistolShot;
+    AudioClip*      backgroundMusic;
 
 #ifdef BUILD_TYPE_DEBUG
     DebugState* debug;

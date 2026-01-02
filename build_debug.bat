@@ -16,7 +16,7 @@ del *.pdb > NUL 2> NUL
 set compiler_options=/nologo /FC /Zi
 set preprocessor=-D"BUILD_TYPE_DEBUG=1" -D"NOMINMAX=1" -D"WIN32_LEAN_AND_MEAN=1"
 set includes=-I..\external
-set libs=user32.lib opengl32.lib gdi32.lib
+set libs=user32.lib opengl32.lib gdi32.lib ole32.lib
 
 echo Building Executable...
 cl %compiler_options% %includes% ..\src\win32_survivor.cpp /FoLastSurvivorDebugX64 %preprocessor% /link %libs%

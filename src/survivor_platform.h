@@ -84,6 +84,22 @@ struct FileReadResult
     u64   contentSize;
 };
 
+struct AudioClip
+{
+    void* handle;
+};
+
+enum AudioClipType
+{
+    AudioClipType_Music,
+    AudioClipType_Sfx
+};
+
+enum
+{
+    AudioClipPlayFlag_Loop = (1 << 0)
+};
+
 #define PLATFORM_ERROR_MESSAGE(name) void name(PlatformErrorType errorType, const char* message)
 typedef PLATFORM_ERROR_MESSAGE(PlatformErrorMessage);
 
@@ -99,6 +115,18 @@ typedef PLATFORM_FILE_FREE(PlatformFileFree);
 #define PLATFORM_WINDOW_GET_DIMENSION(name) v2u name()
 typedef PLATFORM_WINDOW_GET_DIMENSION(PlatformWindowGetDimension);
 
+#define PLATFORM_AUDIO_CLIP_LOAD(name) AudioClip* name(const char* filename, AudioClipType type)
+typedef PLATFORM_AUDIO_CLIP_LOAD(PlatformAudioClipLoad);
+
+#define PLATFORM_AUDIO_CLIP_FREE(name) void name(AudioClip* clip)
+typedef PLATFORM_AUDIO_CLIP_FREE(PlatformAudioClipFree);
+
+#define PLATFORM_AUDIO_CLIP_PLAY(name) void name(AudioClip* clip, u32 flags)
+typedef PLATFORM_AUDIO_CLIP_PLAY(PlatformAudioClipPlay);
+
+#define PLATFORM_AUDIO_SET_VOLUME(name) void name(f32 db, AudioClipType type)
+typedef PLATFORM_AUDIO_SET_VOLUME(PlatformAudioSetVolume);
+
 struct PlatformAPI
 {
     PlatformErrorMessage*       ErrorMessage;
@@ -106,6 +134,10 @@ struct PlatformAPI
     PlatformFileReadEntire*     FileReadEntire;
     PlatformFileFree*           FileFree;
     PlatformWindowGetDimension* WindowGetDimension;
+    PlatformAudioClipLoad*      AudioClipLoad;
+    PlatformAudioClipFree*      AudioClipFree;
+    PlatformAudioClipPlay*      AudioClipPlay;
+    PlatformAudioSetVolume*     AudioSetVolume;
 };
 
 struct GameMemory

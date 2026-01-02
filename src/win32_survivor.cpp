@@ -1,8 +1,13 @@
 #include <windows.h>
 #include <xinput.h>
+#define XAUDIO2_HELPER_FUNCTIONS
+#include <xaudio2.h>
 #include <gl/glcorearb.h>
 #include <gl/GL.h>
 #include <gl/wglext.h>
+
+#define DR_WAV_IMPLEMENTATION
+#include <dr_wav.h>
 
 #ifdef BUILD_TYPE_DEBUG
 #include <gl/glext.h>
@@ -16,15 +21,34 @@
 
 #define GL_PROC_ADDRESS(name) name = (decltype(name))wglGetProcAddress(#name)
 
+struct Wind32XAudio2
+{
+    IXAudio2*               engine;
+    IXAudio2MasteringVoice* masteringVoice;
+    IXAudio2SubmixVoice*    musicSubmixVoice;
+    IXAudio2SubmixVoice*    sfxSubmixVoice;
+};
+
+struct Win32AudioClip
+{
+    WAVEFORMATEX         wave;
+    XAUDIO2_BUFFER       buffer;
+    size_t               length;
+    void*                data;
+    IXAudio2SourceVoice* sourceVoice;
+    IXAudio2SubmixVoice* submixVoice;
+};
+
 struct Win32State
 {
-    HWND      window;
-    HDC       deviceContext;
-    HGLRC     openglContext;
-    b32       running;
-    s64       performanceCounterFreq;
-    f32       deltaTime;
-    GameInput gameInput;
+    HWND          window;
+    HDC           deviceContext;
+    HGLRC         openglContext;
+    b32           running;
+    s64           performanceCounterFreq;
+    f32           deltaTime;
+    GameInput     gameInput;
+    Wind32XAudio2 xaudio2;
 };
 
 struct Win32GameCode
@@ -287,6 +311,161 @@ internal inline void Win32UpdateGameButtonState(GameButtonState* buttonState, b3
 }
 //  ----------------------------------------------------------------------------
 
+// ----------------------------------------------------------------------------
+// XAudio2
+internal PLATFORM_AUDIO_CLIP_LOAD(Win32AudioClipLoad)
+{
+    AudioClip* audioClip = (AudioClip*)malloc(sizeof(audioClip));
+    audioClip->handle    = malloc(sizeof(Win32AudioClip));
+
+    unsigned int channels;
+    unsigned int sampleRate;
+    drwav_uint64 totalPCMFrameCount;
+    drwav_int16* pSampleData =
+        drwav_open_file_and_read_pcm_frames_s16(filename, &channels, &sampleRate, &totalPCMFrameCount, 0);
+    if (!pSampleData)
+    {
+        Log("Audio file '%s' not found", filename);
+        Assert(0);
+    }
+
+    WAVEFORMATEX wave    = { 0 };
+    wave.wFormatTag      = WAVE_FORMAT_PCM;
+    wave.nChannels       = (WORD)channels;
+    wave.nSamplesPerSec  = sampleRate;
+    wave.wBitsPerSample  = 16;
+    wave.nBlockAlign     = (wave.nChannels * wave.wBitsPerSample) / 8;
+    wave.nAvgBytesPerSec = wave.nSamplesPerSec * wave.nBlockAlign;
+    wave.cbSize          = 0;
+
+    XAUDIO2_BUFFER buffer = { 0 };
+    buffer.AudioBytes     = (UINT32)(totalPCMFrameCount * wave.nBlockAlign);
+    buffer.pAudioData     = (BYTE*)pSampleData;
+    buffer.Flags          = XAUDIO2_END_OF_STREAM;
+
+    Win32AudioClip* handle = (Win32AudioClip*)audioClip->handle;
+    handle->data           = (s16*)pSampleData;
+    handle->buffer         = buffer;
+    handle->wave           = wave;
+    handle->length         = totalPCMFrameCount;
+
+    Wind32XAudio2* xaudio2 = &gWin32State.xaudio2;
+    if (type == AudioClipType_Music)
+    {
+        handle->submixVoice = xaudio2->musicSubmixVoice;
+    }
+    else if (type == AudioClipType_Sfx)
+    {
+        handle->submixVoice = xaudio2->sfxSubmixVoice;
+    }
+    else
+    {
+        InvalidCodePath;
+    }
+
+    XAUDIO2_SEND_DESCRIPTOR sendDescriptor = { 0 };
+    XAUDIO2_VOICE_SENDS     voiceSends     = { 0 };
+    sendDescriptor.pOutputVoice            = handle->submixVoice;
+    voiceSends.SendCount                   = 1;
+    voiceSends.pSends                      = &sendDescriptor;
+
+    HRESULT result = xaudio2->engine->CreateSourceVoice(&handle->sourceVoice, &wave, 0, XAUDIO2_DEFAULT_FREQ_RATIO, 0,
+                                                        &voiceSends, 0);
+    Assert(result == S_OK);
+
+    return audioClip;
+}
+
+internal PLATFORM_AUDIO_CLIP_FREE(Win32AudioClipFree)
+{
+    Win32AudioClip* win32AudioClip = (Win32AudioClip*)clip->handle;
+    if (win32AudioClip->data)
+    {
+        drwav_free(win32AudioClip->data, 0);
+    }
+}
+
+internal PLATFORM_AUDIO_CLIP_PLAY(Win32AudioClipPlay)
+{
+    Wind32XAudio2*  xaudio2        = &gWin32State.xaudio2;
+    Win32AudioClip* win32AudioClip = (Win32AudioClip*)clip->handle;
+    XAUDIO2_BUFFER* buffer         = &win32AudioClip->buffer;
+
+    if (flags & AudioClipPlayFlag_Loop)
+    {
+        buffer->LoopBegin  = 0;
+        buffer->LoopLength = (UINT32)win32AudioClip->length;
+        buffer->LoopCount  = XAUDIO2_LOOP_INFINITE;
+    }
+    else
+    {
+        buffer->LoopLength = 0;
+        buffer->LoopCount  = 0;
+    }
+
+    win32AudioClip->sourceVoice->FlushSourceBuffers();
+    win32AudioClip->sourceVoice->SubmitSourceBuffer(buffer);
+    win32AudioClip->sourceVoice->Start(0, XAUDIO2_COMMIT_NOW);
+}
+
+internal PLATFORM_AUDIO_SET_VOLUME(Win32AudioSetVolume)
+{
+    Wind32XAudio2* xaudio2 = &gWin32State.xaudio2;
+
+    f32 volume = XAudio2DecibelsToAmplitudeRatio(db);
+
+    if (type == AudioClipType_Music)
+    {
+        xaudio2->musicSubmixVoice->SetVolume(volume);
+    }
+    else if (type == AudioClipType_Sfx)
+    {
+        xaudio2->sfxSubmixVoice->SetVolume(volume);
+    }
+    else
+    {
+
+        InvalidCodePath;
+    }
+}
+
+internal void Win32XAudio2Init(Win32State* state)
+{
+    Wind32XAudio2* xaudio2 = &state->xaudio2;
+
+    if (SUCCEEDED(CoInitializeEx(0, COINIT_MULTITHREADED)))
+    {
+        HRESULT result = XAudio2Create(&xaudio2->engine, 0, XAUDIO2_DEFAULT_PROCESSOR);
+        if (result == S_OK)
+        {
+            result =
+                xaudio2->engine->CreateMasteringVoice(&xaudio2->masteringVoice, XAUDIO2_DEFAULT_CHANNELS,
+                                                      XAUDIO2_DEFAULT_SAMPLERATE, 0, 0, 0, AudioCategory_GameMedia);
+            Assert(result == S_OK);
+
+            XAUDIO2_VOICE_DETAILS details;
+            xaudio2->masteringVoice->GetVoiceDetails(&details);
+
+            result = xaudio2->engine->CreateSubmixVoice(&xaudio2->musicSubmixVoice, details.InputChannels,
+                                                        details.InputSampleRate, 0, 0, 0, 0);
+            Assert(result == S_OK);
+            result = xaudio2->engine->CreateSubmixVoice(&xaudio2->sfxSubmixVoice, details.InputChannels,
+                                                        details.InputSampleRate, 0, 0, 0, 0);
+            Assert(result == S_OK);
+        }
+        else
+        {
+            Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to initialize create XAudio2 engine");
+        }
+    }
+    else
+    {
+        Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to initialize COM library");
+    }
+}
+
+//  ----------------------------------------------------------------------------
+
 internal void Win32ProcessPendingMessages(Win32State* state)
 {
     Assert(state);
@@ -431,6 +610,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
     }
 
     Win32XInputInit();
+    Win32XAudio2Init(&gWin32State);
 
     GameMemory gameMemory                  = {};
     gameMemory.platform.ErrorMessage       = Win32ErrorMessage;
@@ -438,6 +618,10 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
     gameMemory.platform.FileReadEntire     = Win32FileReadEntire;
     gameMemory.platform.FileFree           = Win32FileFree;
     gameMemory.platform.WindowGetDimension = Win32WindowGetDimension;
+    gameMemory.platform.AudioClipLoad      = Win32AudioClipLoad;
+    gameMemory.platform.AudioClipPlay      = Win32AudioClipPlay;
+    gameMemory.platform.AudioClipFree      = Win32AudioClipFree;
+    gameMemory.platform.AudioSetVolume     = Win32AudioSetVolume;
 
     gameMemory.permanentStorageSize = Gigabytes(1);
     gameMemory.permanentStorage =
