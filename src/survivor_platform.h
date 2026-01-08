@@ -16,6 +16,7 @@ struct GameInputController
 {
     b32 isConnected;
     b32 isWireless;
+    b32 isAnalog;
 
     v2 stickLeft;
     v2 stickRight;
@@ -48,6 +49,7 @@ struct GameInputController
 struct Mouse
 {
     v2u pos;
+    v2s offset;
 
     union
     {
@@ -77,6 +79,12 @@ struct GameInput
         GameInputController controllers[2];
     };
 };
+
+inline GameInputController* GetController(GameInput* gameInput, u32 controllerIndex)
+{
+    Assert(controllerIndex >= 0 && controllerIndex <= ArrayCount(gameInput->controllers));
+    return &gameInput->controllers[controllerIndex];
+}
 
 struct FileReadResult
 {

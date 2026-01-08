@@ -498,11 +498,11 @@ internal void Win32ProcessPendingMessages(Win32State* state)
             }
             if (vkCode == 'A' || vkCode == VK_RIGHT)
             {
-                Win32UpdateGameButtonState(&keyboard->moveRight, isDown);
+                Win32UpdateGameButtonState(&keyboard->moveLeft, isDown);
             }
             if (vkCode == 'D' || vkCode == VK_LEFT)
             {
-                Win32UpdateGameButtonState(&keyboard->moveLeft, isDown);
+                Win32UpdateGameButtonState(&keyboard->moveRight, isDown);
             }
             if (vkCode == VK_ESCAPE)
             {
@@ -519,24 +519,6 @@ internal void Win32ProcessPendingMessages(Win32State* state)
             }
             break;
         }
-        case WM_LBUTTONUP:
-        case WM_LBUTTONDOWN:
-        {
-            Win32UpdateGameButtonState(&mouse->left, msg.wParam & MK_LBUTTON);
-            break;
-        }
-        case WM_MBUTTONUP:
-        case WM_MBUTTONDOWN:
-        {
-            Win32UpdateGameButtonState(&mouse->middle, msg.wParam & MK_MBUTTON);
-            break;
-        }
-        case WM_RBUTTONUP:
-        case WM_RBUTTONDOWN:
-        {
-            Win32UpdateGameButtonState(&mouse->right, msg.wParam & MK_RBUTTON);
-            break;
-        }
         default:
         {
             TranslateMessage(&msg);
@@ -544,6 +526,27 @@ internal void Win32ProcessPendingMessages(Win32State* state)
             break;
         }
         }
+    }
+
+    // Handle mouse input
+    {
+        POINT point;
+        GetCursorPos(&point);
+        ScreenToClient(state->window, &point);
+
+        u32 newMouseX = (u32)point.x;
+        u32 newMouseY = (u32)point.y;
+        s32 offsetX   = (s32)newMouseX - (s32)mouse->pos.x;
+        s32 offsetY   = (s32)newMouseY - (s32)mouse->pos.y;
+
+        mouse->pos.x    = newMouseX;
+        mouse->pos.y    = newMouseY;
+        mouse->offset.x = offsetX;
+        mouse->offset.y = offsetY;
+
+        Win32UpdateGameButtonState(&mouse->left, GetKeyState(VK_LBUTTON) & (1 << 15));
+        Win32UpdateGameButtonState(&mouse->middle, GetKeyState(VK_MBUTTON) & (1 << 15));
+        Win32UpdateGameButtonState(&mouse->right, GetKeyState(VK_RBUTTON) & (1 << 15));
     }
 }
 
@@ -555,6 +558,8 @@ LRESULT WndProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_SIZE:
     {
+        v2u dimension = Win32WindowGetDimension();
+        glViewport(0, 0, GLsizei(dimension.w), GLsizei(dimension.h));
         break;
     }
     case WM_CLOSE:
@@ -564,7 +569,25 @@ LRESULT WndProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
     }
     case WM_KILLFOCUS:
     {
-        ZeroMemory(&gWin32State.gameInput, sizeof(GameInput));
+        GameInput* gameInput = &gWin32State.gameInput;
+        for (u32 controllerIndex = 0; controllerIndex < ArrayCount(gameInput->controllers); controllerIndex++)
+        {
+            GameInputController* controller = GetController(gameInput, controllerIndex);
+
+            for (u32 buttonIndex = 0; buttonIndex < ArrayCount(controller->buttons); buttonIndex++)
+            {
+                controller->buttons[buttonIndex].isDown  = false;
+                controller->buttons[buttonIndex].wasDown = false;
+            }
+        }
+
+        Mouse* mouse = &gWin32State.gameInput.mouse;
+        for (u32 mouseButtonIndex = 0; mouseButtonIndex < ArrayCount(mouse->buttons); mouseButtonIndex++)
+        {
+            mouse->buttons[mouseButtonIndex].isDown  = false;
+            mouse->buttons[mouseButtonIndex].wasDown = false;
+        }
+
         break;
     }
     default:
@@ -754,6 +777,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         gameMemory.opengl.glClearColor        = glClearColor;
         gameMemory.opengl.glDrawArrays        = glDrawArrays;
         gameMemory.opengl.glDrawElements      = glDrawElements;
+        gameMemory.opengl.glLineWidth         = glLineWidth;
         gameMemory.opengl.glCreateProgram     = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
         gameMemory.opengl.glCreateShader      = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
         gameMemory.opengl.glAttachShader      = (PFNGLATTACHSHADERPROC)wglGetProcAddress("glAttachShader");
@@ -796,6 +820,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
     const char*   tempGameDLLFilename = "CopySurvivor.dll";
     Win32GameCode game                = Win32GameCodeLoad(gameDLLFilename, tempGameDLLFilename);
 #endif
+
+    gWin32State.gameInput.keyboard.isAnalog = false;
+    gWin32State.gameInput.gamepad.isAnalog  = true;
 
     LARGE_INTEGER frameStartTime = Win32GetWallClock();
 

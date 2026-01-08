@@ -78,111 +78,160 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         CameraInit(state->camera, position, target, up, pitch, yaw, 45.0f);
 
-        state->player->position = { 0.0f, 0.0f, 0.0f };
-        state->player->target   = { 0.0f, 0.0f, -1.0f };
-
         state->pistolShot      = platform.AudioClipLoad("../data/pistol.wav", AudioClipType_Sfx);
         state->backgroundMusic = platform.AudioClipLoad("../data/background.wav", AudioClipType_Music);
 
         platform.AudioSetVolume(-35.0f, AudioClipType_Music);
         platform.AudioSetVolume(-3.0f, AudioClipType_Sfx);
         platform.AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
+
+        state->player->position = { 0.0f, 0.0f, 0.0f };
+        state->player->target   = { 0.0f, 0.0f, -1.0f };
+        state->player->velocity = { 0.0f, 0.0f, 0.0f };
+        state->player->yaw      = -90.0f;
     }
     // ----------------------------------------------------------------------------
 
     // ----------------------------------------------------------------------------
     // Update
-    Player* player = state->player;
-    Camera* camera = state->camera;
+    v2u     windowDim  = platform.WindowGetDimension();
+    Player* player     = state->player;
+    Camera* camera     = state->camera;
+    mat4x4  projection = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
+    mat4x4  view       = CameraView(camera);
 
-    if (input->keyboard.moveUp.isDown)
+    v3 inputDirection{ 0.0f, 0.0f, 0.0f };
+    // TODO: Tweak movement mechanics
+    f32 maxSpeed         = 7.0f;
+    f32 frictionForce    = 25.0f;
+    f32 moveAcceleration = 40.0f;
+    v3  cameraOffset{ 0.0f, 16.0f, 5.0f };
+
+    for (u32 controllerIndex = 0; controllerIndex < ArrayCount(input->controllers); controllerIndex++)
     {
-        // platform.Logf("Keyboard move up down");
-        // CameraMoveForward(camera, delta);
+        GameInputController* controller = GetController(input, controllerIndex);
 
-        f32 velocity = 1.8f * delta;
-        player->position += player->target * velocity;
-    }
-    if (input->keyboard.moveDown.isDown)
-    {
-        // CameraMoveBackward(camera, delta);
-
-        f32 velocity = 1.8f * delta;
-        player->position -= player->target * velocity;
-    }
-    if (input->keyboard.moveLeft.isDown)
-    {
-        // CameraMoveLeft(camera, delta);
-
-        f32 velocity = 1.8f * delta;
-        v3  right    = Norm(Cross(player->target, { 0.0f, 1.0f, 0.0f }));
-        player->position += right * velocity;
-    }
-    if (input->keyboard.moveRight.isDown)
-    {
-        // CameraMoveRight(camera, delta);
-
-        f32 velocity = 1.8f * delta;
-        v3  right    = Norm(Cross(player->target, { 0.0f, 1.0f, 0.0f }));
-        player->position -= right * velocity;
-    }
-    if (input->mouse.left.isDown && !input->mouse.left.wasDown)
-    {
-        CameraSetPitch(camera, camera->pitch + 1.0f);
-    }
-    if (input->mouse.right.isDown && !input->mouse.right.wasDown)
-    {
-        CameraSetPitch(camera, camera->pitch - 1.0f);
-    }
-
-    if (input->mouse.middle.isDown && !input->mouse.middle.wasDown)
-    {
-        platform.AudioClipPlay(state->pistolShot, 0);
-    }
-
-    if (input->mouse.middle.isDown)
-    {
-        // camera->position.y += 0.01f;
-        platform.Logf("Position %.2f %.2f %.2f", camera->position.x, camera->position.y, camera->position.z);
-        platform.Logf("Target %.2f %.2f %.2f", camera->target.x, camera->target.y, camera->target.z);
-        platform.Logf("Pitch %.2f", camera->pitch);
-        platform.Logf("Yaw %.2f", camera->yaw);
-
-        platform.Logf("Position %.2f %.2f %.2f", player->position.x, player->position.y, player->position.z);
-    }
-
-    if (input->gamepad.isConnected)
-    {
-        GameInputController* gamepad = &input->gamepad;
-
-        if (gamepad->start.wasDown && !gamepad->start.isDown)
+        // TODO: Controller gameplay
+        if (controller->isAnalog)
         {
-            platform.Logf("Gamepad start released");
+            if (controller->rightTrigger.isDown && !controller->rightTrigger.wasDown)
+            {
+                platform.AudioClipPlay(state->pistolShot, 0);
+            }
+            if (controller->leftTrigger.isDown)
+            {
+                platform.Logf("Gamepad aiming");
+            }
         }
-        if (gamepad->moveUp.isDown)
+        else
         {
-            platform.Logf("Dpad up down");
+            Mouse* mouse = &input->mouse;
+
+            v3 playerDirection = { 0 };
+
+            if (controller->moveUp.isDown)
+            {
+                playerDirection.z -= 1.0f;
+            }
+            if (controller->moveDown.isDown)
+            {
+                playerDirection.z += 1.0f;
+            }
+            if (controller->moveLeft.isDown)
+            {
+                playerDirection.x = -1.0f;
+            }
+            if (controller->moveRight.isDown)
+            {
+                playerDirection.x = 1.0f;
+            }
+            playerDirection = Norm(playerDirection);
+
+            v3  newPlayerVelocity = player->velocity;
+            f32 playerSpeed       = Length(player->velocity);
+
+            // Deceleration
+            if (playerSpeed > 0.0f && Length(playerDirection) == 0.0f)
+            {
+                f32 decelerationStep = frictionForce * delta;
+
+                if (playerSpeed <= decelerationStep)
+                {
+                    newPlayerVelocity = v3{ 0, 0, 0 };
+                }
+                else
+                {
+                    newPlayerVelocity -= (newPlayerVelocity / playerSpeed) * decelerationStep;
+                }
+
+                player->velocity = newPlayerVelocity;
+            }
+            // Acceleration
+            else if (Length(playerDirection) > 0.0f)
+            {
+                v3 acceleration = playerDirection * moveAcceleration;
+                player->velocity += acceleration * delta;
+                if (playerSpeed > maxSpeed)
+                {
+                    player->velocity = Norm(player->velocity) * maxSpeed;
+                }
+            }
+
+            player->position += player->velocity * delta;
+            camera->position = player->position + cameraOffset;
+
+            // Player rotation
+            {
+                f32 screenWidth  = (f32)windowDim.w;
+                f32 screenHeight = (f32)windowDim.h;
+                f32 mouseX       = (f32)mouse->pos.x;
+                f32 mouseY       = (f32)mouse->pos.y;
+
+                mat4x4 inverseProjection = Inverse(projection);
+                mat4x4 inverseView       = Inverse(view);
+
+                // Viewport -> NDC
+                v3 rayNdc = { 0 };
+                rayNdc.x  = (2.0f * mouseX) / screenWidth - 1.0f;
+                rayNdc.y  = 1.0f - (2.0f * mouseY) / screenHeight;
+
+                // NDC -> Clip
+                v4 rayClip{ rayNdc.x, rayNdc.y, -1.0f, 1.0f };
+
+                // Clip -> View
+                v4 rayView = inverseProjection * rayClip;
+                rayView.z  = -1.0f;
+                rayView.w  = 0;
+
+                // View -> World
+                v4 rayWorld4 = inverseView * rayView;
+                v3 rayWorld{ rayWorld4.x, rayWorld4.y, rayWorld4.z };
+                rayWorld = Norm(rayWorld);
+
+                // Intersection with world plane
+                float t     = -(camera->position.y / rayWorld.y);
+                v3    point = camera->position + rayWorld * t;
+                // Direction from the player to the point
+                v3 dir = point - player->position;
+
+                f32 targetYaw = -atan2f(dir.x, -dir.z);
+                f32 deltaYaw  = targetYaw - player->yaw;
+                // Wrap to [-Pi, Pi]
+                deltaYaw          = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi;
+                f32 rotationSpeed = 0.05f;
+                player->yaw += deltaYaw * rotationSpeed;
+            }
+
+            if (mouse->left.isDown && !mouse->left.wasDown)
+            {
+                platform.AudioClipPlay(state->pistolShot, 0);
+            }
         }
-        if (gamepad->rightTrigger.isDown)
-        {
-            platform.Logf("Gamepad shoting");
-        }
-        if (gamepad->leftTrigger.isDown)
-        {
-            platform.Logf("Gamepad aiming");
-        }
-        // memory->platform.Logf("Left %.2f %.2f     Right %.2f %.2f", gamepad->stickLeft.x, gamepad->stickLeft.y,
-        //                       gamepad->stickRight.x, gamepad->stickRight.y);
     }
     // ----------------------------------------------------------------------------
 
     // ----------------------------------------------------------------------------
     // Draw
-    v2u windowDim = platform.WindowGetDimension();
-
-    mat4x4 projection = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
-    mat4x4 view       = CameraView(camera);
-
     RenderCommandQueue* renderCommandQueue = RendererFrameBegin(opengl);
 
     FramebufferClear* framebufferClear = PushRenderCommand(renderCommandQueue, FramebufferClear);
@@ -195,8 +244,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     {
         mat4x4 translate = Translate(Identity(), player->position);
+        mat4x4 rotate    = Rotate(Identity(), player->yaw, { 0.0f, 1.0f, 0.0f });
         mat4x4 scale     = Scale(Identity(), 0.5f);
-        mat4x4 model     = translate * scale;
+        mat4x4 model     = translate * rotate * scale;
 
         ProgramUploadUniformMatrix4x4* uniform = PushRenderCommand(renderCommandQueue, ProgramUploadUniformMatrix4x4);
         sprintf(uniform->name, "%s", "mvp");
@@ -226,16 +276,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 DebugDrawPlane(state->debug, opengl, { x, 0.0f, z }, white);
 
                 x += 2.0f;
+                x += 0.2f;
             }
 
             z -= 2.0f;
+            z -= 0.2f;
         }
 
-        DebugDrawLine(state->debug, opengl, player->position, player->position + (player->target), blue);
-        DebugDrawLine(state->debug, opengl, player->position,
-                      { player->position.x, player->position.y + 1.5f, player->position.z }, green);
-        DebugDrawLine(state->debug, opengl, player->position,
-                      { player->position.x + 1.5f, player->position.y, player->position.z }, red);
+        v3 playerForward{ sinf(player->yaw), 0.0f, cosf(player->yaw) };
+
+        DebugDrawLine(state->debug, opengl, player->position, player->position + (playerForward * 1.5f), blue);
     }
     DebugFrameEnd(state->debug, opengl);
 #endif

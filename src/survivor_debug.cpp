@@ -122,6 +122,8 @@ internal void DebugFlush(DebugState* state, OpenGL* opengl)
 {
     Program* debugProgram = &state->program;
 
+    opengl->glLineWidth(2.0f);
+
     GeometryBufferVBOSubdata(opengl, &state->buffer, state->vertexBufferBase, sizeof(DebugVertex) * state->vertexCount);
     GeometryBufferEBOSubdata(opengl, &state->buffer, state->indexBufferBase, sizeof(u32) * state->indexCount);
 

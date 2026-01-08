@@ -20,6 +20,7 @@ struct OpenGL
     PFNGLCLEARPROC                   glClear;
     PFNGLDRAWARRAYSPROC              glDrawArrays;
     PFNGLDRAWELEMENTSPROC            glDrawElements;
+    PFNGLLINEWIDTHPROC               glLineWidth;
     PFNGLCREATEPROGRAMPROC           glCreateProgram;
     PFNGLCREATESHADERPROC            glCreateShader;
     PFNGLATTACHSHADERPROC            glAttachShader;

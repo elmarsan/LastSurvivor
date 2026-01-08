@@ -59,6 +59,17 @@ inline v3 operator*(v3 a, f32 scalar)
     return result;
 }
 
+inline v3 operator/(v3 a, f32 scalar)
+{
+    v3 result;
+
+    result.x = a.x / scalar;
+    result.y = a.y / scalar;
+    result.z = a.z / scalar;
+
+    return result;
+}
+
 inline f32 Length(const v3& a) { return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z); }
 
 inline v3 Norm(v3 a)
@@ -89,6 +100,13 @@ inline v3 Cross(v3 a, v3 b)
 
 inline f32 Dot(v3 a, v3 b) { return (a.x * b.x) + (a.y * b.y) + (a.z * b.z); }
 
+inline f32 Cofactor(mat3x3 mat3)
+{
+    return mat3.e[0][0] * (mat3.e[1][1] * mat3.e[2][2] - mat3.e[1][2] * mat3.e[2][1]) -
+           mat3.e[0][1] * (mat3.e[1][0] * mat3.e[2][2] - mat3.e[1][2] * mat3.e[2][0]) +
+           mat3.e[0][2] * (mat3.e[1][0] * mat3.e[2][1] - mat3.e[1][1] * mat3.e[2][0]);
+}
+
 inline mat4x4 operator*(mat4x4 a, mat4x4 b)
 {
     mat4x4 result = { 0 };
@@ -118,6 +136,78 @@ inline mat4x4 operator*(mat4x4 a, mat4x4 b)
     result.e[3][3] = a.e[0][3] * b.e[3][0] + a.e[1][3] * b.e[3][1] + a.e[2][3] * b.e[3][2] + a.e[3][3] * b.e[3][3];
 
     return result;
+}
+
+inline mat4x4 Inverse(mat4x4 mat4)
+{
+    f32 cofactm00 = Cofactor(mat3x3{ mat4.e[1][1], mat4.e[1][2], mat4.e[1][3], mat4.e[2][1], mat4.e[2][2], mat4.e[2][3],
+                                     mat4.e[3][1], mat4.e[3][2], mat4.e[3][3] });
+    f32 cofactm10 = Cofactor(mat3x3{ mat4.e[1][0], mat4.e[1][2], mat4.e[1][3], mat4.e[2][0], mat4.e[2][2], mat4.e[2][3],
+                                     mat4.e[3][0], mat4.e[3][2], mat4.e[3][3] });
+    f32 cofactm20 = Cofactor(mat3x3{ mat4.e[1][0], mat4.e[1][1], mat4.e[1][3], mat4.e[2][0], mat4.e[2][1], mat4.e[2][3],
+                                     mat4.e[3][0], mat4.e[3][1], mat4.e[3][3] });
+
+    f32 cofactm30 = Cofactor(mat3x3{ mat4.e[1][0], mat4.e[1][1], mat4.e[1][2], mat4.e[2][0], mat4.e[2][1], mat4.e[2][2],
+                                     mat4.e[3][0], mat4.e[3][1], mat4.e[3][2] });
+
+    // Determinant
+    f32 determinant =
+        mat4.e[0][0] * cofactm00 - mat4.e[0][1] * cofactm10 + mat4.e[0][2] * cofactm20 - mat4.e[0][3] * cofactm30;
+    if (fabsf(determinant) <= 0.00001f)
+        return mat4x4{ 1.0f };
+
+    // Remaining cofactors for adj(M)
+    f32 cofactm01 = Cofactor(mat3x3{ mat4.e[0][1], mat4.e[0][2], mat4.e[0][3], mat4.e[2][1], mat4.e[2][2], mat4.e[2][3],
+                                     mat4.e[3][1], mat4.e[3][2], mat4.e[3][3] });
+    f32 cofactm11 = Cofactor(mat3x3{ mat4.e[0][0], mat4.e[0][2], mat4.e[0][3], mat4.e[2][0], mat4.e[2][2], mat4.e[2][3],
+                                     mat4.e[3][0], mat4.e[3][2], mat4.e[3][3] });
+    f32 cofactm21 = Cofactor(mat3x3{ mat4.e[0][0], mat4.e[0][1], mat4.e[0][3], mat4.e[2][0], mat4.e[2][1], mat4.e[2][3],
+                                     mat4.e[3][0], mat4.e[3][1], mat4.e[3][3] });
+    f32 cofactm31 = Cofactor(mat3x3{ mat4.e[0][0], mat4.e[0][1], mat4.e[0][2], mat4.e[2][0], mat4.e[2][1], mat4.e[2][2],
+                                     mat4.e[3][0], mat4.e[3][1], mat4.e[3][2] });
+
+    f32 cofactm02 = Cofactor(mat3x3{ mat4.e[0][1], mat4.e[0][2], mat4.e[0][3], mat4.e[1][1], mat4.e[1][2], mat4.e[1][3],
+                                     mat4.e[3][1], mat4.e[3][2], mat4.e[3][3] });
+    f32 cofactm12 = Cofactor(mat3x3{ mat4.e[0][0], mat4.e[0][2], mat4.e[0][3], mat4.e[1][0], mat4.e[1][2], mat4.e[1][3],
+                                     mat4.e[3][0], mat4.e[3][2], mat4.e[3][3] });
+    f32 cofactm22 = Cofactor(mat3x3{ mat4.e[0][0], mat4.e[0][1], mat4.e[0][3], mat4.e[1][0], mat4.e[1][1], mat4.e[1][3],
+                                     mat4.e[3][0], mat4.e[3][1], mat4.e[3][3] });
+    f32 cofactm32 = Cofactor(mat3x3{ mat4.e[0][0], mat4.e[0][1], mat4.e[0][2], mat4.e[1][0], mat4.e[1][1], mat4.e[1][2],
+                                     mat4.e[3][0], mat4.e[3][1], mat4.e[3][2] });
+
+    f32 cofactm03 = Cofactor(mat3x3{ mat4.e[0][1], mat4.e[0][2], mat4.e[0][3], mat4.e[1][1], mat4.e[1][2], mat4.e[1][3],
+                                     mat4.e[2][1], mat4.e[2][2], mat4.e[2][3] });
+    f32 cofactm13 = Cofactor(mat3x3{ mat4.e[0][0], mat4.e[0][2], mat4.e[0][3], mat4.e[1][0], mat4.e[1][2], mat4.e[1][3],
+                                     mat4.e[2][0], mat4.e[2][2], mat4.e[2][3] });
+    f32 cofactm23 = Cofactor(mat3x3{ mat4.e[0][0], mat4.e[0][1], mat4.e[0][3], mat4.e[1][0], mat4.e[1][1], mat4.e[1][3],
+                                     mat4.e[2][0], mat4.e[2][1], mat4.e[2][3] });
+    f32 cofactm33 = Cofactor(mat3x3{ mat4.e[0][0], mat4.e[0][1], mat4.e[0][2], mat4.e[1][0], mat4.e[1][1], mat4.e[1][2],
+                                     mat4.e[2][0], mat4.e[2][1], mat4.e[2][2] });
+
+    mat4x4 inverse{};
+    f32    invDet = 1.0f / determinant;
+
+    inverse.e[0][0] = invDet * cofactm00;
+    inverse.e[0][1] = -invDet * cofactm01;
+    inverse.e[0][2] = invDet * cofactm02;
+    inverse.e[0][3] = -invDet * cofactm03;
+
+    inverse.e[1][0] = -invDet * cofactm10;
+    inverse.e[1][1] = invDet * cofactm11;
+    inverse.e[1][2] = -invDet * cofactm12;
+    inverse.e[1][3] = invDet * cofactm13;
+
+    inverse.e[2][0] = invDet * cofactm20;
+    inverse.e[2][1] = -invDet * cofactm21;
+    inverse.e[2][2] = invDet * cofactm22;
+    inverse.e[2][3] = -invDet * cofactm23;
+
+    inverse.e[3][0] = -invDet * cofactm30;
+    inverse.e[3][1] = invDet * cofactm31;
+    inverse.e[3][2] = -invDet * cofactm32;
+    inverse.e[3][3] = invDet * cofactm33;
+
+    return inverse;
 }
 
 inline v4 operator*(mat4x4 mat, v4 vec)
@@ -275,4 +365,49 @@ inline mat4x4 LookAt(v3 eye, v3 center, v3 worldUp)
     result.e[3][3] = 1.0f;
 
     return result;
+}
+
+inline f32 Sign(f32 a)
+{
+    f32 result;
+
+    if (a > 0.0f)
+    {
+        result = 1.0f;
+    }
+    if (a < 0.0f)
+    {
+        result = -1.0f;
+    }
+
+    return result;
+}
+
+inline f32 Absolute(f32 a)
+{
+    f32 result;
+
+    if (a > 0.0f)
+    {
+        result = a;
+    }
+    else
+    {
+        result = -a;
+    }
+
+    return result;
+}
+
+inline f32 Clamp(f32 value, f32 min, f32 max)
+{
+    if (value < min)
+    {
+        return min;
+    }
+    else if (value > max)
+    {
+        return max;
+    }
+    return value;
 }

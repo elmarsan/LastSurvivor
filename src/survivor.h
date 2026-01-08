@@ -10,9 +10,10 @@
 
 struct Player
 {
-    v3 position;
-    v3 target;
-    v3 speed;
+    v3  position;
+    v3  target;
+    v3  velocity;
+    f32 yaw; // Radians
 };
 
 struct GameState

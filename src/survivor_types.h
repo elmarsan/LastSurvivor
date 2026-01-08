@@ -83,6 +83,46 @@ union v2u
     };
 };
 
+union v2s
+{
+    s32 e[2];
+    struct
+    {
+        s32 x, y;
+    };
+    struct
+    {
+        s32 w, h;
+    };
+};
+
+union mat3x3
+{
+    struct
+    {
+        f32 e[3][3];
+    };
+    struct
+    {
+        f32 ptr[12];
+    };
+
+    mat3x3(f32 e00, f32 e01, f32 e02, f32 e10, f32 e11, f32 e12, f32 e20, f32 e21, f32 e22)
+    {
+        e[0][0] = e00;
+        e[0][1] = e01;
+        e[0][2] = e02;
+
+        e[1][0] = e10;
+        e[1][1] = e11;
+        e[1][2] = e12;
+
+        e[2][0] = e20;
+        e[2][1] = e21;
+        e[2][2] = e22;
+    }
+};
+
 union mat4x4
 {
     struct
