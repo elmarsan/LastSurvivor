@@ -9,8 +9,8 @@ void DebugInit(DebugState* state, OpenGL* opengl, PlatformAPI* platform)
     FileReadResult debugFs = platform->FileReadEntire("../src/shaders/debug.frag");
 
     ProgramInit(opengl, &state->program);
-    ProgramAttachShader(opengl, &state->program, (const char*)debugVs.content, debugVs.contentSize, GL_VERTEX_SHADER);
-    ProgramAttachShader(opengl, &state->program, (const char*)debugFs.content, debugFs.contentSize, GL_FRAGMENT_SHADER);
+    ProgramAttachShader(opengl, &state->program, (char*)debugVs.content, debugVs.contentSize, GL_VERTEX_SHADER);
+    ProgramAttachShader(opengl, &state->program, (char*)debugFs.content, debugFs.contentSize, GL_FRAGMENT_SHADER);
     ProgramBuild(opengl, &state->program);
 
     platform->FileFree(debugVs.content);

@@ -1,3 +1,7 @@
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#include <stb_image.h>
+
 RenderCommandQueue* RendererFrameBegin(OpenGL* opengl)
 {
     RenderCommandQueue* queue = &opengl->commandQueue;
@@ -59,20 +63,34 @@ void RendererFrameEnd(OpenGL* opengl)
             opengl->glUseProgram(command->program.id);
             break;
         }
-        case RenderCommandType_ProgramUploadUniformMatrix4x4:
+        case RenderCommandType_ProgramUploadUniform:
         {
-            command += sizeof(ProgramUploadUniformMatrix4x4);
-            ProgramUploadUniformMatrix4x4* command = (ProgramUploadUniformMatrix4x4*)payload;
+            command += sizeof(ProgramUploadUniform);
+            ProgramUploadUniform* command = (ProgramUploadUniform*)payload;
 
-            GLint loc = opengl->glGetUniformLocation(command->program.id, command->name);
+            GLint loc = opengl->glGetUniformLocation(command->programId, command->name);
             if (loc != -1)
             {
-                opengl->glUniformMatrix4fv(loc, 1, GL_FALSE, &command->mat4x4.ptr[0]);
+                switch (command->type)
+                {
+                case UniformType_Mat4x4:
+                {
+                    opengl->glUniformMatrix4fv(loc, 1, GL_FALSE, &command->mat4x4.ptr[0]);
+                    break;
+                }
+                case UniformType_Int:
+                {
+                    opengl->glUniform1i(loc, command->integer);
+                    break;
+                }
+                    InvalidDefaultCase;
+                }
             }
             else
             {
-                Log("Uniform '%s' not found in program '%d'", command->name, command->program.id);
+                Log("Uniform '%s' not found in program '%d'", command->name, command->programId);
             }
+
             break;
         }
         }
@@ -101,6 +119,36 @@ inline void* PushRenderCommand_(RenderCommandQueue* queue, size_t size, RenderCo
     }
 
     return result;
+}
+
+inline void PushRenderProgramUse(RenderCommandQueue* queue, GLuint programId)
+{
+    ProgramUse* command = PushRenderCommand(queue, ProgramUse);
+    command->program.id = programId;
+}
+
+inline void PushRenderUploadUniformMat4x4(RenderCommandQueue* queue, GLuint programId, const char* name, mat4x4 mat4)
+{
+    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    sprintf(command->name, "%s", name);
+    command->programId = programId;
+    command->mat4x4    = mat4;
+    command->type      = UniformType_Mat4x4;
+}
+
+inline void PushRenderUploadUniformInt(RenderCommandQueue* queue, GLuint programId, const char* name, int integer)
+{
+    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    sprintf(command->name, "%s", name);
+    command->programId = programId;
+    command->integer   = integer;
+    command->type      = UniformType_Int;
+}
+
+inline void PushRenderDrawBuffer(RenderCommandQueue* queue, GeometryBuffer* buffer)
+{
+    GeometryBufferDraw* command = PushRenderCommand(queue, GeometryBufferDraw);
+    command->buffer             = *buffer;
 }
 
 void GeometryBufferInit(OpenGL* opengl, GeometryBuffer* buffer, GLenum primitive)
@@ -148,17 +196,17 @@ void GeometryBufferEBOSubdata(OpenGL* opengl, GeometryBuffer* buffer, void* data
     opengl->glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, size, data);
 }
 
-void GeometryBufferVertexAttrib(OpenGL* opengl, GeometryBuffer* buffer, u32 index, u32 size, GLenum type, size_t stride,
-                                size_t offset)
+void GeometryBufferVertexAttrib(OpenGL* opengl, GeometryBuffer* buffer, u32 index, u32 componentCount, GLenum type,
+                                size_t stride, size_t offset)
 {
     opengl->glBindVertexArray(buffer->VAO);
-    opengl->glVertexAttribPointer((GLuint)index, (GLint)size, type, false, (GLsizei)stride, (void*)offset);
+    opengl->glVertexAttribPointer((GLuint)index, (GLint)componentCount, type, false, (GLsizei)stride, (void*)offset);
     opengl->glEnableVertexAttribArray((GLuint)index);
 }
 
 void ProgramInit(OpenGL* opengl, Program* program) { program->id = opengl->glCreateProgram(); }
 
-void ProgramAttachShader(OpenGL* opengl, Program* program, const char* source, size_t length, GLenum type)
+void ProgramAttachShader(OpenGL* opengl, Program* program, char* source, size_t length, GLenum type)
 {
     GLuint shader     = opengl->glCreateShader(type);
     GLint  sourceSize = (GLint)length;
@@ -189,6 +237,56 @@ void ProgramBuild(OpenGL* opengl, Program* program)
         char infoBuffer[512];
         opengl->glGetProgramInfoLog(program->id, sizeof(infoBuffer), NULL, infoBuffer);
         Log("OpenGL linking program: '%s'", infoBuffer);
+        Assert(0);
+    }
+}
+
+void TextureAlloc(OpenGL* opengl, Texture* texture, void* imageBuffer, size_t size)
+{
+    int width;
+    int height;
+    int numChannels;
+
+    void* pixels = stbi_load_from_memory((u8*)imageBuffer, (int)size, &width, &height, &numChannels, 0);
+    if (pixels)
+    {
+        texture->width  = (u32)width;
+        texture->height = (u32)height;
+
+        GLint  internalFormat;
+        GLenum format;
+        // TODO: Handle different component types
+        GLenum type = GL_UNSIGNED_BYTE;
+
+        switch (numChannels)
+        {
+        case 1:
+        {
+            internalFormat = format = GL_RED;
+            break;
+        }
+        case 3:
+        {
+            internalFormat = format = GL_RGB;
+            break;
+        }
+        case 4:
+        {
+            internalFormat = format = GL_RGBA;
+            break;
+        }
+            InvalidDefaultCase;
+        }
+
+        opengl->glGenTextures(1, &texture->id);
+        opengl->glBindTexture(GL_TEXTURE_2D, texture->id);
+        opengl->glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, (GLsizei)width, (GLsizei)height, 0, format, type,
+                             pixels);
+        opengl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        opengl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+    else
+    {
         Assert(0);
     }
 }

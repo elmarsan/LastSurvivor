@@ -12,8 +12,7 @@ struct RenderCommandQueue
 struct OpenGL
 {
     RenderCommandQueue commandQueue;
-
-    u8 commandQueueBufferMemory[65536];
+    u8                 commandQueueBufferMemory[65536];
 
     PFNGLENABLEPROC                  glEnable;
     PFNGLCLEARCOLORPROC              glClearColor;
@@ -21,6 +20,10 @@ struct OpenGL
     PFNGLDRAWARRAYSPROC              glDrawArrays;
     PFNGLDRAWELEMENTSPROC            glDrawElements;
     PFNGLLINEWIDTHPROC               glLineWidth;
+    PFNGLGENTEXTURESPROC             glGenTextures;
+    PFNGLBINDTEXTUREPROC             glBindTexture;
+    PFNGLTEXIMAGE2DPROC              glTexImage2D;
+    PFNGLTEXPARAMETERIPROC           glTexParameteri;
     PFNGLCREATEPROGRAMPROC           glCreateProgram;
     PFNGLCREATESHADERPROC            glCreateShader;
     PFNGLATTACHSHADERPROC            glAttachShader;
@@ -71,6 +74,13 @@ struct Program
     GLuint id;
 };
 
+struct Texture
+{
+    GLuint id;
+    u32    width;
+    u32    height;
+};
+
 // ----------------------------------------------------------------------------
 // Render commands
 enum RenderCommandType
@@ -78,7 +88,7 @@ enum RenderCommandType
     RenderCommandType_FramebufferClear,
     RenderCommandType_GeometryBufferDraw,
     RenderCommandType_ProgramUse,
-    RenderCommandType_ProgramUploadUniformMatrix4x4
+    RenderCommandType_ProgramUploadUniform
 };
 
 struct RenderCommandHeader
@@ -101,11 +111,22 @@ struct ProgramUse
     Program program;
 };
 
-struct ProgramUploadUniformMatrix4x4
+enum UniformType
 {
-    Program program;
-    char    name[32];
-    mat4x4  mat4x4;
+    UniformType_Mat4x4,
+    UniformType_Int
+};
+
+struct ProgramUploadUniform
+{
+    GLuint      programId;
+    char        name[32];
+    UniformType type;
+    union
+    {
+        mat4x4 mat4x4;
+        int    integer;
+    };
 };
 // ----------------------------------------------------------------------------
 
@@ -119,9 +140,11 @@ void GeometryBufferVBOSubdata(OpenGL* opengl, GeometryBuffer* buffer, void* data
 void GeometryBufferEBOAlloc(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size, size_t indexSize,
                             GLenum usage);
 void GeometryBufferEBOSubdata(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size);
-void GeometryBufferVertexAttrib(OpenGL* opengl, GeometryBuffer* buffer, u32 index, u32 size, GLenum type, size_t stride,
-                                size_t offset);
+void GeometryBufferVertexAttrib(OpenGL* opengl, GeometryBuffer* buffer, u32 index, u32 componentCount, GLenum type,
+                                size_t stride, size_t offset);
 
-void ProgramInit(OpenGL* opengl, Program& program);
-void ProgramAttachShader(OpenGL* opengl, Program* program, const char* source, size_t length, GLenum type);
+void ProgramInit(OpenGL* opengl, Program* program);
+void ProgramAttachShader(OpenGL* opengl, Program* program, char* source, size_t length, GLenum type);
 void ProgramBuild(OpenGL* opengl, Program* program);
+
+void TextureAlloc(OpenGL* opengl, Texture* texture, void* imageBuffer, size_t size);

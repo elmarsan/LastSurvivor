@@ -4,13 +4,6 @@
 #include "survivor_debug_geometry.cpp"
 #include "survivor_debug.cpp"
 
-struct Vertex
-{
-    v3 position;
-    v3 normal;
-    v2 uv;
-};
-
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     Assert(sizeof(GameState) <= memory->permanentStorageSize);
@@ -19,11 +12,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     PlatformAPI platform = memory->platform;
     OpenGL*     opengl   = &memory->opengl;
     Arena*      arena    = &state->arena;
-
-    v3 green{ 0.0f, 1.0f, 0.0f };
-    v3 red{ 1.0f, 0.0f, 0.0f };
-    v3 blue{ 0.2f, 0.4f, 1.0f };
-    v3 white{ 1.0f, 1.0f, 1.0f };
 
     // ----------------------------------------------------------------------------
     // Init
@@ -53,10 +41,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         FileReadResult fragmentSourceFile = platform.FileReadEntire("../src/shaders/basic.frag");
 
         ProgramInit(opengl, state->program);
-        ProgramAttachShader(opengl, state->program, (const char*)vertexSourceFile.content, vertexSourceFile.contentSize,
+        ProgramAttachShader(opengl, state->program, (char*)vertexSourceFile.content, vertexSourceFile.contentSize,
                             GL_VERTEX_SHADER);
-        ProgramAttachShader(opengl, state->program, (const char*)fragmentSourceFile.content,
-                            fragmentSourceFile.contentSize, GL_FRAGMENT_SHADER);
+        ProgramAttachShader(opengl, state->program, (char*)fragmentSourceFile.content, fragmentSourceFile.contentSize,
+                            GL_FRAGMENT_SHADER);
         ProgramBuild(opengl, state->program);
 
         platform.FileFree(vertexSourceFile.content);
@@ -69,6 +57,48 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                                    offsetof(Vertex, position));
         GeometryBufferVertexAttrib(opengl, state->cubeBuffer, 1, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, normal));
         GeometryBufferVertexAttrib(opengl, state->cubeBuffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
+
+        // 2D
+        {
+            state->program2D    = PushStruct(arena, Program);
+            state->texture      = PushStruct(arena, Texture);
+            state->quad2DBuffer = PushStruct(arena, GeometryBuffer);
+
+            FileReadResult vsFile = platform.FileReadEntire("../src/shaders/2d.vert");
+            FileReadResult fsFile = platform.FileReadEntire("../src/shaders/2d.frag");
+
+            ProgramInit(opengl, state->program2D);
+            ProgramAttachShader(opengl, state->program2D, (char*)vsFile.content, vsFile.contentSize, GL_VERTEX_SHADER);
+            ProgramAttachShader(opengl, state->program2D, (char*)fsFile.content, fsFile.contentSize,
+                                GL_FRAGMENT_SHADER);
+            ProgramBuild(opengl, state->program2D);
+
+            platform.FileFree(vsFile.content);
+            platform.FileFree(fsFile.content);
+
+            size_t vertexSize = sizeof(Vertex2D);
+
+            GeometryBufferInit(opengl, state->quad2DBuffer, GL_TRIANGLES);
+            GeometryBufferVBOAlloc(opengl, state->quad2DBuffer, quad2DVertexs, sizeof(quad2DVertexs), vertexSize,
+                                   GL_STATIC_DRAW);
+            GeometryBufferEBOAlloc(opengl, state->quad2DBuffer, quad2DIndices, sizeof(quad2DIndices), sizeof(u32),
+                                   GL_STATIC_DRAW);
+            GeometryBufferVertexAttrib(opengl, state->quad2DBuffer, 0, 2, GL_FLOAT, vertexSize,
+                                       offsetof(Vertex2D, position));
+            GeometryBufferVertexAttrib(opengl, state->quad2DBuffer, 1, 2, GL_FLOAT, vertexSize, offsetof(Vertex2D, uv));
+
+            FileReadResult imageReadResult = platform.FileReadEntire("../data/atlas.png");
+            if (imageReadResult.contentSize > 0)
+            {
+                TextureAlloc(opengl, state->texture, imageReadResult.content, imageReadResult.contentSize);
+            }
+            else
+            {
+                Assert(0);
+            }
+
+            platform.FileFree(imageReadResult.content);
+        }
 
         v3  position = { 0.0f, 16.0f, 5.0f };
         v3  target   = { 0.0f, -0.9f, -0.4f };
@@ -126,6 +156,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         else
         {
             Mouse* mouse = &input->mouse;
+
+            state->cursor = mouse->pos;
 
             v3 playerDirection = { 0 };
 
@@ -232,34 +264,47 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // ----------------------------------------------------------------------------
     // Draw
-    RenderCommandQueue* renderCommandQueue = RendererFrameBegin(opengl);
+    RenderCommandQueue* commandQueue = RendererFrameBegin(opengl);
 
-    FramebufferClear* framebufferClear = PushRenderCommand(renderCommandQueue, FramebufferClear);
+    FramebufferClear* framebufferClear = PushRenderCommand(commandQueue, FramebufferClear);
     framebufferClear->color.r          = 0.0f;
     framebufferClear->color.g          = 0.0f;
     framebufferClear->color.b          = 0.0f;
 
-    ProgramUse* programUse = PushRenderCommand(renderCommandQueue, ProgramUse);
-    programUse->program.id = state->program->id;
+    // 2D
+    {
+        mat4x4 view = Orthographic(0, (f32)windowDim.w, (f32)windowDim.h, 0);
 
+        mat4x4 translate = Translate(Identity(), { (f32)state->cursor.x, (f32)state->cursor.y, 0.0f });
+        mat4x4 scale     = Scale(Identity(), { 25.0f, 25.0f, 0.0f });
+        mat4x4 model     = translate * scale;
+
+        PushRenderProgramUse(commandQueue, state->program2D->id);
+        PushRenderUploadUniformMat4x4(commandQueue, state->program2D->id, "mvp", view * model);
+        PushRenderUploadUniformInt(commandQueue, state->program2D->id, "texture1", 0);
+        PushRenderDrawBuffer(commandQueue, state->quad2DBuffer);
+    }
+
+    // 3D
     {
         mat4x4 translate = Translate(Identity(), player->position);
         mat4x4 rotate    = Rotate(Identity(), player->yaw, { 0.0f, 1.0f, 0.0f });
         mat4x4 scale     = Scale(Identity(), 0.5f);
         mat4x4 model     = translate * rotate * scale;
 
-        ProgramUploadUniformMatrix4x4* uniform = PushRenderCommand(renderCommandQueue, ProgramUploadUniformMatrix4x4);
-        sprintf(uniform->name, "%s", "mvp");
-        uniform->program = *state->program;
-        uniform->mat4x4  = projection * view * model;
-
-        GeometryBufferDraw* draw = PushRenderCommand(renderCommandQueue, GeometryBufferDraw);
-        draw->buffer             = *state->cubeBuffer;
+        PushRenderProgramUse(commandQueue, state->program->id);
+        PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", projection * view * model);
+        PushRenderDrawBuffer(commandQueue, state->cubeBuffer);
     }
 
     RendererFrameEnd(opengl);
 
 #ifdef BUILD_TYPE_DEBUG
+    v3 green{ 0.0f, 1.0f, 0.0f };
+    v3 red{ 1.0f, 0.0f, 0.0f };
+    v3 blue{ 0.2f, 0.4f, 1.0f };
+    v3 white{ 1.0f, 1.0f, 1.0f };
+
     DebugFrameBegin(state->debug, opengl, projection * view);
     {
         u32 numCols = 20;

@@ -778,6 +778,11 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         gameMemory.opengl.glDrawArrays        = glDrawArrays;
         gameMemory.opengl.glDrawElements      = glDrawElements;
         gameMemory.opengl.glLineWidth         = glLineWidth;
+        gameMemory.opengl.glGenTextures       = glGenTextures;
+        gameMemory.opengl.glBindTexture       = glBindTexture;
+        gameMemory.opengl.glTexImage2D        = glTexImage2D;
+        gameMemory.opengl.glTexParameteri     = glTexParameteri;
+        gameMemory.opengl.glActiveTexture     = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
         gameMemory.opengl.glCreateProgram     = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
         gameMemory.opengl.glCreateShader      = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
         gameMemory.opengl.glAttachShader      = (PFNGLATTACHSHADERPROC)wglGetProcAddress("glAttachShader");
