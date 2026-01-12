@@ -83,6 +83,11 @@ void RendererFrameEnd(OpenGL* opengl)
                     opengl->glUniform1i(loc, command->integer);
                     break;
                 }
+                case UniformType_IntArray:
+                {
+                    opengl->glUniform1iv(loc, command->count, command->integerArray);
+                    break;
+                }
                     InvalidDefaultCase;
                 }
             }
@@ -145,6 +150,17 @@ inline void PushRenderUploadUniformInt(RenderCommandQueue* queue, GLuint program
     command->type      = UniformType_Int;
 }
 
+inline void PushRenderUploadUniformIntArray(RenderCommandQueue* queue, GLuint programId, const char* name, int* array,
+                                            int count)
+{
+    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    sprintf(command->name, "%s", name);
+    command->programId    = programId;
+    command->integerArray = array;
+    command->count        = count;
+    command->type         = UniformType_IntArray;
+}
+
 inline void PushRenderDrawBuffer(RenderCommandQueue* queue, GeometryBuffer* buffer)
 {
     GeometryBufferDraw* command = PushRenderCommand(queue, GeometryBufferDraw);
@@ -175,6 +191,7 @@ void GeometryBufferVBOAlloc(OpenGL* opengl, GeometryBuffer* buffer, void* data, 
 
 void GeometryBufferVBOSubdata(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size)
 {
+    opengl->glBindVertexArray(buffer->VAO);
     opengl->glBindBuffer(GL_ARRAY_BUFFER, buffer->VBO);
     opengl->glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
 }
@@ -192,6 +209,7 @@ void GeometryBufferEBOAlloc(OpenGL* opengl, GeometryBuffer* buffer, void* data, 
 
 void GeometryBufferEBOSubdata(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size)
 {
+    opengl->glBindVertexArray(buffer->VAO);
     opengl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer->EBO);
     opengl->glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, size, data);
 }
@@ -200,7 +218,16 @@ void GeometryBufferVertexAttrib(OpenGL* opengl, GeometryBuffer* buffer, u32 inde
                                 size_t stride, size_t offset)
 {
     opengl->glBindVertexArray(buffer->VAO);
-    opengl->glVertexAttribPointer((GLuint)index, (GLint)componentCount, type, false, (GLsizei)stride, (void*)offset);
+    if (type == GL_BYTE || type == GL_UNSIGNED_BYTE || type == GL_SHORT || type == GL_UNSIGNED_SHORT ||
+        type == GL_INT || type == GL_UNSIGNED_INT)
+    {
+        opengl->glVertexAttribIPointer((GLuint)index, (GLint)componentCount, type, (GLsizei)stride, (void*)offset);
+    }
+    else
+    {
+        opengl->glVertexAttribPointer((GLuint)index, (GLint)componentCount, type, false, (GLsizei)stride,
+                                      (void*)offset);
+    }
     opengl->glEnableVertexAttribArray((GLuint)index);
 }
 

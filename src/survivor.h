@@ -7,12 +7,10 @@
 #include "survivor_memory.h"
 #include "survivor_camera.h"
 #include "survivor_debug.h"
-#include "survivor_geometry.h"
 
 struct Player
 {
     v3  position;
-    v3  target;
     v3  velocity;
     f32 yaw; // Radians
 };
@@ -30,6 +28,28 @@ struct Vertex2D
     v2 uv;
 };
 
+struct BatchVertex
+{
+    v3  position;
+    v2  uv;
+    v4  color;
+    u32 textureIndex;
+};
+
+struct BatchBuffer
+{
+    GeometryBuffer buffer;
+    Program        program;
+    BatchVertex*   vertexBufferBase;
+    BatchVertex*   vertexBufferPtr;
+    u32*           indexBufferBase;
+    u32*           indexBufferPtr;
+    u32            maxVertexCount;
+    u32            maxIndexCount;
+    u32            vertexCount;
+    u32            indexCount;
+};
+
 struct GameState
 {
     b32   initialized;
@@ -42,10 +62,10 @@ struct GameState
     AudioClip*      pistolShot;
     AudioClip*      backgroundMusic;
 
-    Program*        program2D;
-    GeometryBuffer* quad2DBuffer;
-    Texture*        texture;
-    v2u             cursor;
+    Texture*     whiteTexture;
+    Texture*     crosshairAtlas;
+    v2u          cursor;
+    BatchBuffer* batchBuffer;
 
 #ifdef BUILD_TYPE_DEBUG
     DebugState* debug;

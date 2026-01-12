@@ -773,6 +773,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         }
 
         gameMemory.opengl.glEnable            = glEnable;
+        gameMemory.opengl.glDisable           = glDisable;
         gameMemory.opengl.glClear             = glClear;
         gameMemory.opengl.glClearColor        = glClearColor;
         gameMemory.opengl.glDrawArrays        = glDrawArrays;
@@ -782,6 +783,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         gameMemory.opengl.glBindTexture       = glBindTexture;
         gameMemory.opengl.glTexImage2D        = glTexImage2D;
         gameMemory.opengl.glTexParameteri     = glTexParameteri;
+        gameMemory.opengl.glBlendFunc         = glBlendFunc;
         gameMemory.opengl.glActiveTexture     = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
         gameMemory.opengl.glCreateProgram     = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
         gameMemory.opengl.glCreateShader      = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
@@ -807,6 +809,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             (PFNGLENABLEVERTEXATTRIBARRAYPROC)wglGetProcAddress("glEnableVertexAttribArray");
         gameMemory.opengl.glVertexAttribPointer =
             (PFNGLVERTEXATTRIBPOINTERPROC)wglGetProcAddress("glVertexAttribPointer");
+        gameMemory.opengl.glVertexAttribIPointer =
+            (PFNGLVERTEXATTRIBIPOINTERPROC)wglGetProcAddress("glVertexAttribIPointer");
         gameMemory.opengl.glDeleteVertexArrays = (PFNGLDELETEVERTEXARRAYSPROC)wglGetProcAddress("glDeleteVertexArrays");
         gameMemory.opengl.glActiveTexture      = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
         gameMemory.opengl.glGenerateMipmap     = (PFNGLGENERATEMIPMAPPROC)wglGetProcAddress("glGenerateMipmap");

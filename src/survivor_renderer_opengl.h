@@ -15,6 +15,7 @@ struct OpenGL
     u8                 commandQueueBufferMemory[65536];
 
     PFNGLENABLEPROC                  glEnable;
+    PFNGLDISABLEPROC                 glDisable;
     PFNGLCLEARCOLORPROC              glClearColor;
     PFNGLCLEARPROC                   glClear;
     PFNGLDRAWARRAYSPROC              glDrawArrays;
@@ -24,6 +25,7 @@ struct OpenGL
     PFNGLBINDTEXTUREPROC             glBindTexture;
     PFNGLTEXIMAGE2DPROC              glTexImage2D;
     PFNGLTEXPARAMETERIPROC           glTexParameteri;
+    PFNGLBLENDFUNCPROC               glBlendFunc;
     PFNGLCREATEPROGRAMPROC           glCreateProgram;
     PFNGLCREATESHADERPROC            glCreateShader;
     PFNGLATTACHSHADERPROC            glAttachShader;
@@ -46,6 +48,7 @@ struct OpenGL
     PFNGLDELETEBUFFERSPROC           glDeleteBuffers;
     PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
     PFNGLVERTEXATTRIBPOINTERPROC     glVertexAttribPointer;
+    PFNGLVERTEXATTRIBIPOINTERPROC    glVertexAttribIPointer;
     PFNGLDELETEVERTEXARRAYSPROC      glDeleteVertexArrays;
     PFNGLACTIVETEXTUREPROC           glActiveTexture;
     PFNGLGENERATEMIPMAPPROC          glGenerateMipmap;
@@ -114,7 +117,8 @@ struct ProgramUse
 enum UniformType
 {
     UniformType_Mat4x4,
-    UniformType_Int
+    UniformType_Int,
+    UniformType_IntArray
 };
 
 struct ProgramUploadUniform
@@ -126,6 +130,11 @@ struct ProgramUploadUniform
     {
         mat4x4 mat4x4;
         int    integer;
+        struct
+        {
+            int* integerArray;
+            int  count;
+        };
     };
 };
 // ----------------------------------------------------------------------------
