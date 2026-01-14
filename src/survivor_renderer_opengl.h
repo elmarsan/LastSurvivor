@@ -96,7 +96,7 @@ enum RenderCommandType
 
 struct RenderCommandHeader
 {
-    u16 type;
+    u32 type;
 };
 
 struct FramebufferClear

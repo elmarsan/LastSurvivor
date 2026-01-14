@@ -25,7 +25,7 @@ inline v3 operator-(v3 a, v3 b)
     return result;
 }
 
-inline v3& operator-=(v3& a, v3& b)
+inline v3& operator-=(v3& a, const v3& b)
 {
     a = a - b;
     return a;
@@ -42,7 +42,7 @@ inline v3 operator+(v3 a, v3 b)
     return result;
 }
 
-inline v3& operator+=(v3& a, v3& b)
+inline v3& operator+=(v3& a, const v3& b)
 {
     a = a + b;
     return a;

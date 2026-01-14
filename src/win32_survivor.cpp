@@ -371,7 +371,10 @@ internal PLATFORM_AUDIO_CLIP_LOAD(Win32AudioClipLoad)
 
     HRESULT result = xaudio2->engine->CreateSourceVoice(&handle->sourceVoice, &wave, 0, XAUDIO2_DEFAULT_FREQ_RATIO, 0,
                                                         &voiceSends, 0);
-    Assert(result == S_OK);
+    if (result != S_OK)
+    {
+        Assert(0);
+    }
 
     return audioClip;
 }
@@ -387,7 +390,6 @@ internal PLATFORM_AUDIO_CLIP_FREE(Win32AudioClipFree)
 
 internal PLATFORM_AUDIO_CLIP_PLAY(Win32AudioClipPlay)
 {
-    Wind32XAudio2*  xaudio2        = &gWin32State.xaudio2;
     Win32AudioClip* win32AudioClip = (Win32AudioClip*)clip->handle;
     XAUDIO2_BUFFER* buffer         = &win32AudioClip->buffer;
 
@@ -488,34 +490,38 @@ internal void Win32ProcessPendingMessages(Win32State* state)
             b32 isDown        = ((msg.lParam >> 31) & 1) == 0;
             b32 altKeyWasDown = (msg.lParam >> 29) & 1;
 
-            if (vkCode == 'W' || vkCode == VK_UP)
+            if (wasDown != isDown)
             {
-                Win32UpdateGameButtonState(&keyboard->moveUp, isDown);
-            }
-            if (vkCode == 'S' || vkCode == VK_DOWN)
-            {
-                Win32UpdateGameButtonState(&keyboard->moveDown, isDown);
-            }
-            if (vkCode == 'A' || vkCode == VK_RIGHT)
-            {
-                Win32UpdateGameButtonState(&keyboard->moveLeft, isDown);
-            }
-            if (vkCode == 'D' || vkCode == VK_LEFT)
-            {
-                Win32UpdateGameButtonState(&keyboard->moveRight, isDown);
-            }
-            if (vkCode == VK_ESCAPE)
-            {
-                Win32UpdateGameButtonState(&keyboard->start, isDown);
-            }
-            if (vkCode == VK_BACK)
-            {
-                Win32UpdateGameButtonState(&keyboard->back, isDown);
-            }
-            if (vkCode == VK_F4 && altKeyWasDown)
-            {
-                Log("ALT+F4 pressed, closing game...");
-                state->running = false;
+
+                if (vkCode == 'W' || vkCode == VK_UP)
+                {
+                    Win32UpdateGameButtonState(&keyboard->moveUp, isDown);
+                }
+                if (vkCode == 'S' || vkCode == VK_DOWN)
+                {
+                    Win32UpdateGameButtonState(&keyboard->moveDown, isDown);
+                }
+                if (vkCode == 'A' || vkCode == VK_RIGHT)
+                {
+                    Win32UpdateGameButtonState(&keyboard->moveLeft, isDown);
+                }
+                if (vkCode == 'D' || vkCode == VK_LEFT)
+                {
+                    Win32UpdateGameButtonState(&keyboard->moveRight, isDown);
+                }
+                if (vkCode == VK_ESCAPE)
+                {
+                    Win32UpdateGameButtonState(&keyboard->start, isDown);
+                }
+                if (vkCode == VK_BACK)
+                {
+                    Win32UpdateGameButtonState(&keyboard->back, isDown);
+                }
+                if (vkCode == VK_F4 && altKeyWasDown)
+                {
+                    Log("ALT+F4 pressed, closing game...");
+                    state->running = false;
+                }
             }
             break;
         }
@@ -953,7 +959,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         SwapBuffers(gWin32State.deviceContext);
 
         LARGE_INTEGER frameEndTime = Win32GetWallClock();
-        gWin32State.deltaTime      = Win32GetSecondsElapsed(frameStartTime, frameEndTime);
+        gWin32State.deltaTime      = (f32)Win32GetSecondsElapsed(frameStartTime, frameEndTime);
         frameStartTime             = frameEndTime;
 
         if (exitGame)

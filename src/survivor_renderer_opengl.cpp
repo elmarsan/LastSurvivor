@@ -19,6 +19,8 @@ void RendererFrameEnd(OpenGL* opengl)
 
     opengl->glEnable(GL_DEPTH_TEST);
 
+#pragma warning(push)
+#pragma warning(disable : 4456)
     for (u8* command = queue->pushBufferBase; command < queue->pushBufferPtr; /**/)
     {
         RenderCommandHeader* header = (RenderCommandHeader*)command;
@@ -100,12 +102,13 @@ void RendererFrameEnd(OpenGL* opengl)
         }
         }
     }
+#pragma warning(pop)
 }
 
 #define PushRenderCommand(queue, type) (type*)PushRenderCommand_(queue, sizeof(type), RenderCommandType_##type)
 inline void* PushRenderCommand_(RenderCommandQueue* queue, size_t size, RenderCommandType type)
 {
-    void*  result; // Command struct
+    void*  result    = { 0 }; // Command struct
     size_t totalSize = size + sizeof(RenderCommandHeader);
 
     u8* pushBufferEnd = queue->pushBufferBase + queue->pushBufferSize;
@@ -280,8 +283,8 @@ void TextureAlloc(OpenGL* opengl, Texture* texture, void* imageBuffer, size_t si
         texture->width  = (u32)width;
         texture->height = (u32)height;
 
-        GLint  internalFormat;
-        GLenum format;
+        GLint  internalFormat = 0;
+        GLenum format         = 0;
         // TODO: Handle different component types
         GLenum type = GL_UNSIGNED_BYTE;
 
