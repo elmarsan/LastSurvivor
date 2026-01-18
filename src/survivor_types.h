@@ -17,9 +17,9 @@ typedef int32_t  b32;
 typedef float    f32;
 typedef double   f64;
 
-#define global        static
-#define internal      static
-#define local_persist static
+#define global_variable static
+#define internal        static
+#define local_persist   static
 
 #ifdef BUILD_TYPE_DEBUG
 #define Assert(expr)                                                                                                   \

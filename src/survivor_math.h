@@ -3,6 +3,43 @@
 #define Pi           3.14159265359f
 #define Radians(deg) ((deg) * (Pi) / 180.0f)
 
+// ----------------------------------------------------------------------------
+// v2 operator overloading
+inline v2& operator*=(v2& a, const v2& b)
+{
+    a.x = a.x * b.x;
+    a.y = a.y * b.y;
+
+    return a;
+}
+
+inline v2& operator*=(v2& a, f32 scalar)
+{
+    a.x = a.x * scalar;
+    a.y = a.y * scalar;
+
+    return a;
+}
+
+inline v2 operator+(v2 a, v2 b)
+{
+    v2 result;
+
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+
+    return result;
+}
+
+inline v2& operator+=(v2& a, const v2& b)
+{
+    a = a + b;
+    return a;
+}
+// ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+// v3 operator overloading
 inline v3 operator-(v3& a)
 {
     v3 result;
@@ -59,6 +96,15 @@ inline v3 operator*(v3 a, f32 scalar)
     return result;
 }
 
+inline v3& operator*=(v3& a, const v3& b)
+{
+    a.x *= b.x;
+    a.y *= b.y;
+    a.z *= b.z;
+
+    return a;
+}
+
 inline v3 operator/(v3 a, f32 scalar)
 {
     v3 result;
@@ -69,6 +115,7 @@ inline v3 operator/(v3 a, f32 scalar)
 
     return result;
 }
+// ----------------------------------------------------------------------------
 
 inline f32 Length(const v3& a) { return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z); }
 

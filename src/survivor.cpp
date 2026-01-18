@@ -4,11 +4,34 @@
 #include "survivor_debug_geometry.cpp"
 #include "survivor_debug.cpp"
 
-internal u32 rectIndices[]   = { 0, 1, 2, 0, 2, 3 };
-internal u32 rectVertexCount = 4;
-internal u32 rectIndexCount  = 6;
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "stb_rect_pack.h"
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
 
-inline void BatchRect(BatchBuffer* batch, v2 position, v2 size, v4 color)
+global_variable u32 rectIndices[]   = { 0, 1, 2, 0, 2, 3 };
+global_variable u32 rectVertexCount = 4;
+global_variable u32 rectIndexCount  = 6;
+global_variable v4  green{ 0.0f, 1.0f, 0.0f, 1.0f };
+global_variable v4  red{ 1.0f, 0.0f, 0.0f, 1.0f };
+global_variable v4  blue{ 0.2f, 0.4f, 1.0f, 1.0f };
+global_variable v4  white{ 1.0f, 1.0f, 1.0f, 1.0f };
+
+// TODO
+/*
+- (Batch) Review batch buffer size: Ideally, should be large enough to handle a single render call per
+  frame. Otherwise, I'm not sure how to send multiple draw calls in the same frame using batching approach.
+- (Batch) Texture index assignation (remove index parameter in batch function and hardcoded values)
+- (Renderer) Rethink TextureAlloc. See how to alloc simple textures as the white one. Check for different parameters
+  (swizzle, min/mag filters, etc)
+- (Renderer) Rethink DrawBuffer render command. (Is not enough flexible for batching and is not easy to change the
+primitive type)
+- (Audio) Make easy to tweak volumes (ignore db conversion)
+- (Misc): Temporal arenas
+- (Game): gamepad controller
+*/
+
+inline void BatchRect(BatchBuffer* batch, v2 topLeft, v2 bottomRight, v4 color)
 {
     if ((batch->vertexCount + rectVertexCount > batch->maxVertexCount) ||
         (batch->indexCount + rectIndexCount > batch->maxIndexCount))
@@ -25,22 +48,22 @@ inline void BatchRect(BatchBuffer* batch, v2 position, v2 size, v4 color)
     }
 
     // Top-right
-    batch->vertexBufferPtr->position     = { position.x + size.w, position.y };
+    batch->vertexBufferPtr->position     = { topLeft.x + bottomRight.x, topLeft.y };
     batch->vertexBufferPtr->color        = color;
     batch->vertexBufferPtr->textureIndex = 0;
     batch->vertexBufferPtr++;
     // Bottom-right
-    batch->vertexBufferPtr->position     = { position.x + size.w, position.y + size.h };
+    batch->vertexBufferPtr->position     = { topLeft.x + bottomRight.x, topLeft.y + bottomRight.y };
     batch->vertexBufferPtr->color        = color;
     batch->vertexBufferPtr->textureIndex = 0;
     batch->vertexBufferPtr++;
     // Bottom-left
-    batch->vertexBufferPtr->position     = { position.x, position.y + size.h };
+    batch->vertexBufferPtr->position     = { topLeft.x, topLeft.y + bottomRight.y };
     batch->vertexBufferPtr->color        = color;
     batch->vertexBufferPtr->textureIndex = 0;
     batch->vertexBufferPtr++;
     // Top-left
-    batch->vertexBufferPtr->position     = { position.x, position.y };
+    batch->vertexBufferPtr->position     = { topLeft.x, topLeft.y };
     batch->vertexBufferPtr->color        = color;
     batch->vertexBufferPtr->textureIndex = 0;
     batch->vertexBufferPtr++;
@@ -48,8 +71,7 @@ inline void BatchRect(BatchBuffer* batch, v2 position, v2 size, v4 color)
     batch->vertexCount += 4;
 }
 
-// TODO: Texture index assignation
-inline void BatchTextureRect(BatchBuffer* batch, v2 position, v2 size, Texture* texture)
+inline void BatchTextureRect(BatchBuffer* batch, v2 topLeft, v2 bottomRight, Texture* texture, u32 textureIndex = 1)
 {
     if ((batch->vertexCount + rectVertexCount > batch->maxVertexCount) ||
         (batch->indexCount + rectIndexCount > batch->maxIndexCount))
@@ -58,28 +80,27 @@ inline void BatchTextureRect(BatchBuffer* batch, v2 position, v2 size, Texture* 
     }
 
     BatchVertex* vertexBufferPtr = batch->vertexBufferPtr;
-    BatchRect(batch, position, size, { 1.0f, 1.0f, 1.0f, 1.0f });
+    BatchRect(batch, topLeft, bottomRight, { 1.0f, 1.0f, 1.0f, 1.0f });
 
     // Top-right
     vertexBufferPtr->uv           = { 1.0f, 1.0f };
-    vertexBufferPtr->textureIndex = 1;
+    vertexBufferPtr->textureIndex = textureIndex;
     vertexBufferPtr++;
     // Bottom-right
     vertexBufferPtr->uv           = { 1.0f, 0.0f };
-    vertexBufferPtr->textureIndex = 1;
+    vertexBufferPtr->textureIndex = textureIndex;
     vertexBufferPtr++;
     // Bottom-left
     vertexBufferPtr->uv           = { 0.0f, 0.0f };
-    vertexBufferPtr->textureIndex = 1;
+    vertexBufferPtr->textureIndex = textureIndex;
     vertexBufferPtr++;
     // Top-left
     vertexBufferPtr->uv           = { 0.0f, 1.0f };
-    vertexBufferPtr->textureIndex = 1;
+    vertexBufferPtr->textureIndex = textureIndex;
 }
 
-// TODO: Texture index assignation
-inline void BatchTextureSubRect(BatchBuffer* batch, v2 rectPosition, v2 rectSize, Texture* texture, v2 textPosition,
-                                v2 textSize)
+inline void BatchTextureSubRect(BatchBuffer* batch, v2 topLeft, v2 bottomRight, Texture* texture, v2 textureTopLeft,
+                                v2 textureBottomRight, u32 textureIndex = 1)
 {
     if ((batch->vertexCount + rectVertexCount > batch->maxVertexCount) ||
         (batch->indexCount + rectIndexCount > batch->maxIndexCount))
@@ -87,29 +108,74 @@ inline void BatchTextureSubRect(BatchBuffer* batch, v2 rectPosition, v2 rectSize
         Assert(0);
     }
 
-    f32 textureW = (1.0f / texture->width) * textSize.w;
-    f32 textureH = (1.0f / texture->height) * textSize.h;
-    f32 textureX = (1.0f / texture->width) * textPosition.x;
-    f32 textureY = (1.0f / texture->height) * textPosition.y;
+    f32 textureW = (1.0f / texture->width) * textureBottomRight.x;
+    f32 textureH = (1.0f / texture->height) * textureBottomRight.y;
+    f32 textureX = (1.0f / texture->width) * textureTopLeft.x;
+    f32 textureY = (1.0f / texture->height) * textureTopLeft.y;
 
     BatchVertex* vertexBufferPtr = batch->vertexBufferPtr;
-    BatchRect(batch, rectPosition, rectSize, { 1.0f, 1.0f, 1.0f, 1.0f });
+    BatchRect(batch, topLeft, bottomRight, { 1.0f, 1.0f, 1.0f, 1.0f });
 
     // Top-right
     vertexBufferPtr->uv           = { textureX + textureW, textureY };
-    vertexBufferPtr->textureIndex = 1;
+    vertexBufferPtr->textureIndex = textureIndex;
     vertexBufferPtr++;
     // Bottom-right
     vertexBufferPtr->uv           = { textureX + textureW, textureY + textureH };
-    vertexBufferPtr->textureIndex = 1;
+    vertexBufferPtr->textureIndex = textureIndex;
     vertexBufferPtr++;
     // Bottom-left
     vertexBufferPtr->uv           = { textureX, textureY + textureH };
-    vertexBufferPtr->textureIndex = 1;
+    vertexBufferPtr->textureIndex = textureIndex;
     vertexBufferPtr++;
     // Top-left
     vertexBufferPtr->uv           = { textureX, textureY };
-    vertexBufferPtr->textureIndex = 1;
+    vertexBufferPtr->textureIndex = textureIndex;
+}
+
+inline void BatchText(GameState* state, BatchBuffer* batch, char* text, v2 position, v4 color, f32 scale = 1.0f)
+{
+    size_t textLength      = strlen(text);
+    u32    textVertexCount = (u32)textLength * rectVertexCount;
+    u32    textIndexCount  = (u32)textLength * rectIndexCount;
+
+    if ((batch->vertexCount + textVertexCount > batch->maxVertexCount) ||
+        (batch->indexCount + textIndexCount > batch->maxIndexCount))
+    {
+        Assert(0);
+    }
+
+    v2 rectTopLeft{ 0.0f, 0.0f };
+    rectTopLeft += position;
+
+    while (*text)
+    {
+        TTFGlyph* ttfChar = &state->ttfChars[*text++ - TTF_FIRST_GLYPH_OFFSET];
+
+        rectTopLeft.x += (ttfChar->xoff * scale);
+        rectTopLeft.y = position.y + (ttfChar->yoff * scale);
+        v2 rectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) * scale,
+                            ((f32)ttfChar->y1 - (f32)ttfChar->y0) * scale };
+
+        v2 subrectTopLeft{ (f32)ttfChar->x0 + ttfChar->s0, (f32)ttfChar->y0 + ttfChar->t0 };
+        v2 subrectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) - ttfChar->s1,
+                               ((f32)ttfChar->y1 - (f32)ttfChar->y0) - ttfChar->t1 };
+
+        BatchVertex* verterBufferPtr = batch->vertexBufferPtr;
+        BatchTextureSubRect(batch, rectTopLeft, rectBottomRight, state->glyphAtlas, subrectTopLeft, subrectBottomRight,
+                            2);
+
+        verterBufferPtr->color = color;
+        verterBufferPtr++;
+        verterBufferPtr->color = color;
+        verterBufferPtr++;
+        verterBufferPtr->color = color;
+        verterBufferPtr++;
+        verterBufferPtr->color = color;
+        verterBufferPtr++;
+
+        rectTopLeft.x += (ttfChar->xadvance * scale);
+    }
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -182,7 +248,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 Assert(0);
             }
 
-            // TODO: Have a similar function to TextureAlloc and remove this opengl function calls!
             u32 pixels = 0xFFFFFFFF;
             opengl->glGenTextures(1, &state->whiteTexture->id);
             opengl->glBindTexture(GL_TEXTURE_2D, state->whiteTexture->id);
@@ -248,6 +313,80 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->player->position = { 0.0f, 0.0f, 0.0f };
         state->player->velocity = { 0.0f, 0.0f, 0.0f };
         state->player->yaw      = -90.0f;
+
+        // Font loading
+        {
+            FileReadResult fontFile = platform.FileReadEntire("c:\\windows\\fonts\\calibri.ttf");
+            if (fontFile.contentSize > 0)
+            {
+                stbtt_fontinfo fontInfo   = { 0 };
+                u8*            fontBuffer = (u8*)fontFile.content;
+
+                if (stbtt_InitFont(&fontInfo, fontBuffer, 0))
+                {
+                    int fontAtlasWidth  = 1024;
+                    int fontAtlasHeight = 1024;
+                    f32 fontSize        = 64.0f;
+                    // TODO: (Temporal arenas) Free bitmap after allocating texture
+                    u8* bitmapFontBuffer = PushArray(arena, fontAtlasWidth * fontAtlasHeight, u8);
+
+                    stbtt_pack_context packCtx;
+                    stbtt_packedchar   packedChars[TTF_GLYPH_COUNT];
+
+                    stbtt_PackBegin(&packCtx, bitmapFontBuffer, fontAtlasWidth, fontAtlasHeight, 0, 1, 0);
+                    stbtt_PackFontRange(&packCtx, fontBuffer, 0, fontSize, TTF_FIRST_GLYPH_OFFSET, TTF_GLYPH_COUNT,
+                                        packedChars);
+                    stbtt_PackEnd(&packCtx);
+
+                    for (u32 charIndex = 0; charIndex < TTF_GLYPH_COUNT; charIndex++)
+                    {
+                        float x, y;
+
+                        stbtt_aligned_quad alignedQuad;
+                        stbtt_GetPackedQuad(packedChars, fontAtlasWidth, fontAtlasHeight, (int)charIndex, &x, &y,
+                                            &alignedQuad, 0);
+
+                        TTFGlyph* ttfChar = &state->ttfChars[charIndex];
+                        ttfChar->x0       = packedChars[charIndex].x0;
+                        ttfChar->y0       = packedChars[charIndex].y0;
+                        ttfChar->x1       = packedChars[charIndex].x1;
+                        ttfChar->y1       = packedChars[charIndex].y1;
+                        ttfChar->xoff     = packedChars[charIndex].xoff;
+                        ttfChar->yoff     = packedChars[charIndex].yoff;
+                        ttfChar->xadvance = packedChars[charIndex].xadvance;
+                        ttfChar->s0       = alignedQuad.s0;
+                        ttfChar->t0       = alignedQuad.t0;
+                        ttfChar->s1       = alignedQuad.s1;
+                        ttfChar->t1       = alignedQuad.t1;
+                    }
+
+                    platform.FileFree(fontFile.content);
+
+                    state->glyphAtlas = PushStruct(arena, Texture);
+
+                    opengl->glGenTextures(1, &state->glyphAtlas->id);
+                    opengl->glBindTexture(GL_TEXTURE_2D, state->glyphAtlas->id);
+                    opengl->glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, (GLsizei)fontAtlasWidth, (GLsizei)fontAtlasHeight, 0,
+                                         GL_RED, GL_UNSIGNED_BYTE, (void*)bitmapFontBuffer);
+                    GLint swizzleMask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
+                    opengl->glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+                    opengl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    opengl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    state->glyphAtlas->width  = (u32)fontAtlasWidth;
+                    state->glyphAtlas->height = (u32)fontAtlasHeight;
+                }
+                else
+                {
+                    platform.Logf("Unable to init .ttf font");
+                    Assert(0);
+                }
+            }
+            else
+            {
+                platform.Logf("Unable to load font");
+                Assert(0);
+            }
+        }
     }
     // ----------------------------------------------------------------------------
 
@@ -270,7 +409,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         GameInputController* controller = GetController(input, controllerIndex);
 
-        // TODO: Controller gameplay
         if (controller->isAnalog)
         {
             if (controller->rightTrigger.isDown && !controller->rightTrigger.wasDown)
@@ -285,8 +423,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         else
         {
             Mouse* mouse = &input->mouse;
-
-            state->cursor = mouse->pos;
 
             v3 playerDirection = { 0 };
 
@@ -396,9 +532,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     RenderCommandQueue* commandQueue = RendererFrameBegin(opengl);
 
     FramebufferClear* framebufferClear = PushRenderCommand(commandQueue, FramebufferClear);
-    framebufferClear->color.r          = 0.2f;
-    framebufferClear->color.g          = 0.3f;
-    framebufferClear->color.b          = 0.5f;
+    framebufferClear->color.r          = 0.18f;
+    framebufferClear->color.g          = 0.31f;
+    framebufferClear->color.b          = 0.52f;
 
     BatchBuffer* batch     = state->batchBuffer;
     batch->vertexBufferPtr = batch->vertexBufferBase;
@@ -407,13 +543,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     batch->indexCount      = 0;
 
     // TODO: Find a better way to handle textures
-    int textureArray[] = { 0, 1 };
+    int textureArray[] = { 0, 1, 2 };
     opengl->glActiveTexture(GL_TEXTURE0);
     opengl->glBindTexture(GL_TEXTURE_2D, state->whiteTexture->id);
     opengl->glActiveTexture(GL_TEXTURE1);
     opengl->glBindTexture(GL_TEXTURE_2D, state->crosshairAtlas->id);
+    opengl->glActiveTexture(GL_TEXTURE2);
+    opengl->glBindTexture(GL_TEXTURE_2D, state->glyphAtlas->id);
 
     // TODO: This kind of operations with render commands
+    opengl->glDisable(GL_DEPTH_TEST);
     opengl->glEnable(GL_BLEND);
     opengl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -421,17 +560,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         mat4x4 view2D = Orthographic(0, (f32)windowDim.w, (f32)windowDim.h, 0);
 
-        mat4x4 translate = Translate(Identity(), { (f32)state->cursor.x, (f32)state->cursor.y, 0.0f });
-        mat4x4 scale     = Scale(Identity(), { 25.0f, 25.0f, 0.0f });
-        mat4x4 model     = translate * scale;
+        Mouse* mouse = &input->mouse;
+        // Cursors: 828, 965
+        BatchTextureSubRect(batch, { (f32)mouse->pos.x, (f32)mouse->pos.y }, { 32.0f, 32.0f }, state->crosshairAtlas,
+                            { 965.0f, 0.0f }, { 128.0f, 128.0f });
 
-        BatchRect(batch, { 5.0f, 5.0f }, { 50.0f, 50.0f }, { 1.0f, 0.0f, 0.2f, 1.0f });
-        BatchRect(batch, { 0.0f, 300.0f }, { 50.0f, 50.0f }, { 0.0f, 0.6f, 0.0f, 1.0f });
-        BatchTextureRect(batch, { 100.0f, 100.0f }, { 100.0f, 100.0f }, state->crosshairAtlas);
-        BatchTextureSubRect(batch, { 300.0f, 300.0f }, { 250.0f, 250.0f }, state->crosshairAtlas, { 965.0f, 0.0f },
-                            { 128.0f, 128.0f });
-        // 828
-        // 965
+#if 0
+        BatchRect(batch, { 0.0f, 220.0f }, { (f32)windowDim.w, 50.0f }, { 1.0f, 0.0f, 0.2f, 1.0f });
+        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 250.0f },
+                  { 0.5f, 1.0f, 1.0f, 1.0f }, 0.5f);
+
+        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 320.0f }, white, 0.7f);
+        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 390.0f }, red);
+
+        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 460.0f }, green, 1.2f);
+        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 540.0f },
+                  { 1.0f, 0.0f, 1.0f, 1.0f }, 1.5f);
+#endif
 
         // Batch
         if (batch->vertexCount > 0)
@@ -473,11 +618,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     RendererFrameEnd(opengl);
 
 #ifdef BUILD_TYPE_DEBUG
-    v3 green{ 0.0f, 1.0f, 0.0f };
-    v3 red{ 1.0f, 0.0f, 0.0f };
-    v3 blue{ 0.2f, 0.4f, 1.0f };
-    v3 white{ 1.0f, 1.0f, 1.0f };
-
     DebugFrameBegin(state->debug, opengl, projection * view);
     {
         u32 numCols = 20;

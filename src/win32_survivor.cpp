@@ -58,7 +58,7 @@ struct Win32GameCode
     GameUpdateAndRenderProc* UpdateAndRender;
 };
 
-global Win32State gWin32State;
+global_variable Win32State gWin32State;
 
 internal PLATFORM_ERROR_MESSAGE(Win32ErrorMessage)
 {
@@ -789,6 +789,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         gameMemory.opengl.glBindTexture       = glBindTexture;
         gameMemory.opengl.glTexImage2D        = glTexImage2D;
         gameMemory.opengl.glTexParameteri     = glTexParameteri;
+        gameMemory.opengl.glTexParameteriv    = glTexParameteriv;
         gameMemory.opengl.glBlendFunc         = glBlendFunc;
         gameMemory.opengl.glActiveTexture     = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
         gameMemory.opengl.glCreateProgram     = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");

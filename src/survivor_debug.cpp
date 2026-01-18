@@ -22,7 +22,7 @@ void DebugInit(DebugState* state, OpenGL* opengl, PlatformAPI* platform)
     GeometryBufferVBOAlloc(opengl, &state->buffer, 0, vertexSize * MAX_DEBUG_VERTICES, vertexSize, GL_DYNAMIC_DRAW);
     GeometryBufferEBOAlloc(opengl, &state->buffer, 0, sizeof(u32) * MAX_DEBUG_INDICES, sizeof(u32), GL_DYNAMIC_DRAW);
     GeometryBufferVertexAttrib(opengl, &state->buffer, 0, 3, GL_FLOAT, vertexSize, offsetof(DebugVertex, position));
-    GeometryBufferVertexAttrib(opengl, &state->buffer, 1, 3, GL_FLOAT, vertexSize, offsetof(DebugVertex, color));
+    GeometryBufferVertexAttrib(opengl, &state->buffer, 1, 4, GL_FLOAT, vertexSize, offsetof(DebugVertex, color));
 
     state->vertexBufferBase = PushArray(&state->arena, MAX_DEBUG_VERTICES, DebugVertex);
     state->vertexBufferPtr  = state->vertexBufferBase;
@@ -45,7 +45,7 @@ void DebugFrameBegin(DebugState* state, OpenGL* opengl, mat4x4 viewProj)
 
 void DebugFrameEnd(DebugState* state, OpenGL* opengl) { DebugFlush(state, opengl); }
 
-void DebugDrawLine(DebugState* state, OpenGL* opengl, v3 start, v3 end, v3 color)
+void DebugDrawLine(DebugState* state, OpenGL* opengl, v3 start, v3 end, v4 color)
 {
     u32 lineVertices = 2;
     u32 lineIndices  = 2;
@@ -74,7 +74,7 @@ void DebugDrawLine(DebugState* state, OpenGL* opengl, v3 start, v3 end, v3 color
     state->indexCount += lineVertices;
 }
 
-void DebugDrawPlane(DebugState* state, OpenGL* opengl, v3 position, v3 color)
+void DebugDrawPlane(DebugState* state, OpenGL* opengl, v3 position, v4 color)
 {
     u32 vertexCount = ArrayCount(planeVertexs);
     u32 indexCount  = ArrayCount(planeLineIndices);

@@ -25,6 +25,7 @@ struct OpenGL
     PFNGLBINDTEXTUREPROC             glBindTexture;
     PFNGLTEXIMAGE2DPROC              glTexImage2D;
     PFNGLTEXPARAMETERIPROC           glTexParameteri;
+    PFNGLTEXPARAMETERIVPROC          glTexParameteriv;
     PFNGLBLENDFUNCPROC               glBlendFunc;
     PFNGLCREATEPROGRAMPROC           glCreateProgram;
     PFNGLCREATESHADERPROC            glCreateShader;

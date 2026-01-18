@@ -8,6 +8,9 @@
 #include "survivor_camera.h"
 #include "survivor_debug.h"
 
+#define TTF_FIRST_GLYPH_OFFSET 32 // Space ascii code
+#define TTF_GLYPH_COUNT        95
+
 struct Player
 {
     v3  position;
@@ -19,12 +22,6 @@ struct Vertex
 {
     v3 position;
     v3 normal;
-    v2 uv;
-};
-
-struct Vertex2D
-{
-    v2 position;
     v2 uv;
 };
 
@@ -50,6 +47,13 @@ struct BatchBuffer
     u32            indexCount;
 };
 
+struct TTFGlyph
+{
+    u16 x0, y0, x1, y1; // Bounding-box
+    f32 xoff, yoff, xadvance;
+    f32 s0, t0, s1, t1; // Texture coordinates, relative to bounding-box.
+};
+
 struct GameState
 {
     b32   initialized;
@@ -61,11 +65,11 @@ struct GameState
     Camera*         camera;
     AudioClip*      pistolShot;
     AudioClip*      backgroundMusic;
-
-    Texture*     whiteTexture;
-    Texture*     crosshairAtlas;
-    v2u          cursor;
-    BatchBuffer* batchBuffer;
+    Texture*        whiteTexture;
+    Texture*        crosshairAtlas;
+    Texture*        glyphAtlas;
+    BatchBuffer*    batchBuffer;
+    TTFGlyph        ttfChars[TTF_GLYPH_COUNT];
 
 #ifdef BUILD_TYPE_DEBUG
     DebugState* debug;

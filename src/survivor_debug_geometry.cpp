@@ -1,4 +1,4 @@
-internal f32 cubeVertexs[] = {
+global_variable f32 cubeVertexs[] = {
     -0.5f, -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f, 0.0f, 0.0f, 0.5f,  -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f, 1.0f, 0.0f,
     0.5f,  0.5f,  -0.5f, 0.0f,  0.0f,  -1.0f, 1.0f, 1.0f, 0.5f,  0.5f,  -0.5f, 0.0f,  0.0f,  -1.0f, 1.0f, 1.0f,
     -0.5f, 0.5f,  -0.5f, 0.0f,  0.0f,  -1.0f, 0.0f, 1.0f, -0.5f, -0.5f, -0.5f, 0.0f,  0.0f,  -1.0f, 0.0f, 0.0f,
@@ -24,12 +24,12 @@ internal f32 cubeVertexs[] = {
     -0.5f, 0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 0.0f, -0.5f, 0.5f,  -0.5f, 0.0f,  1.0f,  0.0f,  0.0f, 1.0f
 };
 
-internal v3 planeVertexs[] = {
+global_variable v3 planeVertexs[] = {
     { 1.0f, 0.0f, 1.0f },   // top-right
     { 1.0f, 0.0f, -1.0f },  // bottom-right
     { -1.0f, 0.0f, -1.0f }, // bottom-left
     { -1.0f, 0.0f, 1.0f },  // top-left
 };
 
-internal u32 planeIndices[]     = { 0, 1, 2, 2, 3, 0 };
-internal u32 planeLineIndices[] = { 0, 1, 1, 2, 2, 3, 3, 0 };
+global_variable u32 planeIndices[]     = { 0, 1, 2, 2, 3, 0 };
+global_variable u32 planeLineIndices[] = { 0, 1, 1, 2, 2, 3, 3, 0 };
