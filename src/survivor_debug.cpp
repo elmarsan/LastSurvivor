@@ -88,12 +88,12 @@ void DebugDrawPlane(DebugState* state, OpenGL* opengl, v3 position, v4 color)
 
     u32 baseVertex = state->vertexCount;
 
-    for (u32 vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+    for (u32 vertexIndex = 0; vertexIndex < vertexCount; vertexIndex += 8)
     {
         v4 localPos;
-        localPos.x = planeVertexs[vertexIndex].x;
-        localPos.y = planeVertexs[vertexIndex].y;
-        localPos.z = planeVertexs[vertexIndex].z;
+        localPos.x = planeVertexs[vertexIndex];
+        localPos.y = planeVertexs[vertexIndex + 1];
+        localPos.z = planeVertexs[vertexIndex + 2];
         localPos.w = 1.0f;
 
         v4 worldPos4 = model * localPos;
@@ -116,6 +116,61 @@ void DebugDrawPlane(DebugState* state, OpenGL* opengl, v3 position, v4 color)
 
         state->indexCount++;
     }
+}
+
+void DebugDrawAABB(DebugState* state, OpenGL* opengl, v3 position, f32 yRotation, v3 min, v3 max, v4 color)
+{
+    // clang-format off
+	v3 vertexs[8] = {
+		{ min.x, min.y, min.z }, // 0
+		{ min.x, min.y, max.z }, // 1
+		{ min.x, max.y, min.z }, // 2
+		{ min.x, max.y, max.z }, // 3
+		{ max.x, min.y, min.z }, // 4
+		{ max.x, min.y, max.z }, // 5
+		{ max.x, max.y, min.z }, // 6
+		{ max.x, max.y, max.z }, // 7
+	};
+	u32 indices[24] = {
+		0, 1, 1, 3, 3, 2, 2, 0,
+		4, 5, 5, 7, 7, 6, 6, 4,
+		0, 4, 1, 5, 2, 6, 3, 7
+	};
+    // clang-format on
+
+    u32 vertexCount = ArrayCount(vertexs);
+    u32 indexCount  = ArrayCount(indices);
+
+    if (state->vertexCount + vertexCount > MAX_DEBUG_VERTICES || state->indexCount + indexCount > MAX_DEBUG_INDICES)
+    {
+        DebugFlush(state, opengl);
+    }
+
+    for (u32 index = 0; index < indexCount; index++)
+    {
+        *state->indexBufferPtr = indices[index] + state->vertexCount;
+        state->indexBufferPtr++;
+    }
+    state->indexCount += indexCount;
+
+    mat4x4 model = Translate(Identity(), position) * Rotate(Identity(), yRotation, { 0.0f, 1.0f, 0.0f });
+
+    for (u32 vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+    {
+        v4 localPos;
+        localPos.x = vertexs[vertexIndex].x;
+        localPos.y = vertexs[vertexIndex].y;
+        localPos.z = vertexs[vertexIndex].z;
+        localPos.w = 1.0f;
+
+        v4 worldPos4 = model * localPos;
+        v3 worldPos{ worldPos4.x, worldPos4.y, worldPos4.z };
+
+        state->vertexBufferPtr->position = worldPos;
+        state->vertexBufferPtr->color    = color;
+        state->vertexBufferPtr++;
+    }
+    state->vertexCount += vertexCount;
 }
 
 internal void DebugFlush(DebugState* state, OpenGL* opengl)

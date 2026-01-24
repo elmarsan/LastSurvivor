@@ -119,7 +119,9 @@ enum UniformType
 {
     UniformType_Mat4x4,
     UniformType_Int,
-    UniformType_IntArray
+    UniformType_IntArray,
+    UniformType_Vec3,
+    UniformType_Vec4
 };
 
 struct ProgramUploadUniform
@@ -131,6 +133,8 @@ struct ProgramUploadUniform
     {
         mat4x4 mat4x4;
         int    integer;
+        v3     vec3;
+        v4     vec4;
         struct
         {
             int* integerArray;

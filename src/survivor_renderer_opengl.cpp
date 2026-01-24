@@ -90,6 +90,16 @@ void RendererFrameEnd(OpenGL* opengl)
                     opengl->glUniform1iv(loc, command->count, command->integerArray);
                     break;
                 }
+                case UniformType_Vec3:
+                {
+                    opengl->glUniform3fv(loc, 1, &command->vec3.x);
+                    break;
+                }
+                case UniformType_Vec4:
+                {
+                    opengl->glUniform4fv(loc, 1, &command->vec4.x);
+                    break;
+                }
                     InvalidDefaultCase;
                 }
             }
@@ -162,6 +172,24 @@ inline void PushRenderUploadUniformIntArray(RenderCommandQueue* queue, GLuint pr
     command->integerArray = array;
     command->count        = count;
     command->type         = UniformType_IntArray;
+}
+
+inline void PushRenderUploadUniformVec3(RenderCommandQueue* queue, GLuint programId, const char* name, v3 vec3)
+{
+    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    sprintf(command->name, "%s", name);
+    command->programId = programId;
+    command->vec3      = vec3;
+    command->type      = UniformType_Vec3;
+}
+
+inline void PushRenderUploadUniformVec4(RenderCommandQueue* queue, GLuint programId, const char* name, v4 vec4)
+{
+    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    sprintf(command->name, "%s", name);
+    command->programId = programId;
+    command->vec4      = vec4;
+    command->type      = UniformType_Vec4;
 }
 
 inline void PushRenderDrawBuffer(RenderCommandQueue* queue, GeometryBuffer* buffer)

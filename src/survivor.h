@@ -11,11 +11,18 @@
 #define TTF_FIRST_GLYPH_OFFSET 32 // Space ascii code
 #define TTF_GLYPH_COUNT        95
 
+struct Bbox
+{
+    v3 min;
+    v3 max;
+};
+
 struct Player
 {
     v3  position;
     v3  velocity;
     f32 yaw; // Radians
+    f32 height;
 };
 
 struct Vertex
@@ -60,6 +67,7 @@ struct GameState
     Arena arena;
 
     GeometryBuffer* cubeBuffer;
+    GeometryBuffer* planeBuffer;
     Program*        program;
     Player*         player;
     Camera*         camera;

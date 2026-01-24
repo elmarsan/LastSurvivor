@@ -178,6 +178,15 @@ inline void BatchText(GameState* state, BatchBuffer* batch, char* text, v2 posit
     }
 }
 
+inline b32 BbboxInsertecs(Bbox* a, Bbox* b)
+{
+    bool x = (a->max.x >= b->min.x) && (a->min.x <= b->max.x);
+    bool y = (a->max.y >= b->min.y) && (a->min.y <= b->max.y);
+    bool z = (a->max.z >= b->min.z) && (a->min.z <= b->max.z);
+
+    return (x && y && z);
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     Assert(sizeof(GameState) <= memory->permanentStorageSize);
@@ -231,6 +240,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                                    offsetof(Vertex, position));
         GeometryBufferVertexAttrib(opengl, state->cubeBuffer, 1, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, normal));
         GeometryBufferVertexAttrib(opengl, state->cubeBuffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
+
+        // Plane
+        {
+            state->planeBuffer = PushStruct(arena, GeometryBuffer);
+
+            GeometryBufferInit(opengl, state->planeBuffer, GL_TRIANGLES);
+            GeometryBufferVBOAlloc(opengl, state->planeBuffer, planeVertexs, sizeof(planeVertexs), sizeof(Vertex),
+                                   GL_STATIC_DRAW);
+            GeometryBufferEBOAlloc(opengl, state->planeBuffer, planeIndices, ArrayCount(planeIndices) * sizeof(u32),
+                                   sizeof(u32), GL_STATIC_DRAW);
+            GeometryBufferVertexAttrib(opengl, state->planeBuffer, 0, 3, GL_FLOAT, sizeof(Vertex),
+                                       offsetof(Vertex, position));
+            GeometryBufferVertexAttrib(opengl, state->planeBuffer, 1, 3, GL_FLOAT, sizeof(Vertex),
+                                       offsetof(Vertex, normal));
+            GeometryBufferVertexAttrib(opengl, state->planeBuffer, 2, 2, GL_FLOAT, sizeof(Vertex),
+                                       offsetof(Vertex, uv));
+        }
 
         // Texture loading
         {
@@ -310,9 +336,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         platform.AudioSetVolume(-3.0f, AudioClipType_Sfx);
         platform.AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
-        state->player->position = { 0.0f, 0.0f, 0.0f };
+        state->player->position = { 0.0f, 1.0f, 0.0f };
         state->player->velocity = { 0.0f, 0.0f, 0.0f };
         state->player->yaw      = -90.0f;
+        state->player->height   = 0.50f;
 
         // Font loading
         {
@@ -401,9 +428,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     v3 inputDirection{ 0.0f, 0.0f, 0.0f };
     // TODO: Tweak movement mechanics
     f32 maxSpeed         = 7.0f;
-    f32 frictionForce    = 25.0f;
+    f32 frictionForce    = 20.0f;
     f32 moveAcceleration = 40.0f;
     v3  cameraOffset{ 0.0f, 16.0f, 5.0f };
+    CameraSetPitch(camera, -68.0f);
+
+#if 0
+    // v3 cameraOffset{ 0.0f, 4.0f, 8.0f };
+    // CameraSetPitch(camera, -26.0f);
+
+    v3 cameraOffset{ 0.0f, -0.5f, 8.0f };
+    CameraSetPitch(camera, 5.0f);
+#endif
+
+    v3 boxPosition{ -3.0f, 0.0f, -3.0f };
+    v3 testAABBPosition{ -8.0f, 3.0f, -1.0f };
+    v3 testHalfExtend{ 1.0f, 3.0f, 1.0f };
+    v3 playerHalfExtend{ 0.5f, 0.5f, 0.5f };
 
     for (u32 controllerIndex = 0; controllerIndex < ArrayCount(input->controllers); controllerIndex++)
     {
@@ -474,8 +515,54 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 }
             }
 
-            player->position += player->velocity * delta;
-            camera->position = player->position + cameraOffset;
+            v3 newPlayerPosition = player->position + (player->velocity * delta);
+
+            // World limits
+            f32 floorSize    = 30.0f;
+            f32 playerCenter = player->height;
+
+            // Left limit
+            if (newPlayerPosition.x - playerCenter < -floorSize - 0.5f)
+            {
+                newPlayerPosition.x = player->position.x;
+            }
+            // Right limit
+            if (newPlayerPosition.x + playerCenter > floorSize + 0.5f)
+            {
+                newPlayerPosition.x = player->position.x;
+            }
+            // Top limit
+            if (newPlayerPosition.z - playerCenter < -floorSize - 0.5f)
+            {
+                newPlayerPosition.z = player->position.z;
+            }
+            // Bottom limit
+            if (newPlayerPosition.z + playerCenter > floorSize + 0.5f)
+            {
+                newPlayerPosition.z = player->position.z;
+            }
+
+            Bbox playerBbbox;
+            playerBbbox.min = newPlayerPosition - playerHalfExtend;
+            playerBbbox.max = newPlayerPosition + playerHalfExtend;
+
+            Bbox testBbbox;
+            testBbbox.min = testAABBPosition - testHalfExtend;
+            testBbbox.max = testAABBPosition + testHalfExtend;
+
+            if (BbboxInsertecs(&playerBbbox, &testBbbox))
+            {
+                platform.Logf("Bbox intersection");
+                // v3  r{ 1.0f, 0.0f, 0.0f };
+                // f32 pushStrenght = 2.0f;
+                // player->velocity += r * pushStrength;
+            }
+            else
+            {
+                platform.Logf("\n");
+                player->position = newPlayerPosition;
+                camera->position = player->position + cameraOffset;
+            }
 
             // Player rotation
             {
@@ -556,7 +643,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     opengl->glEnable(GL_BLEND);
     opengl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // 2D
+    // Batch
     {
         mat4x4 view2D = Orthographic(0, (f32)windowDim.w, (f32)windowDim.h, 0);
 
@@ -564,6 +651,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // Cursors: 828, 965
         BatchTextureSubRect(batch, { (f32)mouse->pos.x, (f32)mouse->pos.y }, { 32.0f, 32.0f }, state->crosshairAtlas,
                             { 965.0f, 0.0f }, { 128.0f, 128.0f });
+
+        char coordBuffer[64];
+        sprintf(coordBuffer, "%d %d %d", (int)player->position.x, (int)player->position.y, (int)player->position.z);
+        BatchText(state, batch, coordBuffer, { 0.0f, 50.0f }, white);
 
 #if 0
         BatchRect(batch, { 0.0f, 220.0f }, { (f32)windowDim.w, 50.0f }, { 1.0f, 0.0f, 0.2f, 1.0f });
@@ -605,14 +696,33 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // 3D
     {
-        mat4x4 translate = Translate(Identity(), player->position);
-        mat4x4 rotate    = Rotate(Identity(), player->yaw, { 0.0f, 1.0f, 0.0f });
-        mat4x4 scale     = Scale(Identity(), 0.5f);
-        mat4x4 model     = translate * rotate * scale;
+        mat4x4 viewProj = projection * view;
 
         PushRenderProgramUse(commandQueue, state->program->id);
-        PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", projection * view * model);
-        PushRenderDrawBuffer(commandQueue, state->cubeBuffer);
+
+        // Floor
+        {
+            mat4x4 translate = Translate(Identity(), { 0.0f, 0.0f, 0.0f });
+            mat4x4 scale     = Scale(Identity(), 30.0f);
+            mat4x4 model     = translate * scale;
+
+            PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
+            PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 0.5f });
+            PushRenderDrawBuffer(commandQueue, state->planeBuffer);
+        }
+
+        // Player
+        {
+            mat4x4 translate = Translate(Identity(), { player->position.x, player->height, player->position.z });
+            mat4x4 rotate    = Rotate(Identity(), player->yaw, { 0.0f, 1.0f, 0.0f });
+            mat4x4 scale     = Scale(Identity(), player->height);
+
+            mat4x4 model = translate * rotate * scale;
+
+            PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
+            PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", blue);
+            PushRenderDrawBuffer(commandQueue, state->cubeBuffer);
+        }
     }
 
     RendererFrameEnd(opengl);
@@ -620,30 +730,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 #ifdef BUILD_TYPE_DEBUG
     DebugFrameBegin(state->debug, opengl, projection * view);
     {
-        u32 numCols = 20;
-        u32 numRows = 20;
-        f32 x       = 0.0f;
-        f32 z       = 0.0f;
-
-        for (u32 col = 0; col < numCols; col++)
-        {
-            x = -((float)numCols / 2.0f);
-
-            for (u32 row = 0; row < numRows; row++)
-            {
-                DebugDrawPlane(state->debug, opengl, { x, 0.0f, z }, white);
-
-                x += 2.0f;
-                x += 0.2f;
-            }
-
-            z -= 2.0f;
-            z -= 0.2f;
-        }
-
         v3 playerTarget{ sinf(player->yaw), 0.0f, cosf(player->yaw) };
 
-        DebugDrawLine(state->debug, opengl, player->position, player->position + (playerTarget * 1.5f), blue);
+        DebugDrawLine(state->debug, opengl, v3{ player->position.x, player->height, player->position.z },
+                      v3{ player->position.x, player->height, player->position.z } + (playerTarget * 1.5f), blue);
+
+        DebugDrawAABB(state->debug, opengl, testAABBPosition, 0, -testHalfExtend, testHalfExtend, red);
+        DebugDrawAABB(state->debug, opengl, { player->position.x, player->height, player->position.z }, player->yaw,
+                      -playerHalfExtend, playerHalfExtend, green);
     }
     DebugFrameEnd(state->debug, opengl);
 #endif

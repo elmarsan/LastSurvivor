@@ -105,6 +105,15 @@ inline v3& operator*=(v3& a, const v3& b)
     return a;
 }
 
+inline v3& operator*=(v3& a, f32 scalar)
+{
+    a.x = a.x * scalar;
+    a.y = a.y * scalar;
+    a.z = a.z * scalar;
+
+    return a;
+}
+
 inline v3 operator/(v3 a, f32 scalar)
 {
     v3 result;
