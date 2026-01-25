@@ -13,6 +13,7 @@
 #include <gl/glext.h>
 
 #include "survivor_types.h"
+#include "survivor_math.h"
 #include "survivor_renderer_opengl.h"
 #include "survivor_platform.h"
 #elif defined(BUILD_TYPE_RELEASE)

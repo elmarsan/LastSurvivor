@@ -74,7 +74,7 @@ void DebugDrawLine(DebugState* state, OpenGL* opengl, v3 start, v3 end, v4 color
     state->indexCount += lineVertices;
 }
 
-void DebugDrawPlane(DebugState* state, OpenGL* opengl, v3 position, v4 color)
+void DebugDrawPlane(DebugState* state, OpenGL* opengl, v3 position, v3 size, v4 color)
 {
     u32 vertexCount = ArrayCount(planeVertexs);
     u32 indexCount  = ArrayCount(planeLineIndices);
@@ -84,7 +84,7 @@ void DebugDrawPlane(DebugState* state, OpenGL* opengl, v3 position, v4 color)
         DebugFlush(state, opengl);
     }
 
-    mat4x4 model = Translate(Identity(), position);
+    mat4x4 model = Translate(Identity(), position) * Scale(Identity(), size);
 
     u32 baseVertex = state->vertexCount;
 
@@ -177,7 +177,11 @@ internal void DebugFlush(DebugState* state, OpenGL* opengl)
 {
     Program* debugProgram = &state->program;
 
-    opengl->glLineWidth(2.0f);
+    // opengl->glLineWidth(2.0f);
+    // Intel integrated gpu error
+    // API_ID_LINE_WIDTH deprecated behavior warning has been generated. Wide lines have been deprecated.
+    // glLineWidth set to 2.000000. glLineWidth with width greater than 1.0 will generate GL_INVALID_VALUE error in
+    // future versions
 
     GeometryBufferVBOSubdata(opengl, &state->buffer, state->vertexBufferBase, sizeof(DebugVertex) * state->vertexCount);
     GeometryBufferEBOSubdata(opengl, &state->buffer, state->indexBufferBase, sizeof(u32) * state->indexCount);

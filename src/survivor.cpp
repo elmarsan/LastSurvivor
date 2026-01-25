@@ -12,7 +12,7 @@
 global_variable u32 rectIndices[]   = { 0, 1, 2, 0, 2, 3 };
 global_variable u32 rectVertexCount = 4;
 global_variable u32 rectIndexCount  = 6;
-global_variable v4  green{ 0.0f, 1.0f, 0.0f, 1.0f };
+global_variable v4  green{ 0.1f, 0.66f, 0.0f, 1.0f };
 global_variable v4  red{ 1.0f, 0.0f, 0.0f, 1.0f };
 global_variable v4  blue{ 0.2f, 0.4f, 1.0f, 1.0f };
 global_variable v4  white{ 1.0f, 1.0f, 1.0f, 1.0f };
@@ -178,13 +178,22 @@ inline void BatchText(GameState* state, BatchBuffer* batch, char* text, v2 posit
     }
 }
 
-inline b32 BbboxInsertecs(Bbox* a, Bbox* b)
-{
-    bool x = (a->max.x >= b->min.x) && (a->min.x <= b->max.x);
-    bool y = (a->max.y >= b->min.y) && (a->min.y <= b->max.y);
-    bool z = (a->max.z >= b->min.z) && (a->min.z <= b->max.z);
+inline Entity* EntityGet(GameState* state, u32 index) { return &state->entities[index]; }
 
-    return (x && y && z);
+inline Entity* EntityInit(GameState* state, EntityType type, v3 position, v3 size = v3{ 1.0f, 1.0f, 1.0f })
+{
+    Assert(state->entityCount < ArrayCount(state->entities));
+
+    Entity* entity   = &state->entities[state->entityCount++];
+    entity->type     = type;
+    entity->position = position;
+    entity->yaw      = 0.0f;
+    entity->velocity = { 0.0f, 0.0f, 0.0f };
+    entity->size     = size;
+    entity->aabb.min = -entity->size;
+    entity->aabb.max = entity->size;
+
+    return entity;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -208,7 +217,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         state->program    = PushStruct(arena, Program);
         state->camera     = PushStruct(arena, Camera);
-        state->player     = PushStruct(arena, Player);
         state->cubeBuffer = PushStruct(arena, GeometryBuffer);
 #ifdef BUILD_TYPE_DEBUG
         state->debug   = PushStruct(arena, DebugState);
@@ -321,13 +329,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             GeometryBufferVertexAttrib(opengl, buffer, 3, 1, GL_INT, vertexSize, offsetof(BatchVertex, textureIndex));
         }
 
-        v3  position = { 0.0f, 16.0f, 5.0f };
-        v3  target   = { 0.0f, -0.9f, -0.4f };
-        v3  up       = { 0.0f, 1.0f, 0.0f };
-        f32 pitch    = -68.0f;
-        f32 yaw      = -90.0f;
-
-        CameraInit(state->camera, position, target, up, pitch, yaw, 45.0f);
+        CameraInit(state->camera,          //
+                   { 0.0f, 16.0f, 5.0f },  // Position
+                   { 0.0f, -0.9f, -0.4f }, // Target
+                   { 0.0f, 1.0f, 0.0f },   // Up
+                   -68.0f,                 // Pitch
+                   -90.0f,                 // Yaw
+                   45.0f                   // Fov
+        );
 
         state->pistolShot      = platform.AudioClipLoad("../data/pistol.wav", AudioClipType_Sfx);
         state->backgroundMusic = platform.AudioClipLoad("../data/background.wav", AudioClipType_Music);
@@ -336,10 +345,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         platform.AudioSetVolume(-3.0f, AudioClipType_Sfx);
         platform.AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
-        state->player->position = { 0.0f, 1.0f, 0.0f };
-        state->player->velocity = { 0.0f, 0.0f, 0.0f };
-        state->player->yaw      = -90.0f;
-        state->player->height   = 0.50f;
+        Entity* player = EntityInit(state, EntityType_Player, { 0.0f, 1.0f, 0.0f }, { 0.5f, 0.5f, 0.5f });
+        Entity* enemy0 = EntityInit(state, EntityType_Enemy, { -2.0f, 1.0f, -4.0f }, { 0.5f, 0.5f, 0.5f });
+        EntityInit(state, EntityType_Object, { 0.0f, 1.0f, -8.0f }, { 4.0f, 1.0f, 1.0f });
+        EntityInit(state, EntityType_Object, { -8.0f, 1.0f, 0.0f }, { 4.0f, 1.0f, 1.0f });
+        EntityInit(state, EntityType_Object, { -8.0f, 1.0f, -3.0f }, { 4.0f, 1.0f, 1.0f });
+        EntityInit(state, EntityType_Object, { 8.0f, 1.0f, -3.0f }, { 3.0f, 1.0f, 1.0f });
+        EntityInit(state, EntityType_Object, { 7.5f, 1.0f, -0.5f }, { 3.0f, 1.0f, 1.0f });
+
+        enemy0->targetEntity = player;
 
         // Font loading
         {
@@ -415,36 +429,37 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
         }
     }
+
     // ----------------------------------------------------------------------------
 
     // ----------------------------------------------------------------------------
     // Update
     v2u     windowDim  = platform.WindowGetDimension();
-    Player* player     = state->player;
+    Entity* player     = EntityGet(state, 0);
     Camera* camera     = state->camera;
     mat4x4  projection = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
     mat4x4  view       = CameraView(camera);
 
-    v3 inputDirection{ 0.0f, 0.0f, 0.0f };
-    // TODO: Tweak movement mechanics
-    f32 maxSpeed         = 7.0f;
-    f32 frictionForce    = 20.0f;
-    f32 moveAcceleration = 40.0f;
-    v3  cameraOffset{ 0.0f, 16.0f, 5.0f };
+    v4 playerColor = blue;
+
+    v3 cameraOffset{ 0.0f, 16.0f, 5.0f };
     CameraSetPitch(camera, -68.0f);
 
 #if 0
-    // v3 cameraOffset{ 0.0f, 4.0f, 8.0f };
-    // CameraSetPitch(camera, -26.0f);
-
-    v3 cameraOffset{ 0.0f, -0.5f, 8.0f };
-    CameraSetPitch(camera, 5.0f);
+    v3 cameraOffset{ 0.0f, 4.0f, 8.0f };
+    CameraSetPitch(camera, -26.0f);
 #endif
 
-    v3 boxPosition{ -3.0f, 0.0f, -3.0f };
-    v3 testAABBPosition{ -8.0f, 3.0f, -1.0f };
-    v3 testHalfExtend{ 1.0f, 3.0f, 1.0f };
-    v3 playerHalfExtend{ 0.5f, 0.5f, 0.5f };
+    f32 floorSize = 15.0f;
+
+    // ----------------------------------------------------------------------------
+    // TODO: Tweak movement mechanics
+    f32 maxSpeed         = 8.3f;
+    f32 frictionForce    = 20.0f;
+    f32 moveAcceleration = 40.0f;
+    f32 knockbackForce   = 17.0f;
+    f32 enemyHitRadius   = 0.75f;
+    // ----------------------------------------------------------------------------
 
     for (u32 controllerIndex = 0; controllerIndex < ArrayCount(input->controllers); controllerIndex++)
     {
@@ -465,15 +480,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             Mouse* mouse = &input->mouse;
 
-            v3 playerDirection = { 0 };
+            v3 playerDirection = { 0.0f, 0.0f, 0.0f };
 
             if (controller->moveUp.isDown)
             {
-                playerDirection.z -= 1.0f;
+                playerDirection.z = -1.0f;
             }
             if (controller->moveDown.isDown)
             {
-                playerDirection.z += 1.0f;
+                playerDirection.z = 1.0f;
             }
             if (controller->moveLeft.isDown)
             {
@@ -485,84 +500,170 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
             playerDirection = Norm(playerDirection);
 
-            v3  newPlayerVelocity = player->velocity;
-            f32 playerSpeed       = Length(player->velocity);
-
             // Deceleration
-            if (playerSpeed > 0.0f && Length(playerDirection) == 0.0f)
+            f32 playerSpeed = Length(player->velocity);
+            if (playerSpeed > 0.0f)
             {
                 f32 decelerationStep = frictionForce * delta;
 
                 if (playerSpeed <= decelerationStep)
                 {
-                    newPlayerVelocity = v3{ 0, 0, 0 };
+                    player->velocity = { 0.0f, 0.0f, 0.0f };
+                    player->flags &= ~EntityFlag_InKnockback;
                 }
                 else
                 {
-                    newPlayerVelocity -= (newPlayerVelocity / playerSpeed) * decelerationStep;
-                }
+                    if (player->flags & EntityFlag_InKnockback)
+                    {
+                        decelerationStep *= 2.0f;
+                    }
 
-                player->velocity = newPlayerVelocity;
+                    player->velocity -= (player->velocity / playerSpeed) * decelerationStep;
+                }
             }
+
             // Acceleration
-            else if (Length(playerDirection) > 0.0f)
+            if (!(player->flags & EntityFlag_InKnockback))
             {
                 v3 acceleration = playerDirection * moveAcceleration;
                 player->velocity += acceleration * delta;
-                if (playerSpeed > maxSpeed)
+                if (Length(player->velocity) > maxSpeed)
                 {
                     player->velocity = Norm(player->velocity) * maxSpeed;
                 }
             }
 
             v3 newPlayerPosition = player->position + (player->velocity * delta);
+            v3 correction        = { 0.0f, 0.0f, 0.0f };
+            v3 totalCorrection   = { 0 };
 
-            // World limits
-            f32 floorSize    = 30.0f;
-            f32 playerCenter = player->height;
+            AABB playerWorldBbox = AABBToWorld(player->aabb, player->position);
 
-            // Left limit
-            if (newPlayerPosition.x - playerCenter < -floorSize - 0.5f)
+            // Collision detection
+            for (u32 entityIndex = 1; entityIndex < state->entityCount; entityIndex++)
             {
-                newPlayerPosition.x = player->position.x;
-            }
-            // Right limit
-            if (newPlayerPosition.x + playerCenter > floorSize + 0.5f)
-            {
-                newPlayerPosition.x = player->position.x;
-            }
-            // Top limit
-            if (newPlayerPosition.z - playerCenter < -floorSize - 0.5f)
-            {
-                newPlayerPosition.z = player->position.z;
-            }
-            // Bottom limit
-            if (newPlayerPosition.z + playerCenter > floorSize + 0.5f)
-            {
-                newPlayerPosition.z = player->position.z;
+                Entity* entity = EntityGet(state, entityIndex);
+
+                if (entity->targetEntity)
+                {
+                    v3 distance = entity->targetEntity->position - entity->position;
+                    v3 dir      = Norm(distance);
+                    entity->yaw = (f32)atan2(dir.x, dir.z);
+
+                    if (entity->type == EntityType_Enemy)
+                    {
+                        v2 hitRectMinCorner{ entity->position.x - enemyHitRadius, entity->position.z - enemyHitRadius };
+                        v2 hitRectMaxCorner{ entity->position.x + enemyHitRadius, entity->position.z + enemyHitRadius };
+
+                        v2 targetMinCorner;
+                        v2 targetMaxCorner;
+                        targetMinCorner.x = entity->targetEntity->position.x - (entity->size.x * 0.5f);
+                        targetMinCorner.y = entity->targetEntity->position.z - (entity->size.z * 0.5f);
+                        targetMaxCorner.x = entity->targetEntity->position.x + (entity->size.x * 0.5f);
+                        targetMaxCorner.y = entity->targetEntity->position.z + (entity->size.z * 0.5f);
+
+                        bool overlapsX =
+                            hitRectMinCorner.x <= targetMaxCorner.x && hitRectMaxCorner.x >= targetMinCorner.x;
+                        bool overlapsZ =
+                            hitRectMinCorner.y <= targetMaxCorner.y && hitRectMaxCorner.y >= targetMinCorner.y;
+                        if (overlapsX && overlapsZ)
+                        {
+                            v3 pushDir = { dir.x, 0.0f, dir.z };
+
+                            entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
+                            entity->targetEntity->velocity += pushDir * (knockbackForce);
+                            entity->targetEntity->flags |= EntityFlag_InKnockback;
+
+                            playerColor = red;
+                        }
+                    }
+                }
+                else
+                {
+                    AABB entityWorldBbox = AABBToWorld(entity->aabb, entity->position);
+
+                    AABB intersection;
+                    if (AABBIntersection(entityWorldBbox, playerWorldBbox, &intersection))
+                    {
+                        if (player->flags & EntityFlag_InKnockback)
+                        {
+                            player->flags &= ~EntityFlag_InKnockback;
+                        }
+
+                        playerColor = white;
+
+                        v3 penetration;
+                        penetration.x = intersection.max.x - intersection.min.x;
+                        penetration.y = intersection.max.y - intersection.min.y;
+                        penetration.z = intersection.max.z - intersection.min.z;
+
+                        // ----------------------------------------------------------------------------
+                        // Correct using the minimal penetration axis
+                        if (penetration.x < penetration.y && penetration.x < penetration.z)
+                        {
+                            correction.x = penetration.x;
+                        }
+                        else if (penetration.y < penetration.z)
+                        {
+                            correction.y = penetration.y;
+                        }
+                        else
+                        {
+                            correction.z = penetration.z;
+                        }
+                        // ----------------------------------------------------------------------------
+
+                        // ----------------------------------------------------------------------------
+                        // Determine correction axis
+                        if (newPlayerPosition.x < entity->position.x)
+                        {
+                            correction.x = -correction.x;
+                        }
+                        if (newPlayerPosition.y < entity->position.y)
+                        {
+                            correction.y = -correction.y;
+                        }
+                        if (newPlayerPosition.z < entity->position.z)
+                        {
+                            correction.z = -correction.z;
+                        }
+                        // ----------------------------------------------------------------------------
+
+                        // ----------------------------------------------------------------------------
+                        // Use the greatest penetration to resolve collisions
+                        if (Abs(correction.x) > Abs(totalCorrection.x))
+                        {
+                            totalCorrection.x = correction.x;
+                        }
+                        if (Abs(correction.y) > Abs(totalCorrection.y))
+                        {
+                            totalCorrection.y = correction.y;
+                        }
+                        if (Abs(correction.z) > Abs(totalCorrection.z))
+                        {
+                            totalCorrection.z = correction.z;
+                        }
+                        // ----------------------------------------------------------------------------
+                    }
+                }
             }
 
-            Bbox playerBbbox;
-            playerBbbox.min = newPlayerPosition - playerHalfExtend;
-            playerBbbox.max = newPlayerPosition + playerHalfExtend;
+            // if (totalCorrection.x != 0.0f)
+            //{
+            //     player->velocity.x = 0.0f;
+            // }
+            // if (totalCorrection.y != 0.0f)
+            //{
+            //     player->velocity.y = 0.0f;
+            // }
+            // if (totalCorrection.z != 0.0f)
+            //{
+            //     player->velocity.z = 0.0f;
+            // }
 
-            Bbox testBbbox;
-            testBbbox.min = testAABBPosition - testHalfExtend;
-            testBbbox.max = testAABBPosition + testHalfExtend;
-
-            if (BbboxInsertecs(&playerBbbox, &testBbbox))
-            {
-                platform.Logf("Bbox intersection");
-                // v3  r{ 1.0f, 0.0f, 0.0f };
-                // f32 pushStrenght = 2.0f;
-                // player->velocity += r * pushStrength;
-            }
-            else
-            {
-                platform.Logf("\n");
-                player->position = newPlayerPosition;
-                camera->position = player->position + cameraOffset;
-            }
+            newPlayerPosition += totalCorrection;
+            player->position = newPlayerPosition;
+            camera->position = player->position + cameraOffset;
 
             // Player rotation
             {
@@ -608,7 +709,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
             if (mouse->left.isDown && !mouse->left.wasDown)
             {
-                platform.AudioClipPlay(state->pistolShot, 0);
+                // platform.AudioClipPlay(state->pistolShot, 0);
             }
         }
     }
@@ -703,7 +804,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // Floor
         {
             mat4x4 translate = Translate(Identity(), { 0.0f, 0.0f, 0.0f });
-            mat4x4 scale     = Scale(Identity(), 30.0f);
+            mat4x4 scale     = Scale(Identity(), floorSize);
             mat4x4 model     = translate * scale;
 
             PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
@@ -711,17 +812,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             PushRenderDrawBuffer(commandQueue, state->planeBuffer);
         }
 
-        // Player
+        // Entities
         {
-            mat4x4 translate = Translate(Identity(), { player->position.x, player->height, player->position.z });
-            mat4x4 rotate    = Rotate(Identity(), player->yaw, { 0.0f, 1.0f, 0.0f });
-            mat4x4 scale     = Scale(Identity(), player->height);
+            for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+            {
+                Entity* entity = &state->entities[entityIndex];
 
-            mat4x4 model = translate * rotate * scale;
+                mat4x4 translate = Translate(Identity(), entity->position);
+                mat4x4 rotate    = Rotate(Identity(), entity->yaw, { 0.0f, 1.0f, 0.0f });
+                mat4x4 scale     = Scale(Identity(), entity->size);
 
-            PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
-            PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", blue);
-            PushRenderDrawBuffer(commandQueue, state->cubeBuffer);
+                mat4x4 model = translate * rotate * scale;
+
+                PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
+                PushRenderUploadUniformVec4(commandQueue, state->program->id, "color",
+                                            entityIndex == 0 ? playerColor : green);
+                PushRenderDrawBuffer(commandQueue, state->cubeBuffer);
+            }
         }
     }
 
@@ -730,14 +837,30 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 #ifdef BUILD_TYPE_DEBUG
     DebugFrameBegin(state->debug, opengl, projection * view);
     {
-        v3 playerTarget{ sinf(player->yaw), 0.0f, cosf(player->yaw) };
+        // Debug entities
+        for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+        {
+            Entity* entity = &state->entities[entityIndex];
 
-        DebugDrawLine(state->debug, opengl, v3{ player->position.x, player->height, player->position.z },
-                      v3{ player->position.x, player->height, player->position.z } + (playerTarget * 1.5f), blue);
+            // Entity AABB
+            DebugDrawAABB(state->debug, opengl, entity->position, entity->yaw, entity->aabb.min, entity->aabb.max, red);
 
-        DebugDrawAABB(state->debug, opengl, testAABBPosition, 0, -testHalfExtend, testHalfExtend, red);
-        DebugDrawAABB(state->debug, opengl, { player->position.x, player->height, player->position.z }, player->yaw,
-                      -playerHalfExtend, playerHalfExtend, green);
+            // Entity Y orientation
+            if (entity->type != EntityType_Object)
+            {
+                v3 entityTarget{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
+                v3 p0{ entity->position.x, 0.5f, entity->position.z };
+                v3 p1 = p0 + (entityTarget * 1.5f);
+
+                DebugDrawLine(state->debug, opengl, p0, p1, blue);
+            }
+
+            if (entity->type == EntityType_Enemy)
+            {
+                // Enemy hitbox
+                DebugDrawPlane(state->debug, opengl, entity->position, { enemyHitRadius, 0, enemyHitRadius }, red);
+            }
+        }
     }
     DebugFrameEnd(state->debug, opengl);
 #endif

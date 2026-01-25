@@ -2,6 +2,121 @@
 
 #define Pi           3.14159265359f
 #define Radians(deg) ((deg) * (Pi) / 180.0f)
+#define Max(a, b)    ((a) > (b) ? (a) : (b))
+#define Min(a, b)    ((a) < (b) ? (a) : (b))
+#define Abs(a)       ((a >= 0.0f) ? (a) : -a)
+
+union v2
+{
+    f32 e[2];
+    struct
+    {
+        f32 x, y;
+    };
+    struct
+    {
+        f32 w, h;
+    };
+};
+
+union v2u
+{
+    u32 e[2];
+    struct
+    {
+        u32 x, y;
+    };
+    struct
+    {
+        u32 w, h;
+    };
+};
+
+union v2s
+{
+    s32 e[2];
+    struct
+    {
+        s32 x, y;
+    };
+    struct
+    {
+        s32 w, h;
+    };
+};
+
+union mat3x3
+{
+    struct
+    {
+        f32 e[3][3];
+    };
+    struct
+    {
+        f32 ptr[12];
+    };
+
+    mat3x3(f32 e00, f32 e01, f32 e02, f32 e10, f32 e11, f32 e12, f32 e20, f32 e21, f32 e22)
+    {
+        e[0][0] = e00;
+        e[0][1] = e01;
+        e[0][2] = e02;
+
+        e[1][0] = e10;
+        e[1][1] = e11;
+        e[1][2] = e12;
+
+        e[2][0] = e20;
+        e[2][1] = e21;
+        e[2][2] = e22;
+    }
+};
+
+union mat4x4
+{
+    struct
+    {
+        f32 e[4][4];
+    };
+    struct
+    {
+        f32 ptr[16];
+    };
+};
+
+union v3
+{
+    f32 e[3];
+    struct
+    {
+        f32 x, y, z;
+    };
+    struct
+    {
+        f32 r, g, b;
+    };
+};
+
+union v4
+{
+    f32 e[4];
+    struct
+    {
+        f32 x, y, z, w;
+    };
+    struct
+    {
+        f32 r, g, b, a;
+    };
+};
+
+// TODO: (min and max) vs (center and halfsize)
+// https://www.yosoygames.com.ar/wp/2013/07/good-bye-axisalignedbox-hello-aabb/
+struct AABB
+{
+    v3 min;
+    v3 max;
+};
 
 // ----------------------------------------------------------------------------
 // v2 operator overloading
@@ -35,6 +150,16 @@ inline v2& operator+=(v2& a, const v2& b)
 {
     a = a + b;
     return a;
+}
+
+inline v2 operator-(v2 a, v2 b)
+{
+    v2 result;
+
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+
+    return result;
 }
 // ----------------------------------------------------------------------------
 
@@ -124,6 +249,8 @@ inline v3 operator/(v3 a, f32 scalar)
 
     return result;
 }
+
+inline b32 operator>(v3 a, v3 b) { return a.x > b.x && a.y > b.y && a.z > b.z; }
 // ----------------------------------------------------------------------------
 
 inline f32 Length(const v3& a) { return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z); }
@@ -439,22 +566,6 @@ inline f32 Sign(f32 a)
     return result;
 }
 
-inline f32 Absolute(f32 a)
-{
-    f32 result;
-
-    if (a > 0.0f)
-    {
-        result = a;
-    }
-    else
-    {
-        result = -a;
-    }
-
-    return result;
-}
-
 inline f32 Clamp(f32 value, f32 min, f32 max)
 {
     if (value < min)
@@ -466,4 +577,30 @@ inline f32 Clamp(f32 value, f32 min, f32 max)
         return max;
     }
     return value;
+}
+
+inline b32 AABBIntersection(AABB a, AABB b, AABB* intersection)
+{
+    b32 overlaps = false;
+
+    bool x = (a.max.x >= b.min.x) && (a.min.x <= b.max.x);
+    bool y = (a.max.y >= b.min.y) && (a.min.y <= b.max.y);
+    bool z = (a.max.z >= b.min.z) && (a.min.z <= b.max.z);
+    if (x && y && z)
+    {
+        overlaps = true;
+
+        intersection->min = { Max(a.min.x, b.min.x), Max(a.min.y, b.min.y), Max(a.min.z, b.min.z) };
+        intersection->max = { Min(a.max.x, b.max.x), Min(a.max.y, b.max.y), Min(a.max.z, b.max.z) };
+    }
+
+    return overlaps;
+}
+
+inline AABB AABBToWorld(AABB local, v3 pos)
+{
+    AABB world;
+    world.min = local.min + pos;
+    world.max = local.max + pos;
+    return world;
 }
