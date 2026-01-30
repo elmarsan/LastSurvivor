@@ -786,6 +786,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         gameMemory.opengl.glDrawArrays        = glDrawArrays;
         gameMemory.opengl.glDrawElements      = glDrawElements;
         gameMemory.opengl.glLineWidth         = glLineWidth;
+        gameMemory.opengl.glPolygonMode       = glPolygonMode;
         gameMemory.opengl.glGenTextures       = glGenTextures;
         gameMemory.opengl.glBindTexture       = glBindTexture;
         gameMemory.opengl.glTexImage2D        = glTexImage2D;

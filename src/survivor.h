@@ -79,6 +79,7 @@ struct GameState
 
     GeometryBuffer* cubeBuffer;
     GeometryBuffer* planeBuffer; // TODO: Batch
+    GeometryBuffer* objBuffer;
     Program*        program;
     Camera*         camera;
     AudioClip*      pistolShot;

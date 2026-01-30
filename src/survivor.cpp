@@ -3,6 +3,7 @@
 #include "survivor_renderer_opengl.cpp"
 #include "survivor_debug_geometry.cpp"
 #include "survivor_debug.cpp"
+#include "survivor_obj.cpp"
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "stb_rect_pack.h"
@@ -428,6 +429,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 Assert(0);
             }
         }
+
+        // Obj test
+        {
+            FileReadResult teapotFile = platform.FileReadEntire("../data/teapot.obj");
+            if (teapotFile.contentSize > 0)
+            {
+                state->objBuffer = PushStruct(arena, GeometryBuffer);
+                ObjParseFile(teapotFile, platform.Logf, opengl, arena, state->objBuffer);
+                platform.FileFree(teapotFile.content);
+            }
+            else
+            {
+                Assert(0);
+            }
+        }
     }
 
     // ----------------------------------------------------------------------------
@@ -439,6 +455,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     Camera* camera     = state->camera;
     mat4x4  projection = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
     mat4x4  view       = CameraView(camera);
+
+    // v3     pos{ 0.0f, 1.0f, 4.0f };
+    // v3     target{ 0.0f, 0.0f, -1.0f };
+    // v3     up{ 0.0f, 1.0f, 0.0f };
+    // mat4x4 view = LookAt(pos, pos + target, up);
 
     v4 playerColor = blue;
 
@@ -829,11 +850,25 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                                             entityIndex == 0 ? playerColor : green);
                 PushRenderDrawBuffer(commandQueue, state->cubeBuffer);
             }
+
+            // Obj test
+            {
+                mat4x4 translate = Identity();
+                mat4x4 rotate    = Identity();
+                // mat4x4 rotate = Rotate(Identity(), cosf(Radians(185.0f)), { 0.0f, 1.0f, 0.0f });
+                mat4x4 scale = Scale(Identity(), 0.25f);
+
+                mat4x4 model = translate * rotate * scale;
+                PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
+                PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", red);
+                PushRenderDrawBuffer(commandQueue, state->objBuffer);
+            }
         }
     }
 
     RendererFrameEnd(opengl);
 
+    // #if 0
 #ifdef BUILD_TYPE_DEBUG
     DebugFrameBegin(state->debug, opengl, projection * view);
     {

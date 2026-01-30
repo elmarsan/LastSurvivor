@@ -19,6 +19,9 @@ void RendererFrameEnd(OpenGL* opengl)
 
     opengl->glEnable(GL_DEPTH_TEST);
 
+    // opengl->glPolygonMode(GL_FRONT_AND_BACK , GL_LINE);
+    opengl->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
 #pragma warning(push)
 #pragma warning(disable : 4456)
     for (u8* command = queue->pushBufferBase; command < queue->pushBufferPtr; /**/)

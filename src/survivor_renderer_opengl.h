@@ -21,6 +21,7 @@ struct OpenGL
     PFNGLDRAWARRAYSPROC              glDrawArrays;
     PFNGLDRAWELEMENTSPROC            glDrawElements;
     PFNGLLINEWIDTHPROC               glLineWidth;
+    PFNGLPOLYGONMODEPROC             glPolygonMode;
     PFNGLGENTEXTURESPROC             glGenTextures;
     PFNGLBINDTEXTUREPROC             glBindTexture;
     PFNGLTEXIMAGE2DPROC              glTexImage2D;
