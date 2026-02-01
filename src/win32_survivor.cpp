@@ -106,7 +106,7 @@ internal PLATFORM_FILE_READ_ENTIRE(Win32FileReadEntire)
         long size = ftell(file);
         if (size != -1L)
         {
-            result.contentSize = (u64)size;
+            result.contentSize = (size_t)size;
             result.content     = malloc(sizeof(u8) * size);
             fseek(file, 0, SEEK_SET);
             fread(result.content, 1, result.contentSize, file);

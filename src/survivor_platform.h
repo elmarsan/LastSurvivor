@@ -88,8 +88,8 @@ inline GameInputController* GetController(GameInput* gameInput, u32 controllerIn
 
 struct FileReadResult
 {
-    void* content;
-    u64   contentSize;
+    void*  content;
+    size_t contentSize;
 };
 
 struct AudioClip

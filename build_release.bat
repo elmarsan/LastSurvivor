@@ -10,7 +10,7 @@ pushd build
 
 del *.pdb > NUL 2> NUL
 
-set compiler_options=/nologo /FC /fp:fast /O2 /W4 /WX /wd4201 /wd4100 /wd4505
+set compiler_options=/nologo /FC /fp:fast /O2 /W4 /WX /wd4201 /wd4100 /wd4505 /wd4715
 set preprocessor=-D"BUILD_TYPE_RELEASE=1" -D"NOMINMAX=1" -D"WIN32_LEAN_AND_MEAN=1" -D"_CRT_SECURE_NO_WARNINGS=1"
 set includes=-I..\external
 set libs=user32.lib opengl32.lib gdi32.lib ole32.lib

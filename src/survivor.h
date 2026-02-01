@@ -7,6 +7,7 @@
 #include "survivor_memory.h"
 #include "survivor_camera.h"
 #include "survivor_debug.h"
+#include "survivor_obj.h"
 
 #define TTF_FIRST_GLYPH_OFFSET 32 // Space ascii code
 #define TTF_GLYPH_COUNT        95
@@ -80,6 +81,7 @@ struct GameState
     GeometryBuffer* cubeBuffer;
     GeometryBuffer* planeBuffer; // TODO: Batch
     GeometryBuffer* objBuffer;
+    GeometryBuffer* fenceBuffer;
     Program*        program;
     Camera*         camera;
     AudioClip*      pistolShot;

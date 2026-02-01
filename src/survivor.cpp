@@ -432,11 +432,27 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // Obj test
         {
+            // Fence
+            FileReadResult fenceFile = platform.FileReadEntire("../data/fence.obj");
+            if (fenceFile.contentSize > 0)
+            {
+                state->fenceBuffer = PushStruct(arena, GeometryBuffer);
+                Obj obj        = ObjReadData(fenceFile.content, fenceFile.contentSize, platform.FileReadEntire, platform.FileFree, platform.Logf, arena);
+                ObjInitGeometryBuffer(&obj, arena, opengl, state->fenceBuffer);
+                platform.FileFree(fenceFile.content);
+            }
+            else
+            {
+                Assert(0);
+            }
+
+            // Teapot
             FileReadResult teapotFile = platform.FileReadEntire("../data/teapot.obj");
             if (teapotFile.contentSize > 0)
             {
-                state->objBuffer = PushStruct(arena, GeometryBuffer);
-                ObjParseFile(teapotFile, platform.Logf, opengl, arena, state->objBuffer);
+                state->objBuffer   = PushStruct(arena, GeometryBuffer);
+                Obj teapotData = ObjReadData(teapotFile.content, teapotFile.contentSize, platform.FileReadEntire, platform.FileFree, platform.Logf, arena);
+                ObjInitGeometryBuffer(&teapotData, arena, opengl, state->objBuffer);
                 platform.FileFree(teapotFile.content);
             }
             else
@@ -456,10 +472,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     mat4x4  projection = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
     mat4x4  view       = CameraView(camera);
 
-    // v3     pos{ 0.0f, 1.0f, 4.0f };
-    // v3     target{ 0.0f, 0.0f, -1.0f };
-    // v3     up{ 0.0f, 1.0f, 0.0f };
-    // mat4x4 view = LookAt(pos, pos + target, up);
+    //v3     pos{ 0.0f, 1.0f, 4.0f };
+    //v3     target{ 0.0f, 0.0f, -1.0f };
+    //v3     up{ 0.0f, 1.0f, 0.0f };
+    //mat4x4 view = LookAt(pos, pos + target, up);
 
     v4 playerColor = blue;
 
@@ -862,6 +878,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
                 PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", red);
                 PushRenderDrawBuffer(commandQueue, state->objBuffer);
+            }
+
+            // Fence test
+            {
+                // mat4x4 translate = Translate(Identity(), { 0.0f, 0.0f, 3.0f });
+                mat4x4 translate = Identity();
+                mat4x4 rotate    = Rotate(Identity(), -65.0f, { 0.0f, 1.0f, 0.0f });
+                mat4x4 scale     = Identity();
+                // mat4x4 rotate = Rotate(Identity(), cosf(Radians(185.0f)), { 0.0f, 1.0f, 0.0f });
+                // mat4x4 scale = Scale(Identity(), 0.25f);
+
+                mat4x4 model = translate * rotate * scale;
+                PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
+                PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", red);
+                PushRenderDrawBuffer(commandQueue, state->fenceBuffer);
             }
         }
     }

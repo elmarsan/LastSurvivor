@@ -17,6 +17,10 @@ union v2
     {
         f32 w, h;
     };
+    struct
+    {
+        f32 u, v;
+    };
 };
 
 union v2u

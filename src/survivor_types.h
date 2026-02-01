@@ -56,3 +56,8 @@ typedef double   f64;
         InvalidCodePath;                                                                                               \
         break;                                                                                                         \
     }
+#define DefaultCase                                                                                                    \
+    default:                                                                                                           \
+    {                                                                                                                  \
+        break;                                                                                                         \
+    }
