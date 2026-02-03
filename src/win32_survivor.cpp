@@ -148,6 +148,16 @@ internal PLATFORM_WINDOW_GET_DIMENSION(Win32WindowGetDimension)
 internal void APIENTRY Win32OpenGLDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
                                                 const GLchar* message, const void* userParam)
 {
+    // Intel integrated gpu error
+    // API_ID_LINE_WIDTH deprecated behavior warning has been generated. Wide lines have been deprecated.
+    // glLineWidth set to 2.000000. glLineWidth with width greater than 1.0 will generate GL_INVALID_VALUE error in
+    // future versions
+    const char* vendor = (const char*)glGetString(GL_VENDOR);
+    if (strcmp(vendor, "Intel") == 0 && id == 7)
+    {
+        return;
+    }
+
     if (severity != GL_DEBUG_SEVERITY_NOTIFICATION)
     {
         Log("------------------------------------------------------------");
@@ -753,12 +763,21 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             Win32ErrorMessage(PlatformErrorType_Fatal, "Unable to set OpenGL context");
         }
 
-        GLint major, minor, contextFlags;
-        glGetIntegerv(GL_MAJOR_VERSION, &major);
-        glGetIntegerv(GL_MINOR_VERSION, &minor);
+        GLint contextFlags;
         glGetIntegerv(GL_CONTEXT_FLAGS, &contextFlags);
 
-        Log("OpenGL context created, version %d.%d", major, minor);
+#if BUILD_TYPE_DEBUG
+        const GLubyte* vendor   = glGetString(GL_VENDOR);
+        const GLubyte* renderer = glGetString(GL_RENDERER);
+        const GLubyte* version  = glGetString(GL_VERSION);
+
+        Log("------------------------------------------------------------");
+        Log("OpenGL context created");
+        Log("Vendor   %s", vendor);
+        Log("Renderer %s", renderer);
+        Log("Version  %s", version);
+        Log("------------------------------------------------------------");
+#endif
 
         if (contextFlags & GL_CONTEXT_FLAG_DEBUG_BIT)
         {
@@ -839,8 +858,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
     Win32GameCode game                = Win32GameCodeLoad(gameDLLFilename, tempGameDLLFilename);
 #endif
 
-    gWin32State.gameInput.keyboard.isAnalog = false;
-    gWin32State.gameInput.gamepad.isAnalog  = true;
+    gWin32State.gameInput.keyboard.isAnalog    = false;
+    gWin32State.gameInput.keyboard.isConnected = true;
+    gWin32State.gameInput.gamepad.isAnalog     = true;
 
     LARGE_INTEGER frameStartTime = Win32GetWallClock();
 

@@ -118,24 +118,24 @@ void DebugDrawPlane(DebugState* state, OpenGL* opengl, v3 position, v3 size, v4 
     }
 }
 
-void DebugDrawAABB(DebugState* state, OpenGL* opengl, v3 position, f32 yRotation, v3 min, v3 max, v4 color)
+void DebugDrawAABB(DebugState* state, OpenGL* opengl, v3 worldPosition, f32 yRotation, AABB aabb, v4 color)
 {
     // clang-format off
-	v3 vertexs[8] = {
-		{ min.x, min.y, min.z }, // 0
-		{ min.x, min.y, max.z }, // 1
-		{ min.x, max.y, min.z }, // 2
-		{ min.x, max.y, max.z }, // 3
-		{ max.x, min.y, min.z }, // 4
-		{ max.x, min.y, max.z }, // 5
-		{ max.x, max.y, min.z }, // 6
-		{ max.x, max.y, max.z }, // 7
-	};
-	u32 indices[24] = {
-		0, 1, 1, 3, 3, 2, 2, 0,
-		4, 5, 5, 7, 7, 6, 6, 4,
-		0, 4, 1, 5, 2, 6, 3, 7
-	};
+    v3 vertexs[8] = {
+        { aabb.min.x, aabb.min.y, aabb.min.z }, // 0
+        { aabb.min.x, aabb.min.y, aabb.max.z }, // 1
+        { aabb.min.x, aabb.max.y, aabb.min.z }, // 2
+        { aabb.min.x, aabb.max.y, aabb.max.z }, // 3
+        { aabb.max.x, aabb.min.y, aabb.min.z }, // 4
+        { aabb.max.x, aabb.min.y, aabb.max.z }, // 5
+        { aabb.max.x, aabb.max.y, aabb.min.z }, // 6
+        { aabb.max.x, aabb.max.y, aabb.max.z }, // 7
+    };
+    u32 indices[24] = {
+        0, 1, 1, 3, 3, 2, 2, 0,
+        4, 5, 5, 7, 7, 6, 6, 4,
+        0, 4, 1, 5, 2, 6, 3, 7
+    };
     // clang-format on
 
     u32 vertexCount = ArrayCount(vertexs);
@@ -153,20 +153,27 @@ void DebugDrawAABB(DebugState* state, OpenGL* opengl, v3 position, f32 yRotation
     }
     state->indexCount += indexCount;
 
-    mat4x4 model = Translate(Identity(), position) * Rotate(Identity(), yRotation, { 0.0f, 1.0f, 0.0f });
+    mat4x4 translate = Translate(Identity(), worldPosition);
+    mat4x4 rotate    = Rotate(Identity(), yRotation, { 0.0f, 1.0f, 0.0f });
+    mat4x4 model     = translate * rotate;
 
     for (u32 vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
     {
-        v4 localPos;
-        localPos.x = vertexs[vertexIndex].x;
-        localPos.y = vertexs[vertexIndex].y;
-        localPos.z = vertexs[vertexIndex].z;
-        localPos.w = 1.0f;
+        v4 position;
+        position.x = vertexs[vertexIndex].x;
+        position.y = vertexs[vertexIndex].y;
+        position.z = vertexs[vertexIndex].z;
+        position.w = 1.0f;
 
-        v4 worldPos4 = model * localPos;
-        v3 worldPos{ worldPos4.x, worldPos4.y, worldPos4.z };
+        v4 worldPos4 = model * position;
+        v3 worldPos3;
+        worldPos3.x = worldPos4.x;
+        worldPos3.y = worldPos4.y;
+        worldPos3.z = worldPos4.z;
 
-        state->vertexBufferPtr->position = worldPos;
+        state->vertexBufferPtr->position = worldPos3;
+
+        state->vertexBufferPtr->position = worldPos3;
         state->vertexBufferPtr->color    = color;
         state->vertexBufferPtr++;
     }
@@ -177,11 +184,7 @@ internal void DebugFlush(DebugState* state, OpenGL* opengl)
 {
     Program* debugProgram = &state->program;
 
-    // opengl->glLineWidth(2.0f);
-    // Intel integrated gpu error
-    // API_ID_LINE_WIDTH deprecated behavior warning has been generated. Wide lines have been deprecated.
-    // glLineWidth set to 2.000000. glLineWidth with width greater than 1.0 will generate GL_INVALID_VALUE error in
-    // future versions
+    opengl->glLineWidth(2.0f);
 
     GeometryBufferVBOSubdata(opengl, &state->buffer, state->vertexBufferBase, sizeof(DebugVertex) * state->vertexCount);
     GeometryBufferEBOSubdata(opengl, &state->buffer, state->indexBufferBase, sizeof(u32) * state->indexCount);

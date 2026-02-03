@@ -468,11 +468,10 @@ void ObjInitGeometryBuffer(Obj* obj, Arena* arena, OpenGL* opengl, GeometryBuffe
     u32*      indices       = PushArray(arena, maxIndices, u32);
     ObjIndex* uniqueIndices = PushArray(arena, maxVertices, ObjIndex);
 
-    u32     vertexCount     = 0;
-    u32     indexCount      = 0;
-    u32     buildIndexCount = 0;
-    u32*    indexPtr        = indices;
-    Vertex* vertexPtr       = vertexs;
+    u32     vertexCount = 0;
+    u32     indexCount  = 0;
+    u32*    indexPtr    = indices;
+    Vertex* vertexPtr   = vertexs;
 
     for (u32 faceIndex = 0; faceIndex < obj->faceCount; faceIndex++)
     {

@@ -114,14 +114,6 @@ union v4
     };
 };
 
-// TODO: (min and max) vs (center and halfsize)
-// https://www.yosoygames.com.ar/wp/2013/07/good-bye-axisalignedbox-hello-aabb/
-struct AABB
-{
-    v3 min;
-    v3 max;
-};
-
 // ----------------------------------------------------------------------------
 // v2 operator overloading
 inline v2& operator*=(v2& a, const v2& b)
@@ -244,6 +236,17 @@ inline v3& operator*=(v3& a, f32 scalar)
 }
 
 inline v3 operator/(v3 a, f32 scalar)
+{
+    v3 result;
+
+    result.x = a.x / scalar;
+    result.y = a.y / scalar;
+    result.z = a.z / scalar;
+
+    return result;
+}
+
+inline v3 operator/(f32 scalar, v3 a)
 {
     v3 result;
 
@@ -554,21 +557,7 @@ inline mat4x4 LookAt(v3 eye, v3 center, v3 worldUp)
     return result;
 }
 
-inline f32 Sign(f32 a)
-{
-    f32 result;
-
-    if (a > 0.0f)
-    {
-        result = 1.0f;
-    }
-    if (a < 0.0f)
-    {
-        result = -1.0f;
-    }
-
-    return result;
-}
+inline b32 IsPositive(f32 a) { return a >= 0.0f ? true : false; }
 
 inline f32 Clamp(f32 value, f32 min, f32 max)
 {
@@ -581,30 +570,4 @@ inline f32 Clamp(f32 value, f32 min, f32 max)
         return max;
     }
     return value;
-}
-
-inline b32 AABBIntersection(AABB a, AABB b, AABB* intersection)
-{
-    b32 overlaps = false;
-
-    bool x = (a.max.x >= b.min.x) && (a.min.x <= b.max.x);
-    bool y = (a.max.y >= b.min.y) && (a.min.y <= b.max.y);
-    bool z = (a.max.z >= b.min.z) && (a.min.z <= b.max.z);
-    if (x && y && z)
-    {
-        overlaps = true;
-
-        intersection->min = { Max(a.min.x, b.min.x), Max(a.min.y, b.min.y), Max(a.min.z, b.min.z) };
-        intersection->max = { Min(a.max.x, b.max.x), Min(a.max.y, b.max.y), Min(a.max.z, b.max.z) };
-    }
-
-    return overlaps;
-}
-
-inline AABB AABBToWorld(AABB local, v3 pos)
-{
-    AABB world;
-    world.min = local.min + pos;
-    world.max = local.max + pos;
-    return world;
 }

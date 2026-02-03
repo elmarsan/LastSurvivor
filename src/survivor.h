@@ -2,6 +2,7 @@
 
 #include "survivor_types.h"
 #include "survivor_math.h"
+#include "survivor_physics.h"
 #include "survivor_renderer_opengl.h"
 #include "survivor_platform.h"
 #include "survivor_memory.h"
@@ -73,6 +74,30 @@ struct TTFGlyph
     f32 s0, t0, s1, t1; // Texture coordinates, relative to bounding-box.
 };
 
+#define GRID_COLS 30
+#define GRID_ROWS 30
+
+#define CELL_SIZE 1.0f
+#define CELL_HALF (CELL_SIZE * 0.5f)
+
+#define CELL_ROW(index)      (index / GRID_ROWS)
+#define CELL_COL(index)      (index % GRID_COLS)
+#define CELL_INDEX(row, col) (col + ((row) * GRID_ROWS))
+
+typedef u32 cell_index;
+
+#define GRAPH_EMPTY_NODE 0xFFFFFFFF
+
+struct Graph
+{
+    std::vector<cell_index>       nodes;
+    std::vector<std::vector<u32>> edges;
+};
+
+//  ----------------------------------------------------------------------------
+//  ----------------------------------------------------------------------------
+//  ----------------------------------------------------------------------------
+
 struct GameState
 {
     b32   initialized;
@@ -91,9 +116,9 @@ struct GameState
     Texture*        fenceDiffuseMapTexture;
     BatchBuffer*    batchBuffer;
     TTFGlyph        ttfChars[TTF_GLYPH_COUNT];
-
-    Entity entities[MAX_ENTITY_COUNT];
-    u32    entityCount;
+    Entity          entities[MAX_ENTITY_COUNT];
+    u32             entityCount;
+    Graph*          graph;
 
 #ifdef BUILD_TYPE_DEBUG
     DebugState* debug;
