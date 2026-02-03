@@ -1,10 +1,20 @@
 #version 330 core
 
+in  vec2 UV;
 out vec4 FragColor;
 
-uniform vec4 color;
+uniform bool      hasDiffuse;
+uniform sampler2D diffuseMap;
+uniform vec4      color;
 
 void main()
 {
-    FragColor = vec4(color);
+    if (hasDiffuse)
+    {
+        FragColor = texture(diffuseMap, UV) * color;
+    }
+    else
+    {
+        FragColor = color;
+    }
 }

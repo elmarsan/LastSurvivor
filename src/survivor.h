@@ -78,9 +78,8 @@ struct GameState
     b32   initialized;
     Arena arena;
 
-    GeometryBuffer* cubeBuffer;
-    GeometryBuffer* planeBuffer; // TODO: Batch
-    GeometryBuffer* objBuffer;
+    GeometryBuffer* planeBuffer;
+    GeometryBuffer* characterBuffer;
     GeometryBuffer* fenceBuffer;
     Program*        program;
     Camera*         camera;
@@ -89,6 +88,7 @@ struct GameState
     Texture*        whiteTexture;
     Texture*        crosshairAtlas;
     Texture*        glyphAtlas;
+    Texture*        fenceDiffuseMapTexture;
     BatchBuffer*    batchBuffer;
     TTFGlyph        ttfChars[TTF_GLYPH_COUNT];
 

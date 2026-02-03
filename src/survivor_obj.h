@@ -1,6 +1,6 @@
 #pragma once
 
-#define OBJ_INVALID_INDEX 0xFFFFFFFF
+// Note: Limited to triangulated faces
 
 struct ObjIndex
 {
@@ -21,29 +21,33 @@ union ObjFace
     ObjIndex corners[3];
 };
 
-struct Obj
-{
-    u32      positionCount; // v
-    u32      normalCount;   // vn
-    u32      uvCount;       // vt
-    u32      faceCount;     // f
-    v3*      positions;
-    v3*      normals;
-    v2*      uvs;
-    ObjFace* faces;
-};
-
 struct ObjMaterial
 {
-    v3    ambient;          // Ka
-    v3    diffuse;          // Kd
-    v3    specular;         // Ks
-    f32   specularExponent; // Ns
-    f32   disolve;          // d
-    u32   illumModel;       // illum
-    char* diffuseMap;
+    char name[64];
+    char diffuseMap[256];
+    v3   ambient;
+    v3   diffuse;
+    v3   specular;
+    f32  specularExponent;
+    f32  disolve;
+    u32  illumModel;
+};
+
+struct Obj
+{
+    u32          positionCount;
+    u32          normalCount;
+    u32          uvCount;
+    u32          faceCount;
+    u32          materialCount;
+    v3*          positions;
+    v3*          normals;
+    v2*          uvs;
+    ObjFace*     faces;
+    ObjMaterial* materials;
+    AABB         aabb;
 };
 
 Obj  ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRead, PlatformFileFree* fileFree,
                  PlatformLog* logf, Arena* arena);
-void ObjInitGeometryBuffer(Obj* data, Arena* arena, OpenGL* opengl, GeometryBuffer* buffer);
+void ObjInitGeometryBuffer(Obj* obj, Arena* arena, OpenGL* opengl, GeometryBuffer* buffer);

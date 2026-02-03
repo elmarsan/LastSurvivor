@@ -3,15 +3,17 @@
 
 enum ObjLineType
 {
-    ObjLineType_Vertex,      // v
-    ObjLineType_Normal,      // vn
-    ObjLineType_UV,          // vt
-    ObjLineType_Face,        // f
-    ObjLineType_Comment,     // #
-    ObjLineType_Material,    // mtllib
-    ObjLineType_UseMaterial, // usemtl
-    ObjLineType_UseMap,      // usemap
-    ObjLineType_Group,       // g
+    ObjLineType_Vertex,        // v
+    ObjLineType_Normal,        // vn
+    ObjLineType_UV,            // vt
+    ObjLineType_Face,          // f
+    ObjLineType_Comment,       // #
+    ObjLineType_Material,      // mtllib
+    ObjLineType_UseMaterial,   // usemtl
+    ObjLineType_UseMap,        // usemap
+    ObjLineType_Group,         // g
+    ObjLineType_Object,        // o
+    ObjLineType_SmoothShading, // s
     ObjLineType_Empty
 };
 
@@ -20,12 +22,14 @@ enum MaterialLineType
     MaterialLineType_Ambient,          // Ka
     MaterialLineType_Diffuse,          // Kd
     MaterialLineType_Specular,         // Ks
+    MaterialLineType_Emmisive,         // Ke
     MaterialLineType_SpecularExponent, // Ns
     MaterialLineType_Disolve,          // d
     MaterialLineType_Illum,            // illum
     MaterialLineType_Comment,          // #
     MaterialLineType_Name,             // newmtl
     MaterialLineType_DiffuseMap,       // map_Kd
+    MaterialLineType_Refraction,       // Ni
     MaterialLineType_Empty
 };
 
@@ -73,6 +77,14 @@ internal ObjLineType ObjGetLineType(char* lineBuf)
     else if (strcmp(attrBuf, "g") == 0)
     {
         return ObjLineType_Group;
+    }
+    else if (strcmp(attrBuf, "o") == 0)
+    {
+        return ObjLineType_Object;
+    }
+    else if (strcmp(attrBuf, "s") == 0)
+    {
+        return ObjLineType_SmoothShading;
     }
     else
     {
@@ -122,6 +134,11 @@ internal void ObjPrepass(Obj* data, void* objBuffer, size_t size)
             data->faceCount++;
             break;
         }
+        case ObjLineType_Material:
+        {
+            data->materialCount++;
+            break;
+        }
             DefaultCase;
         }
 
@@ -161,6 +178,10 @@ internal MaterialLineType MaterialGetLineType(char* lineBuf)
     {
         return MaterialLineType_SpecularExponent;
     }
+    else if (strcmp(attrBuf, "Ke") == 0)
+    {
+        return MaterialLineType_Emmisive;
+    }
     else if (strcmp(attrBuf, "d") == 0)
     {
         return MaterialLineType_Disolve;
@@ -177,6 +198,10 @@ internal MaterialLineType MaterialGetLineType(char* lineBuf)
     {
         return MaterialLineType_DiffuseMap;
     }
+    else if (strcmp(attrBuf, "Ni") == 0)
+    {
+        return MaterialLineType_Refraction;
+    }
     else
     {
         // Unsupported attribute type
@@ -184,7 +209,7 @@ internal MaterialLineType MaterialGetLineType(char* lineBuf)
     }
 }
 
-internal void ObjParseMaterialFile(Obj* obj, char* filename, PlatformFileReadEntire* fileRead,
+internal void ObjParseMaterialFile(ObjMaterial* material, char* filename, PlatformFileReadEntire* fileRead,
                                    PlatformFileFree* fileFree)
 {
     FileReadResult materialFile = fileRead(filename);
@@ -216,25 +241,39 @@ internal void ObjParseMaterialFile(Obj* obj, char* filename, PlatformFileReadEnt
             {
             case MaterialLineType_Name:
             {
-                // name
+                char materialFileBuf[64];
+                sscanf(lineBuf, "newmtl %[^\n]", materialFileBuf);
+                sprintf(material->name, "%s", materialFileBuf);
                 break;
             }
             case MaterialLineType_Ambient:
             {
-                v3 ambient{ 0.0f, 0.0f, 0.0f };
-                sscanf(lineBuf, "Ka%f %f %f", &ambient.r, &ambient.g, &ambient.b);
+                sscanf(lineBuf, "Ka %f %f %f", &material->ambient.r, &material->ambient.g, &material->ambient.b);
                 break;
             }
             case MaterialLineType_Diffuse:
             {
-                v3 diffuse{ 0.0f, 0.0f, 0.0f };
-                sscanf(lineBuf, "Kd%f %f %f", &diffuse.r, &diffuse.g, &diffuse.b);
+                sscanf(lineBuf, "Kd %f %f %f", &material->diffuse.r, &material->diffuse.g, &material->diffuse.b);
                 break;
             }
             case MaterialLineType_Specular:
             {
-                v3 specular{ 0.0f, 0.0f, 0.0f };
-                sscanf(lineBuf, "Ks%f %f %f", &specular.r, &specular.g, &specular.b);
+                sscanf(lineBuf, "Ks %f %f %f", &material->specular.r, &material->specular.g, &material->specular.b);
+                break;
+            }
+            case MaterialLineType_SpecularExponent:
+            {
+                sscanf(lineBuf, "Ns %f", &material->specularExponent);
+                break;
+            }
+            case MaterialLineType_Disolve:
+            {
+                sscanf(lineBuf, "d %f", &material->disolve);
+                break;
+            }
+            case MaterialLineType_DiffuseMap:
+            {
+                sscanf(lineBuf, "map_Kd %s", &material->diffuseMap);
                 break;
             }
 
@@ -269,16 +308,19 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRea
     result.normals   = PushArray(arena, result.normalCount, v3);
     result.uvs       = PushArray(arena, result.uvCount, v2);
     result.faces     = PushArray(arena, result.faceCount, ObjFace);
+    result.materials = PushArray(arena, result.materialCount, ObjMaterial);
 
-    logf("Vertex count: %d", result.positionCount);
-    logf("Normal count: %d", result.normalCount);
-    logf("UV     count: %d", result.uvCount);
-    logf("Face   count: %d", result.faceCount);
+    logf("Vertex   count: %d", result.positionCount);
+    logf("Normal   count: %d", result.normalCount);
+    logf("UV       count: %d", result.uvCount);
+    logf("Face     count: %d", result.faceCount);
+    logf("Material count: %d", result.materialCount);
 
-    u8* beginCursor = (u8*)objBuf;
-    u8* cursor      = beginCursor;
-    u64 bytesRead   = 0;
-    u32 lineCount   = 1;
+    u8* beginCursor   = (u8*)objBuf;
+    u8* cursor        = beginCursor;
+    u64 bytesRead     = 0;
+    u32 lineCount     = 1;
+    u32 materialIndex = 0;
 
     char     lineBuf[LINE_BUFFER_CHAR_COUNT];
     v3*      vertexPtr = result.positions;
@@ -305,19 +347,28 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRea
         {
         case ObjLineType_Vertex:
         {
-            sscanf(lineBuf, "v%f %f %f", &vertexPtr->x, &vertexPtr->y, &vertexPtr->z);
+            sscanf(lineBuf, "v %f %f %f", &vertexPtr->x, &vertexPtr->y, &vertexPtr->z);
+
+            result.aabb.min.x = Min(result.aabb.min.x, vertexPtr->x);
+            result.aabb.min.y = Min(result.aabb.min.y, vertexPtr->y);
+            result.aabb.min.z = Min(result.aabb.min.z, vertexPtr->z);
+
+            result.aabb.max.x = Max(result.aabb.max.x, vertexPtr->x);
+            result.aabb.max.y = Max(result.aabb.max.y, vertexPtr->y);
+            result.aabb.max.z = Max(result.aabb.max.z, vertexPtr->z);
+
             vertexPtr++;
             break;
         }
         case ObjLineType_Normal:
         {
-            sscanf(lineBuf, "vn%f %f %f", &normalPtr->x, &normalPtr->y, &normalPtr->z);
+            sscanf(lineBuf, "vn %f %f %f", &normalPtr->x, &normalPtr->y, &normalPtr->z);
             normalPtr++;
             break;
         }
         case ObjLineType_UV:
         {
-            sscanf(lineBuf, "vt%f %f", &uvPtr->u, &uvPtr->v);
+            sscanf(lineBuf, "vt %f %f", &uvPtr->u, &uvPtr->v);
             uvPtr->u = Clamp(uvPtr->u, 0.0f, uvPtr->u);
             uvPtr->v = Clamp(uvPtr->v, 0.0f, uvPtr->v);
             uvPtr++;
@@ -338,7 +389,7 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRea
                 facePtr->v1.uv     = UNKNOWN_VERTEX_INDEX;
                 facePtr->v2.uv     = UNKNOWN_VERTEX_INDEX;
 
-                sscanf(lineBuf, "f%u %u %u", &facePtr->v0.position, &facePtr->v1.position, &facePtr->v2.position);
+                sscanf(lineBuf, "f %u %u %u", &facePtr->v0.position, &facePtr->v1.position, &facePtr->v2.position);
 
                 for (u32 cornerIndex = 0; cornerIndex < ArrayCount(facePtr->corners); cornerIndex++)
                 {
@@ -349,7 +400,7 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRea
             // Position + uv + normal
             else if (result.normalCount > 0 && result.uvCount > 0)
             {
-                sscanf(lineBuf, "f%u/%u/%u %u/%u/%u %u/%u/%u", &facePtr->v0.position, &facePtr->v0.uv,
+                sscanf(lineBuf, "f %u/%u/%u %u/%u/%u %u/%u/%u", &facePtr->v0.position, &facePtr->v0.uv,
                        &facePtr->v0.normal, &facePtr->v1.position, &facePtr->v1.uv, &facePtr->v1.normal,
                        &facePtr->v2.position, &facePtr->v2.uv, &facePtr->v2.normal);
 
@@ -370,12 +421,16 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRea
         }
         case ObjLineType_Material:
         {
-            // TODO: Resolve path properly
-            // char materialFileBuf[128];
-            // sscanf(lineBuf, "mtllib ./%s", materialFileBuf);
-            // ObjParseMaterialFile(&result, materialFileBuf, fileRead, fileFree);
+            //  TODO: Resolve path properly
+            char materialFileBuf[128];
+            sscanf(lineBuf, "mtllib %s", materialFileBuf);
 
-            ObjParseMaterialFile(&result, "../data/fence.mtl", fileRead, fileFree);
+            char materialFilepath[256];
+            sprintf(materialFilepath, "%s", "../data/");
+            strcat(materialFilepath, materialFileBuf);
+
+            ObjMaterial* material = &result.materials[materialIndex++];
+            ObjParseMaterialFile(material, materialFilepath, fileRead, fileFree);
             break;
         }
             DefaultCase;
@@ -404,10 +459,10 @@ internal u32 FindVertexIndex(ObjIndex* index, ObjIndex* indices, u32 indexCount)
     return UNKNOWN_VERTEX_INDEX;
 }
 
-void ObjInitGeometryBuffer(Obj* data, Arena* arena, OpenGL* opengl, GeometryBuffer* buffer)
+void ObjInitGeometryBuffer(Obj* obj, Arena* arena, OpenGL* opengl, GeometryBuffer* buffer)
 {
-    u32 maxVertices = data->faceCount * 3;
-    u32 maxIndices  = data->faceCount * 3;
+    u32 maxVertices = obj->faceCount * 3;
+    u32 maxIndices  = obj->faceCount * 3;
 
     Vertex*   vertexs       = PushArray(arena, maxVertices, Vertex);
     u32*      indices       = PushArray(arena, maxIndices, u32);
@@ -419,9 +474,9 @@ void ObjInitGeometryBuffer(Obj* data, Arena* arena, OpenGL* opengl, GeometryBuff
     u32*    indexPtr        = indices;
     Vertex* vertexPtr       = vertexs;
 
-    for (u32 faceIndex = 0; faceIndex < data->faceCount; faceIndex++)
+    for (u32 faceIndex = 0; faceIndex < obj->faceCount; faceIndex++)
     {
-        ObjFace* face = &data->faces[faceIndex];
+        ObjFace* face = &obj->faces[faceIndex];
 
         for (u32 cornerIndex = 0; cornerIndex < 3; cornerIndex++)
         {
@@ -436,15 +491,15 @@ void ObjInitGeometryBuffer(Obj* data, Arena* arena, OpenGL* opengl, GeometryBuff
             }
             else
             {
-                vertexPtr->position = data->positions[corner->position];
+                vertexPtr->position = obj->positions[corner->position];
 
                 if (corner->normal != UNKNOWN_VERTEX_INDEX)
                 {
-                    vertexPtr->normal = data->normals[corner->normal];
+                    vertexPtr->normal = obj->normals[corner->normal];
                 }
                 if (corner->uv != UNKNOWN_VERTEX_INDEX)
                 {
-                    vertexPtr->uv = data->uvs[corner->uv];
+                    vertexPtr->uv = obj->uvs[corner->uv];
                 }
 
                 *indexPtr++                = vertexCount;
@@ -457,9 +512,12 @@ void ObjInitGeometryBuffer(Obj* data, Arena* arena, OpenGL* opengl, GeometryBuff
         }
     }
 
+    size_t vertexSize = sizeof(Vertex);
+    size_t indexSize  = sizeof(u32);
+
     GeometryBufferInit(opengl, buffer, GL_TRIANGLES);
-    GeometryBufferVBOAlloc(opengl, buffer, vertexs, sizeof(Vertex) * vertexCount, sizeof(v3), GL_STATIC_DRAW);
-    GeometryBufferEBOAlloc(opengl, buffer, indices, sizeof(u32) * indexCount, sizeof(u32), GL_STATIC_DRAW);
+    GeometryBufferVBOAlloc(opengl, buffer, vertexs, vertexSize * vertexCount, vertexSize, GL_STATIC_DRAW);
+    GeometryBufferEBOAlloc(opengl, buffer, indices, indexSize * indexCount, indexSize, GL_STATIC_DRAW);
 
     GeometryBufferVertexAttrib(opengl, buffer, 0, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, position));
     GeometryBufferVertexAttrib(opengl, buffer, 1, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, normal));

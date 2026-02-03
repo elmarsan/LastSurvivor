@@ -181,18 +181,12 @@ inline void BatchText(GameState* state, BatchBuffer* batch, char* text, v2 posit
 
 inline Entity* EntityGet(GameState* state, u32 index) { return &state->entities[index]; }
 
-inline Entity* EntityInit(GameState* state, EntityType type, v3 position, v3 size = v3{ 1.0f, 1.0f, 1.0f })
+inline Entity* EntityNew(GameState* state, EntityType type)
 {
     Assert(state->entityCount < ArrayCount(state->entities));
 
-    Entity* entity   = &state->entities[state->entityCount++];
-    entity->type     = type;
-    entity->position = position;
-    entity->yaw      = 0.0f;
-    entity->velocity = { 0.0f, 0.0f, 0.0f };
-    entity->size     = size;
-    entity->aabb.min = -entity->size;
-    entity->aabb.max = entity->size;
+    Entity* entity = &state->entities[state->entityCount++];
+    entity->type   = type;
 
     return entity;
 }
@@ -216,9 +210,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         ArenaInit(arena, (size_t)memory->permanentStorageSize - sizeof(GameState),
                   (u8*)memory->permanentStorage + sizeof(GameState));
 
-        state->program    = PushStruct(arena, Program);
-        state->camera     = PushStruct(arena, Camera);
-        state->cubeBuffer = PushStruct(arena, GeometryBuffer);
+        state->program                = PushStruct(arena, Program);
+        state->camera                 = PushStruct(arena, Camera);
+        state->planeBuffer            = PushStruct(arena, GeometryBuffer);
+        state->characterBuffer        = PushStruct(arena, GeometryBuffer);
+        state->fenceBuffer            = PushStruct(arena, GeometryBuffer);
+        state->fenceDiffuseMapTexture = PushStruct(arena, Texture);
+        state->whiteTexture           = PushStruct(arena, Texture);
+        state->crosshairAtlas         = PushStruct(arena, Texture);
+        state->glyphAtlas             = PushStruct(arena, Texture);
+        state->batchBuffer            = PushStruct(arena, BatchBuffer);
+
 #ifdef BUILD_TYPE_DEBUG
         state->debug   = PushStruct(arena, DebugState);
         void* permMem  = PushBlock(arena, Kilobytes(64));
@@ -242,18 +244,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         platform.FileFree(vertexSourceFile.content);
         platform.FileFree(fragmentSourceFile.content);
 
-        GeometryBufferInit(opengl, state->cubeBuffer, GL_TRIANGLES);
-        GeometryBufferVBOAlloc(opengl, state->cubeBuffer, cubeVertexs, sizeof(cubeVertexs), sizeof(Vertex),
-                               GL_STATIC_DRAW);
-        GeometryBufferVertexAttrib(opengl, state->cubeBuffer, 0, 3, GL_FLOAT, sizeof(Vertex),
-                                   offsetof(Vertex, position));
-        GeometryBufferVertexAttrib(opengl, state->cubeBuffer, 1, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, normal));
-        GeometryBufferVertexAttrib(opengl, state->cubeBuffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
-
         // Plane
         {
-            state->planeBuffer = PushStruct(arena, GeometryBuffer);
-
             GeometryBufferInit(opengl, state->planeBuffer, GL_TRIANGLES);
             GeometryBufferVBOAlloc(opengl, state->planeBuffer, planeVertexs, sizeof(planeVertexs), sizeof(Vertex),
                                    GL_STATIC_DRAW);
@@ -269,9 +261,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // Texture loading
         {
-            state->whiteTexture   = PushStruct(arena, Texture);
-            state->crosshairAtlas = PushStruct(arena, Texture);
-
             FileReadResult imageReadResult = platform.FileReadEntire("../data/crosshairs.png");
             if (imageReadResult.contentSize > 0)
             {
@@ -291,8 +280,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // 2D batching
         {
-            state->batchBuffer = PushStruct(arena, BatchBuffer);
-
             BatchBuffer* batch = state->batchBuffer;
 
             batch->maxVertexCount   = 1000;
@@ -346,16 +333,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         platform.AudioSetVolume(-3.0f, AudioClipType_Sfx);
         platform.AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
-        Entity* player = EntityInit(state, EntityType_Player, { 0.0f, 1.0f, 0.0f }, { 0.5f, 0.5f, 0.5f });
-        Entity* enemy0 = EntityInit(state, EntityType_Enemy, { -2.0f, 1.0f, -4.0f }, { 0.5f, 0.5f, 0.5f });
-        EntityInit(state, EntityType_Object, { 0.0f, 1.0f, -8.0f }, { 4.0f, 1.0f, 1.0f });
-        EntityInit(state, EntityType_Object, { -8.0f, 1.0f, 0.0f }, { 4.0f, 1.0f, 1.0f });
-        EntityInit(state, EntityType_Object, { -8.0f, 1.0f, -3.0f }, { 4.0f, 1.0f, 1.0f });
-        EntityInit(state, EntityType_Object, { 8.0f, 1.0f, -3.0f }, { 3.0f, 1.0f, 1.0f });
-        EntityInit(state, EntityType_Object, { 7.5f, 1.0f, -0.5f }, { 3.0f, 1.0f, 1.0f });
-
-        enemy0->targetEntity = player;
-
         // Font loading
         {
             FileReadResult fontFile = platform.FileReadEntire("c:\\windows\\fonts\\calibri.ttf");
@@ -404,8 +381,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
                     platform.FileFree(fontFile.content);
 
-                    state->glyphAtlas = PushStruct(arena, Texture);
-
                     opengl->glGenTextures(1, &state->glyphAtlas->id);
                     opengl->glBindTexture(GL_TEXTURE_2D, state->glyphAtlas->id);
                     opengl->glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, (GLsizei)fontAtlasWidth, (GLsizei)fontAtlasHeight, 0,
@@ -430,36 +405,77 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
         }
 
+        AABB characterAABB = { 0 };
+        AABB fenceAABB     = { 0 };
+
         // Obj test
         {
             // Fence
-            FileReadResult fenceFile = platform.FileReadEntire("../data/fence.obj");
+            FileReadResult fenceFile = platform.FileReadEntire("../data/fence_2.obj");
             if (fenceFile.contentSize > 0)
             {
-                state->fenceBuffer = PushStruct(arena, GeometryBuffer);
-                Obj obj        = ObjReadData(fenceFile.content, fenceFile.contentSize, platform.FileReadEntire, platform.FileFree, platform.Logf, arena);
-                ObjInitGeometryBuffer(&obj, arena, opengl, state->fenceBuffer);
+
+                Obj obj = ObjReadData(fenceFile.content, fenceFile.contentSize, platform.FileReadEntire,
+                                      platform.FileFree, platform.Logf, arena);
                 platform.FileFree(fenceFile.content);
+
+                fenceAABB = obj.aabb;
+
+                char fenceDiffuseMapFilepath[256];
+                sprintf(fenceDiffuseMapFilepath, "%s", "../data/");
+                strcat(fenceDiffuseMapFilepath, obj.materials[0].diffuseMap);
+
+                ObjInitGeometryBuffer(&obj, arena, opengl, state->fenceBuffer);
+
+                FileReadResult fenceDiffuseMapReadResult = platform.FileReadEntire(fenceDiffuseMapFilepath);
+                if (fenceDiffuseMapReadResult.contentSize > 0)
+                {
+                    TextureAlloc(opengl, state->fenceDiffuseMapTexture, fenceDiffuseMapReadResult.content,
+                                 fenceDiffuseMapReadResult.contentSize);
+                    platform.FileFree(fenceDiffuseMapReadResult.content);
+                }
+                else
+                {
+                    Assert(0);
+                }
             }
             else
             {
                 Assert(0);
             }
 
-            // Teapot
-            FileReadResult teapotFile = platform.FileReadEntire("../data/teapot.obj");
-            if (teapotFile.contentSize > 0)
+            // Stickman
+            FileReadResult characterFile = platform.FileReadEntire("../data/character.obj");
+            if (characterFile.contentSize > 0)
             {
-                state->objBuffer   = PushStruct(arena, GeometryBuffer);
-                Obj teapotData = ObjReadData(teapotFile.content, teapotFile.contentSize, platform.FileReadEntire, platform.FileFree, platform.Logf, arena);
-                ObjInitGeometryBuffer(&teapotData, arena, opengl, state->objBuffer);
-                platform.FileFree(teapotFile.content);
+                Obj characterObj = ObjReadData(characterFile.content, characterFile.contentSize,
+                                               platform.FileReadEntire, platform.FileFree, platform.Logf, arena);
+                platform.FileFree(characterFile.content);
+                characterAABB = characterObj.aabb;
+
+                ObjInitGeometryBuffer(&characterObj, arena, opengl, state->characterBuffer);
             }
             else
             {
                 Assert(0);
             }
         }
+
+        Entity* player   = EntityNew(state, EntityType_Player);
+        player->position = { 0.0f, 0.0f, 0.0f };
+        player->size     = { 1.0f, 1.0f, 1.0f };
+        player->aabb     = characterAABB;
+
+        Entity* enemy0       = EntityNew(state, EntityType_Enemy);
+        enemy0->position     = { -2.0f, 0.0f, -4.0f };
+        enemy0->size         = { 1.0f, 1.0f, 1.0f };
+        enemy0->aabb         = characterAABB;
+        enemy0->targetEntity = player;
+
+        Entity* fence0   = EntityNew(state, EntityType_Object);
+        fence0->position = { 0.0f, 0.0f, -2.0f };
+        fence0->size     = { 1.0f, 1.0f, 1.0f };
+        fence0->aabb     = fenceAABB;
     }
 
     // ----------------------------------------------------------------------------
@@ -472,12 +488,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     mat4x4  projection = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
     mat4x4  view       = CameraView(camera);
 
-    //v3     pos{ 0.0f, 1.0f, 4.0f };
-    //v3     target{ 0.0f, 0.0f, -1.0f };
-    //v3     up{ 0.0f, 1.0f, 0.0f };
-    //mat4x4 view = LookAt(pos, pos + target, up);
-
-    v4 playerColor = blue;
+    v4 playerColor = white;
 
     v3 cameraOffset{ 0.0f, 16.0f, 5.0f };
     CameraSetPitch(camera, -68.0f);
@@ -775,8 +786,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     opengl->glBindTexture(GL_TEXTURE_2D, state->crosshairAtlas->id);
     opengl->glActiveTexture(GL_TEXTURE2);
     opengl->glBindTexture(GL_TEXTURE_2D, state->glyphAtlas->id);
+    opengl->glActiveTexture(GL_TEXTURE3);
+    opengl->glBindTexture(GL_TEXTURE_2D, state->fenceDiffuseMapTexture->id);
 
-    // TODO: This kind of operations with render commands
+    // TODO: Do this kind of operations with render commands
     opengl->glDisable(GL_DEPTH_TEST);
     opengl->glEnable(GL_BLEND);
     opengl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -837,6 +850,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         mat4x4 viewProj = projection * view;
 
         PushRenderProgramUse(commandQueue, state->program->id);
+        PushRenderUploadUniformInt(commandQueue, state->program->id, "hasDiffuse", 0);
 
         // Floor
         {
@@ -861,45 +875,28 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
                 mat4x4 model = translate * rotate * scale;
 
-                PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
-                PushRenderUploadUniformVec4(commandQueue, state->program->id, "color",
-                                            entityIndex == 0 ? playerColor : green);
-                PushRenderDrawBuffer(commandQueue, state->cubeBuffer);
-            }
+                if (entity->type != EntityType_Object)
+                {
+                    PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
+                    PushRenderUploadUniformVec4(commandQueue, state->program->id, "color",
+                                                entityIndex == 0 ? playerColor : green);
+                    PushRenderDrawBuffer(commandQueue, state->characterBuffer);
+                }
+                else
+                {
+                    PushRenderUploadUniformInt(commandQueue, state->program->id, "hasDiffuse", 1);
+                    PushRenderUploadUniformInt(commandQueue, state->program->id, "diffuseMap", 3);
 
-            // Obj test
-            {
-                mat4x4 translate = Identity();
-                mat4x4 rotate    = Identity();
-                // mat4x4 rotate = Rotate(Identity(), cosf(Radians(185.0f)), { 0.0f, 1.0f, 0.0f });
-                mat4x4 scale = Scale(Identity(), 0.25f);
-
-                mat4x4 model = translate * rotate * scale;
-                PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
-                PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", red);
-                PushRenderDrawBuffer(commandQueue, state->objBuffer);
-            }
-
-            // Fence test
-            {
-                // mat4x4 translate = Translate(Identity(), { 0.0f, 0.0f, 3.0f });
-                mat4x4 translate = Identity();
-                mat4x4 rotate    = Rotate(Identity(), -65.0f, { 0.0f, 1.0f, 0.0f });
-                mat4x4 scale     = Identity();
-                // mat4x4 rotate = Rotate(Identity(), cosf(Radians(185.0f)), { 0.0f, 1.0f, 0.0f });
-                // mat4x4 scale = Scale(Identity(), 0.25f);
-
-                mat4x4 model = translate * rotate * scale;
-                PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
-                PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", red);
-                PushRenderDrawBuffer(commandQueue, state->fenceBuffer);
+                    PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
+                    PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", white);
+                    PushRenderDrawBuffer(commandQueue, state->fenceBuffer);
+                }
             }
         }
     }
 
     RendererFrameEnd(opengl);
 
-    // #if 0
 #ifdef BUILD_TYPE_DEBUG
     DebugFrameBegin(state->debug, opengl, projection * view);
     {
@@ -909,13 +906,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             Entity* entity = &state->entities[entityIndex];
 
             // Entity AABB
-            DebugDrawAABB(state->debug, opengl, entity->position, entity->yaw, entity->aabb.min, entity->aabb.max, red);
+            DebugDrawAABB(state->debug, opengl, entity->position, 0.0f, entity->aabb.min, entity->aabb.max, red);
 
             // Entity Y orientation
             if (entity->type != EntityType_Object)
             {
                 v3 entityTarget{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
-                v3 p0{ entity->position.x, 0.5f, entity->position.z };
+                v3 p0{ entity->position.x, entity->aabb.max.y, entity->position.z };
                 v3 p1 = p0 + (entityTarget * 1.5f);
 
                 DebugDrawLine(state->debug, opengl, p0, p1, blue);
