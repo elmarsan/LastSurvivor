@@ -86,17 +86,11 @@ struct TTFGlyph
 
 typedef u32 cell_index;
 
-#define GRAPH_EMPTY_NODE 0xFFFFFFFF
-
 struct Graph
 {
     std::vector<cell_index>       nodes;
     std::vector<std::vector<u32>> edges;
 };
-
-//  ----------------------------------------------------------------------------
-//  ----------------------------------------------------------------------------
-//  ----------------------------------------------------------------------------
 
 struct GameState
 {

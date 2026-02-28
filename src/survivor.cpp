@@ -200,7 +200,6 @@ inline cell_index WorldPositionToGridCell(v3 position)
     s32 minCol = -(GRID_COLS / 2);
     s32 minRow = (GRID_ROWS / 2);
 
-    // TODO: Use u32
     s32 col = (s32)floorf((position.x) - minCol);
     s32 row = (s32)((-position.z) + minRow);
 
@@ -236,6 +235,8 @@ void DebugDrawGridCell(DebugState* debug, OpenGL* opengl, cell_index cell, v4 co
 }
 
 // Graph functions
+#define GRAPH_EMPTY_NODE 0xFFFFFFFF
+
 f32                     GraphGetMovementCost(cell_index from, cell_index to);
 std::vector<cell_index> GraphFindBestPath(Graph* graph, cell_index start, cell_index goal);
 void                    GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex);
@@ -287,6 +288,7 @@ f32 GraphGetMovementCost(cell_index from, cell_index to)
 
 // https://www.redblobgames.com/pathfinding/a-star/implementation.html
 // A* algorithm
+// Returns best path from start to goal in reverse order (start → ... → goal).
 std::vector<cell_index> GraphFindBestPath(Graph* graph, cell_index start, cell_index goal)
 {
     std::unordered_map<cell_index, cell_index> cameFromMap{};
@@ -351,8 +353,7 @@ std::vector<cell_index> GraphFindBestPath(Graph* graph, cell_index start, cell_i
         path.push_back(current);
         current = cameFromMap[current];
     }
-    path.push_back(start); // optional
-    std::reverse(path.begin(), path.end());
+    path.push_back(start);
     return path;
 }
 
@@ -458,8 +459,6 @@ void GraphInit(GameState* state)
 {
     Graph* graph = state->graph;
 
-    std::vector<cell_index> cells{};
-
     for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
     {
         Entity* entity = EntityGet(state, entityIndex);
@@ -510,16 +509,17 @@ void GraphInit(GameState* state)
             u32 minRow = CELL_ROW(maxZCell);
             u32 maxRow = CELL_ROW(minZCell);
 
+            // Corners of the obstacle
             for (int i = 1; i <= 1; i++)
             {
                 // Top-left corner
-                graph->nodes.push_back(CELL_INDEX((int)minRow - i, (int)minCol - i));
+                graph->nodes.push_back(CELL_INDEX(minRow - i, minCol - i));
                 // Top-right corner
-                graph->nodes.push_back(CELL_INDEX((int)minRow - i, (int)maxCol + i));
+                graph->nodes.push_back(CELL_INDEX(minRow - i, maxCol + i));
                 // Bottom-left corner
-                graph->nodes.push_back(CELL_INDEX((int)maxRow + i, (int)minCol - i));
+                graph->nodes.push_back(CELL_INDEX(maxRow + i, minCol - i));
                 // Bottom-right corner
-                graph->nodes.push_back(CELL_INDEX((int)maxRow + i, (int)maxCol + i));
+                graph->nodes.push_back(CELL_INDEX(maxRow + i, maxCol + i));
             }
         }
     }
@@ -1188,10 +1188,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 std::vector<cell_index> path = GraphFindBestPath(state->graph, originCellIndex, targetCellIndex);
                 if (!path.empty())
                 {
-                    v3 targetPosition = GridCellToWorldPosition(path[1]);
+                    v3 targetPosition = GridCellToWorldPosition(path[path.size() - 2]);
                     entityDir         = Norm(targetPosition - entity->position);
                     entityDir.y       = 0.0f;
-                    // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
+                    // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);d
                 }
 
                 //----------------------------------------------------------------------------
