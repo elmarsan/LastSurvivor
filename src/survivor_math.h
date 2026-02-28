@@ -2,6 +2,7 @@
 
 #define Pi           3.14159265359f
 #define Radians(deg) ((deg) * (Pi) / 180.0f)
+#define Degrees(rad) ((rad) * (180.0f) / (Pi))
 #define Max(a, b)    ((a) > (b) ? (a) : (b))
 #define Min(a, b)    ((a) < (b) ? (a) : (b))
 #define Abs(a)       ((a >= 0.0f) ? (a) : -a)

@@ -9,6 +9,7 @@
 #include "survivor_camera.h"
 #include "survivor_debug.h"
 #include "survivor_obj.h"
+#include "survivor_world.h"
 
 #define TTF_FIRST_GLYPH_OFFSET 32 // Space ascii code
 #define TTF_GLYPH_COUNT        95
@@ -23,7 +24,8 @@ enum EntityType
 
 enum EntityFlag
 {
-    EntityFlag_InKnockback = (1 << 0)
+    EntityFlag_InKnockback = (1 << 0),
+    EntityFlag_Positioning = (1 << 1),
 };
 
 struct Entity
@@ -36,6 +38,7 @@ struct Entity
     Entity*    targetEntity; // TODO: Needed? All enemies will follow player
     AABB       aabb;
     u32        flags;
+    u32        index;
 };
 
 struct Vertex
@@ -74,18 +77,6 @@ struct TTFGlyph
     f32 s0, t0, s1, t1; // Texture coordinates, relative to bounding-box.
 };
 
-#define GRID_COLS 30
-#define GRID_ROWS 30
-
-#define CELL_SIZE 1.0f
-#define CELL_HALF (CELL_SIZE * 0.5f)
-
-#define CELL_ROW(index)      (index / GRID_ROWS)
-#define CELL_COL(index)      (index % GRID_COLS)
-#define CELL_INDEX(row, col) (col + ((row) * GRID_ROWS))
-
-typedef u32 cell_index;
-
 struct Graph
 {
     std::vector<cell_index>       nodes;
@@ -100,6 +91,7 @@ struct GameState
     GeometryBuffer* planeBuffer;
     GeometryBuffer* characterBuffer;
     GeometryBuffer* fenceBuffer;
+    AABB*           fenceAABB;
     Program*        program;
     Camera*         camera;
     AudioClip*      pistolShot;
@@ -113,6 +105,7 @@ struct GameState
     Entity          entities[MAX_ENTITY_COUNT];
     u32             entityCount;
     Graph*          graph;
+    b32             buildMode;
 
 #ifdef BUILD_TYPE_DEBUG
     DebugState* debug;

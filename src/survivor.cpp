@@ -4,6 +4,7 @@
 #include "survivor_debug_geometry.cpp"
 #include "survivor_debug.cpp"
 #include "survivor_obj.cpp"
+#include "survivor_world.cpp"
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "stb_rect_pack.h"
@@ -191,33 +192,134 @@ inline Entity* EntityNew(GameState* state, EntityType type)
 
     Entity* entity = &state->entities[state->entityCount++];
     entity->type   = type;
+    entity->index  = state->entityCount - 1;
 
     return entity;
 }
 
-inline cell_index WorldPositionToGridCell(v3 position)
+inline void EntityRemove(GameState* state, u32 index)
 {
-    s32 minCol = -(GRID_COLS / 2);
-    s32 minRow = (GRID_ROWS / 2);
+    Assert(index < state->entityCount);
 
-    s32 col = (s32)floorf((position.x) - minCol);
-    s32 row = (s32)((-position.z) + minRow);
+    while (index < state->entityCount)
+    {
+        state->entities[index] = state->entities[index + 1];
+        index++;
+    }
 
-    return CELL_INDEX(row, col);
+    state->entityCount--;
 }
 
-inline v3 GridCellToWorldPosition(cell_index cellIndex)
+union EntityWorldCorners
 {
-    u32 row = CELL_ROW(cellIndex);
-    u32 col = CELL_COL(cellIndex);
+    struct
+    {
+        v3 topLeft;
+        v3 topRight;
+        v3 bottomLeft;
+        v3 bottomRight;
+    };
 
-    f32 offsetX = -(GRID_COLS / 2);
-    f32 offsetZ = (GRID_ROWS / 2);
+    v3 corners[4];
+};
 
-    f32 x = (col * CELL_SIZE) + offsetX + CELL_HALF;
-    f32 z = -((row * CELL_SIZE) - offsetZ + CELL_HALF);
+EntityWorldCorners EntityGetWorldCorners(GameState* state, Entity* entity)
+{
+    v3 localCorners[4] = {
+        { entity->aabb.min.x, 0.0f, entity->aabb.min.z }, // Top-left
+        { entity->aabb.max.x, 0.0f, entity->aabb.min.z }, // Top-right
+        { entity->aabb.min.x, 0.0f, entity->aabb.max.z }, // Bottom-left
+        { entity->aabb.max.x, 0.0f, entity->aabb.max.z }, // Bottom-right
+    };
 
-    return v3{ x, 0.0f, z };
+    f32 c = cosf(entity->yaw);
+    f32 s = sinf(entity->yaw);
+
+    EntityWorldCorners worldCorners = { 0 };
+
+    for (u32 cornerIndex = 0; cornerIndex < 4; cornerIndex++)
+    {
+        // TODO: Use rotation matrix
+        f32 rotatedX = localCorners[cornerIndex].x * c + localCorners[cornerIndex].z * s;
+        f32 rotatedZ = localCorners[cornerIndex].x * -s + localCorners[cornerIndex].z * c;
+
+        worldCorners.corners[cornerIndex] = {
+            entity->position.x + rotatedX, //
+            entity->aabb.min.y,            //
+            entity->position.z + rotatedZ  //
+        };
+    }
+
+    return worldCorners;
+}
+
+union EntityCellCorners
+{
+    struct
+    {
+        u32 topLeftCell;
+        u32 topRightCell;
+        u32 bottomLeftCell;
+        u32 bottomRightCell;
+    };
+
+    u32 cells[4];
+};
+// TODO: Get rid of this
+EntityCellCorners EntityGetCellCorners(GameState* state, Entity* entity)
+{
+    v3 localCorners[4] = {
+        { entity->aabb.min.x, 0.0f, entity->aabb.min.z }, // Top-left
+        { entity->aabb.max.x, 0.0f, entity->aabb.min.z }, // Top-right
+        { entity->aabb.min.x, 0.0f, entity->aabb.max.z }, // Bottom-left
+        { entity->aabb.max.x, 0.0f, entity->aabb.max.z }, // Bottom-right
+    };
+
+    f32 c = cosf(entity->yaw);
+    f32 s = sinf(entity->yaw);
+
+    v3 worldCorners[4];
+
+    for (u32 cornerIndex = 0; cornerIndex < 4; cornerIndex++)
+    {
+        f32 rotatedX = localCorners[cornerIndex].x * c + localCorners[cornerIndex].z * s;
+        f32 rotatedZ = localCorners[cornerIndex].x * -s + localCorners[cornerIndex].z * c;
+
+        worldCorners[cornerIndex] = {
+            entity->position.x + rotatedX, //
+            entity->aabb.min.y,            //
+            entity->position.z + rotatedZ  //
+        };
+    }
+
+    v3 min = worldCorners[0];
+    v3 max = worldCorners[0];
+    for (u32 cornerIndex = 1; cornerIndex < 4; cornerIndex++)
+    {
+        min.x = Min(min.x, worldCorners[cornerIndex].x);
+        min.z = Min(min.z, worldCorners[cornerIndex].z);
+        max.x = Max(max.x, worldCorners[cornerIndex].x);
+        max.z = Max(max.z, worldCorners[cornerIndex].z);
+    }
+
+    // TODO: Check valid cell
+    cell_index minXCell = WorldPositionToGridCell({ min.x, 0.0f, 0.0f });
+    cell_index maxXCell = WorldPositionToGridCell({ max.x, 0.0f, 0.0f });
+    cell_index minZCell = WorldPositionToGridCell({ 0.0f, 0.0f, min.z });
+    cell_index maxZCell = WorldPositionToGridCell({ 0.0f, 0.0f, max.z });
+
+    u32 minCol = CELL_COL(minXCell);
+    u32 maxCol = CELL_COL(maxXCell);
+    u32 minRow = CELL_ROW(maxZCell);
+    u32 maxRow = CELL_ROW(minZCell);
+
+    EntityCellCorners corners = { 0 };
+    corners.topLeftCell       = CELL_INDEX(maxRow, minCol);
+    corners.topRightCell      = CELL_INDEX(maxRow, maxCol);
+    corners.bottomLeftCell    = CELL_INDEX(minRow, minCol);
+    corners.bottomRightCell   = CELL_INDEX(minRow, maxCol);
+
+    return corners;
 }
 
 // TODO: Move to debug?
@@ -247,8 +349,8 @@ f32                     GraphHeuristicLength(cell_index a, cell_index b);
 
 inline f32 GraphHeuristicLength(cell_index a, cell_index b)
 {
-    v3 aPos = GridCellToWorldPosition(a);
-    v3 bPos = GridCellToWorldPosition(b);
+    v3 aPos = WorldGridCellToPosition(a);
+    v3 bPos = WorldGridCellToPosition(b);
 
     return Length(bPos - aPos);
 }
@@ -361,7 +463,7 @@ void GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex)
 {
     Graph* graph = state->graph;
 
-    v3 nodeA = GridCellToWorldPosition(graph->nodes[targetNodeIndex]);
+    v3 nodeA = WorldGridCellToPosition(graph->nodes[targetNodeIndex]);
 
     for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
     {
@@ -372,7 +474,7 @@ void GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex)
             {
                 if (nodeIndex != targetNodeIndex)
                 {
-                    v3 nodeB = GridCellToWorldPosition(graph->nodes[nodeIndex]);
+                    v3 nodeB = WorldGridCellToPosition(graph->nodes[nodeIndex]);
 
                     AABB entityWorldAABB = AABBToWorld(entity->aabb, entity->position);
                     AABB expandedAABB    = ExpandAABB(entityWorldAABB, CELL_SIZE);
@@ -464,63 +566,18 @@ void GraphInit(GameState* state)
         Entity* entity = EntityGet(state, entityIndex);
         if (entity->type == EntityType_Object)
         {
-            v3 localCorners[4] = {
-                { entity->aabb.min.x, 0.0f, entity->aabb.min.z }, // Top-left
-                { entity->aabb.max.x, 0.0f, entity->aabb.min.z }, // Top-right
-                { entity->aabb.min.x, 0.0f, entity->aabb.max.z }, // Bottom-left
-                { entity->aabb.max.x, 0.0f, entity->aabb.max.z }, // Bottom-right
-            };
+            EntityCellCorners corners = EntityGetCellCorners(state, entity);
 
-            f32 c = cosf(entity->yaw);
-            f32 s = sinf(entity->yaw);
-
-            v3 worldCorners[4];
-
-            for (u32 cornerIndex = 0; cornerIndex < 4; cornerIndex++)
-            {
-                f32 rotatedX = localCorners[cornerIndex].x * c - localCorners[cornerIndex].z * s;
-                f32 rotatedZ = localCorners[cornerIndex].x * s + localCorners[cornerIndex].z * c;
-
-                worldCorners[cornerIndex] = {
-                    entity->position.x + rotatedX, //
-                    entity->aabb.min.y,            //
-                    entity->position.z + rotatedZ  //
-                };
-            }
-
-            v3 min = worldCorners[0];
-            v3 max = worldCorners[0];
-            for (u32 cornerIndex = 1; cornerIndex < 4; cornerIndex++)
-            {
-                min.x = Min(min.x, worldCorners[cornerIndex].x);
-                min.z = Min(min.z, worldCorners[cornerIndex].z);
-                max.x = Max(max.x, worldCorners[cornerIndex].x);
-                max.z = Max(max.z, worldCorners[cornerIndex].z);
-            }
-
-            // TODO: Check valid cell
-            cell_index minXCell = WorldPositionToGridCell({ min.x, 0.0f, 0.0f });
-            cell_index maxXCell = WorldPositionToGridCell({ max.x, 0.0f, 0.0f });
-            cell_index minZCell = WorldPositionToGridCell({ 0.0f, 0.0f, min.z });
-            cell_index maxZCell = WorldPositionToGridCell({ 0.0f, 0.0f, max.z });
-
-            u32 minCol = CELL_COL(minXCell);
-            u32 maxCol = CELL_COL(maxXCell);
-            u32 minRow = CELL_ROW(maxZCell);
-            u32 maxRow = CELL_ROW(minZCell);
-
-            // Corners of the obstacle
-            for (int i = 1; i <= 1; i++)
-            {
-                // Top-left corner
-                graph->nodes.push_back(CELL_INDEX(minRow - i, minCol - i));
-                // Top-right corner
-                graph->nodes.push_back(CELL_INDEX(minRow - i, maxCol + i));
-                // Bottom-left corner
-                graph->nodes.push_back(CELL_INDEX(maxRow + i, minCol - i));
-                // Bottom-right corner
-                graph->nodes.push_back(CELL_INDEX(maxRow + i, maxCol + i));
-            }
+            // Top-left corner
+            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.topLeftCell) + 1, CELL_COL(corners.topLeftCell) - 1));
+            // Top-right corner
+            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.topRightCell) + 1, CELL_COL(corners.topRightCell) + 1));
+            // Bottom-left corner
+            graph->nodes.push_back(
+                CELL_INDEX(CELL_ROW(corners.bottomLeftCell) - 1, CELL_COL(corners.bottomLeftCell) - 1));
+            // Bottom-right corner
+            graph->nodes.push_back(
+                CELL_INDEX(CELL_ROW(corners.bottomRightCell) - 1, CELL_COL(corners.bottomRightCell) + 1));
         }
     }
 
@@ -560,6 +617,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->crosshairAtlas         = PushStruct(arena, Texture);
         state->glyphAtlas             = PushStruct(arena, Texture);
         state->batchBuffer            = PushStruct(arena, BatchBuffer);
+        state->buildMode              = false;
 
 #ifdef BUILD_TYPE_DEBUG
         state->debug   = PushStruct(arena, DebugState);
@@ -746,7 +804,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
 
         AABB characterAABB = { 0 };
-        AABB fenceAABB     = { 0 };
 
         // Obj test
         {
@@ -758,7 +815,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                                       platform.FileFree, platform.Logf, arena);
                 platform.FileFree(fenceFile.content);
 
-                fenceAABB = obj.aabb;
+                state->fenceAABB = PushStruct(arena, AABB);
+
+                *state->fenceAABB = obj.aabb;
 
                 char fenceDiffuseMapFilepath[256];
                 sprintf(fenceDiffuseMapFilepath, "%s", "../data/");
@@ -805,18 +864,19 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         player->size     = { 1.0f, 1.0f, 1.0f };
         player->aabb     = characterAABB;
 
-        Entity* enemy0       = EntityNew(state, EntityType_Enemy);
-        enemy0->position     = { -2.0f, 0.0f, -8.0f };
-        enemy0->size         = { 1.0f, 1.0f, 1.0f };
-        enemy0->aabb         = characterAABB;
-        enemy0->targetEntity = player;
+        // Entity* enemy0       = EntityNew(state, EntityType_Enemy);
+        // enemy0->position     = { -2.0f, 0.0f, -8.0f };
+        // enemy0->size         = { 1.0f, 1.0f, 1.0f };
+        // enemy0->aabb         = characterAABB;
+        // enemy0->targetEntity = player;
 
-        v3 fenceSize = fenceAABB.max - fenceAABB.min;
+        // v3 fenceSize = state->fenceAABB->max - state->fenceAABB->min;
 
         Entity* fence0   = EntityNew(state, EntityType_Object);
         fence0->position = { 0.0f, 0.0f, -2.0f };
         fence0->size     = { 1.0f, 1.0f, 1.0f };
-        fence0->aabb     = fenceAABB;
+        // fence0->yaw      = Radians(-90.0f);
+        fence0->aabb = *state->fenceAABB;
 
 #if 0
         for (u32 i = 0; i < 20; i++)
@@ -879,6 +939,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     f32 enemyAcceleration = 10.0f;
     // ----------------------------------------------------------------------------
 
+    if (ButtonIsPressed(input->debug.f1))
+    {
+        state->buildMode = !state->buildMode;
+    }
+
     for (u32 controllerIndex = 0; controllerIndex < ArrayCount(input->controllers); controllerIndex++)
     {
         GameInputController* controller = GetController(input, controllerIndex);
@@ -887,11 +952,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             if (controller->isAnalog)
             {
-                if (controller->rightTrigger.isDown && !controller->rightTrigger.wasDown)
+                if (ButtonIsPressed(controller->rightTrigger))
                 {
                     platform.AudioClipPlay(state->pistolShot, 0);
                 }
-                if (controller->leftTrigger.isDown)
+                if (ButtonIsDown(controller->leftTrigger))
                 {
                     platform.Logf("Gamepad aiming");
                 }
@@ -902,19 +967,19 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
                 v3 playerDirection = { 0.0f, 0.0f, 0.0f };
 
-                if (controller->moveUp.isDown)
+                if (ButtonIsDown(controller->moveUp))
                 {
                     playerDirection.z = -1.0f;
                 }
-                if (controller->moveDown.isDown)
+                if (ButtonIsDown(controller->moveDown))
                 {
                     playerDirection.z = 1.0f;
                 }
-                if (controller->moveLeft.isDown)
+                if (ButtonIsDown(controller->moveLeft))
                 {
                     playerDirection.x = -1.0f;
                 }
-                if (controller->moveRight.isDown)
+                if (ButtonIsDown(controller->moveRight))
                 {
                     playerDirection.x = 1.0f;
                 }
@@ -1114,35 +1179,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
                 // Player rotation
                 {
-                    f32 screenWidth  = (f32)windowDim.w;
-                    f32 screenHeight = (f32)windowDim.h;
-                    f32 mouseX       = (f32)mouse->pos.x;
-                    f32 mouseY       = (f32)mouse->pos.y;
+                    v3 point = WorldMousePicking(camera, projection, windowDim, mouse->pos);
 
-                    mat4x4 inverseProjection = Inverse(projection);
-                    mat4x4 inverseView       = Inverse(view);
-
-                    // Viewport -> NDC
-                    v3 rayNdc = { 0 };
-                    rayNdc.x  = (2.0f * mouseX) / screenWidth - 1.0f;
-                    rayNdc.y  = 1.0f - (2.0f * mouseY) / screenHeight;
-
-                    // NDC -> Clip
-                    v4 rayClip{ rayNdc.x, rayNdc.y, -1.0f, 1.0f };
-
-                    // Clip -> View
-                    v4 rayView = inverseProjection * rayClip;
-                    rayView.z  = -1.0f;
-                    rayView.w  = 0;
-
-                    // View -> World
-                    v4 rayWorld4 = inverseView * rayView;
-                    v3 rayWorld{ rayWorld4.x, rayWorld4.y, rayWorld4.z };
-                    rayWorld = Norm(rayWorld);
-
-                    // Intersection with world plane
-                    float t     = -(camera->position.y / rayWorld.y);
-                    v3    point = camera->position + rayWorld * t;
                     // Direction from the player to the point
                     v3 dir = point - player->position;
 
@@ -1152,14 +1190,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     deltaYaw          = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi;
                     f32 rotationSpeed = 0.05f;
                     player->yaw += deltaYaw * rotationSpeed;
-
-                    if (input->mouse.middle.isDown && !input->mouse.middle.wasDown)
-                    {
-                        debugSelectedCellIndex = WorldPositionToGridCell(point);
-                    }
                 }
 
-                if (mouse->left.isDown && !mouse->left.wasDown)
+                if (ButtonIsPressed(mouse->left))
                 {
                     // platform.AudioClipPlay(state->pistolShot, 0);
                 }
@@ -1188,7 +1221,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 std::vector<cell_index> path = GraphFindBestPath(state->graph, originCellIndex, targetCellIndex);
                 if (!path.empty())
                 {
-                    v3 targetPosition = GridCellToWorldPosition(path[path.size() - 2]);
+                    v3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
                     entityDir         = Norm(targetPosition - entity->position);
                     entityDir.y       = 0.0f;
                     // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);d
@@ -1289,6 +1322,141 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         GraphRemoveNode(state, playerGraphNodeIndex);
     }
+
+    ///////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    Mouse* mouse = &input->mouse;
+
+    if (state->buildMode)
+    {
+        local_persist Entity* obstacle;
+
+        // Spawn obstacle
+        if (!obstacle && ButtonIsPressed(mouse->left))
+        {
+            v3 position = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+
+            obstacle           = EntityNew(state, EntityType_Object);
+            obstacle->position = position;
+            obstacle->size     = { 1.0f, 1.0f, 1.0f };
+            obstacle->flags |= EntityFlag_Positioning;
+            obstacle->aabb = *state->fenceAABB;
+        }
+        else if (obstacle)
+        {
+            // Place object if valid position
+            if (ButtonIsPressed(mouse->left))
+            {
+                if (WorldIsValidPosition(obstacle->position))
+                {
+                    obstacle->flags &= ~EntityFlag_Positioning;
+                    obstacle = 0;
+                }
+            }
+            else if (ButtonIsPressed(mouse->right))
+            {
+                EntityRemove(state, obstacle->index);
+                obstacle = 0;
+            }
+            else
+            {
+                v3 newPosition     = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+                obstacle->position = newPosition;
+
+                f32 yawStep = Radians(90.0f);
+                if (ButtonIsPressed(input->keyboard.moveLeft))
+                {
+                    obstacle->yaw -= -yawStep;
+                }
+                else if (ButtonIsPressed(input->keyboard.moveRight))
+                {
+                    obstacle->yaw += yawStep;
+                }
+                obstacle->yaw = fmodf(obstacle->yaw, 2.0f * Pi);
+                if (obstacle->yaw < 0.0f)
+                {
+                    obstacle->yaw += (2.0f * Pi);
+                }
+
+                EntityWorldCorners obstacleWorldCorners = EntityGetWorldCorners(state, obstacle);
+
+                for (u32 entityIndex = 0; entityIndex < ArrayCount(state->entities); entityIndex++)
+                {
+                    Entity* entity = EntityGet(state, entityIndex);
+                    if (entity != obstacle && entity->type == EntityType_Object)
+                    {
+                        EntityWorldCorners entityWorldCorners = EntityGetWorldCorners(state, entity);
+
+                        b32 matchObstacles = false;
+                        for (u32 i = 0; i < ArrayCount(entityWorldCorners.corners); i++)
+                        {
+                            cell_index obstacleCellCorner = WorldPositionToGridCell(obstacleWorldCorners.corners[i]);
+
+                            for (u32 j = 0; j < ArrayCount(entityWorldCorners.corners); j++)
+                            {
+                                cell_index entityCellCorner = WorldPositionToGridCell(entityWorldCorners.corners[j]);
+
+                                if (obstacleCellCorner == entityCellCorner)
+                                {
+                                    f32 xDiff = obstacleWorldCorners.corners[i].x - entityWorldCorners.corners[j].x;
+                                    f32 zDiff = obstacleWorldCorners.corners[i].z - entityWorldCorners.corners[j].z;
+
+                                    b32 obstacleVertical =
+                                        (obstacle->yaw == (Pi / 2.0f) || obstacle->yaw == (3 * Pi / 2.0f));
+                                    b32 entityVertical = (entity->yaw == (Pi / 2.0f) || entity->yaw == (3 * Pi / 2.0f));
+
+                                    // Vertical to vertical
+                                    if (obstacleVertical && entityVertical)
+                                    {
+                                        obstacle->position.x = entity->position.x;
+                                        obstacle->position.z -= (zDiff * 0.5f);
+                                        obstacle->yaw = entity->yaw;
+                                    }
+                                    // Horizontal to horizontal
+                                    else if (!obstacleVertical && !obstacleVertical)
+                                    {
+                                        obstacle->position.x -= (xDiff * 0.5f);
+                                        obstacle->position.z = entity->position.z;
+                                        obstacle->yaw        = entity->yaw;
+                                    }
+                                    // Mixed orientation (L-shape)
+                                    else
+                                    {
+                                        // TODO
+                                    }
+
+                                    matchObstacles = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (matchObstacles)
+                        {
+                            entity->flags |= EntityFlag_Positioning;
+                        }
+                        else
+                        {
+                            entity->flags &= ~EntityFlag_Positioning;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        if (ButtonIsPressed(mouse->middle))
+        {
+            v3 mousePoint          = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+            debugSelectedCellIndex = WorldPositionToGridCell(mousePoint);
+        }
+    }
+    ///////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+
     // ----------------------------------------------------------------------------
 
     // ----------------------------------------------------------------------------
@@ -1329,7 +1497,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         mat4x4 view2D = Orthographic(0, (f32)windowDim.w, (f32)windowDim.h, 0);
 
-        Mouse* mouse = &input->mouse;
         // Cursors: 828, 965
         BatchTextureSubRect(batch, { (f32)mouse->pos.x, (f32)mouse->pos.y }, { 32.0f, 32.0f }, state->crosshairAtlas,
                             { 965.0f, 0.0f }, { 128.0f, 128.0f });
@@ -1351,6 +1518,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                         CELL_COL(debugSelectedCellIndex));
                 BatchText(state, batch, debugSelectedCellBuffer, { 0.0f, 100.0f }, magenta);
             }
+        }
+
+        if (state->buildMode)
+        {
+            BatchText(state, batch, "Build", { 0.0f, 150.0f }, green);
         }
 
 #if 0
@@ -1431,11 +1603,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 }
                 else
                 {
+                    v4 tintColor = white;
+
+                    if (entity->flags & EntityFlag_Positioning)
+                    {
+                        tintColor = WorldIsValidPosition(entity->position) ? green : red;
+                    }
+
                     PushRenderUploadUniformInt(commandQueue, state->program->id, "hasDiffuse", 1);
                     PushRenderUploadUniformInt(commandQueue, state->program->id, "diffuseMap", 3);
-
                     PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
-                    PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", white);
+                    PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", tintColor);
                     PushRenderDrawBuffer(commandQueue, state->fenceBuffer);
                 }
             }
@@ -1494,11 +1672,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 {
                     DebugDrawGridCell(state->debug, opengl, nodeCell, green);
 
-                    v3 nodePos = GridCellToWorldPosition(nodeCell);
+                    v3 nodePos = WorldGridCellToPosition(nodeCell);
                     for (auto edgeIndex : graph->edges[nodeIndex])
                     {
                         cell_index dstCell    = graph->nodes[edgeIndex];
-                        v3         dstNodePos = GridCellToWorldPosition(dstCell);
+                        v3         dstNodePos = WorldGridCellToPosition(dstCell);
 
                         DebugDrawLine(state->debug, opengl, nodePos, dstNodePos, magenta);
                     }
@@ -1521,66 +1699,80 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             Entity* entity          = &state->entities[entityIndex];
             AABB    entityWorldAABB = AABBToWorld(entity->aabb, entity->position);
 
-            // Entity AABB
-            DebugDrawAABB(state->debug, opengl, entity->position, entity->yaw, entity->aabb, red);
-
-            // Enemy debug pathfinding
+            // Entity rotation
             {
-                if (entity->type == EntityType_Enemy)
-                {
-                    // A*
-                    {
-                        u32 playerGraphNodeIndex = GraphAddNode(state, WorldPositionToGridCell(player->position));
-                        u32 enemyGraphNodeIndex  = GraphAddNode(state, WorldPositionToGridCell(entity->position));
-
-                        cell_index playerCell = WorldPositionToGridCell(player->position);
-                        cell_index enemyCell  = WorldPositionToGridCell(entity->position);
-
-                        cell_index originCellIndex = WorldPositionToGridCell(entity->position);
-                        cell_index targetCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
-
-                        std::vector<cell_index> path =
-                            GraphFindBestPath(state->graph, originCellIndex, targetCellIndex);
-                        if (!path.empty())
-                        {
-                            for (u32 i = 0; i < path.size() - 1; i++)
-                            {
-                                v3 start = GridCellToWorldPosition(path[i]);
-                                v3 end   = GridCellToWorldPosition(path[i + 1]);
-
-                                start.y = 0.01f;
-                                end.y   = 0.01f;
-
-                                DebugDrawLine(state->debug, opengl, start, end, yellow);
-                            }
-                        }
-
-                        if (playerGraphNodeIndex != GRAPH_EMPTY_NODE)
-                        {
-                            GraphRemoveNode(state, playerGraphNodeIndex);
-                        }
-                        if (enemyGraphNodeIndex != GRAPH_EMPTY_NODE)
-                        {
-                            GraphRemoveNode(state, enemyGraphNodeIndex);
-                        }
-                    }
-                }
-            }
-
-            // Entity Y orientation
-            if (entity->type != EntityType_Object)
-            {
-                v3 entityTarget{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
+                v3 lookAt{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
                 v3 p0{ entity->position.x, entity->aabb.max.y, entity->position.z };
-                v3 p1 = p0 + (entityTarget * 1.5f);
+                v3 p1 = p0 + (lookAt * 1.5f);
 
                 DebugDrawLine(state->debug, opengl, p0, p1, blue);
             }
 
-            if (entity->type == EntityType_Enemy)
+            // Entity AABB
+            DebugDrawAABB(state->debug, opengl, entity->position, entity->yaw, entity->aabb, red);
+
+            // Entity Y orientation
+            if (entity->type == EntityType_Object)
+            {
+                if (state->buildMode)
+                {
+                    v4 color = blue;
+                    if (entity->flags & EntityFlag_Positioning)
+                    {
+                        color = orange;
+                    }
+
+                    EntityWorldCorners corners = EntityGetWorldCorners(state, entity);
+
+                    DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.topLeft), color);
+                    DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.topRight), color);
+                    DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.bottomLeft), color);
+                    DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.bottomRight), color);
+
+                    // EntityCellCorners corners = EntityGetCellCorners(state, entity);
+                    //  DebugDrawGridCell(state->debug, opengl, corners.topLeftCell, color);
+                    //  DebugDrawGridCell(state->debug, opengl, corners.topRightCell, color);
+                    //  DebugDrawGridCell(state->debug, opengl, corners.bottomLeftCell, color);
+                    //  DebugDrawGridCell(state->debug, opengl, corners.bottomRightCell, color);
+                }
+            }
+            else if (entity->type == EntityType_Enemy)
             {
                 // Enemy hitbox
                 DebugDrawPlane(state->debug, opengl, entity->position, { enemyHitRadius, 0, enemyHitRadius }, yellow);
+
+                // Path finding
+                {
+                    u32 playerGraphNodeIndex = GraphAddNode(state, WorldPositionToGridCell(player->position));
+                    u32 enemyGraphNodeIndex  = GraphAddNode(state, WorldPositionToGridCell(entity->position));
+
+                    cell_index startCell = WorldPositionToGridCell(entity->position);
+                    cell_index dstCell   = WorldPositionToGridCell(entity->targetEntity->position);
+
+                    std::vector<cell_index> path = GraphFindBestPath(state->graph, startCell, dstCell);
+                    if (!path.empty())
+                    {
+                        for (u32 i = 0; i < path.size() - 1; i++)
+                        {
+                            v3 start = WorldGridCellToPosition(path[i]);
+                            v3 end   = WorldGridCellToPosition(path[i + 1]);
+
+                            start.y = 0.01f;
+                            end.y   = 0.01f;
+
+                            DebugDrawLine(state->debug, opengl, start, end, yellow);
+                        }
+                    }
+
+                    if (playerGraphNodeIndex != GRAPH_EMPTY_NODE)
+                    {
+                        GraphRemoveNode(state, playerGraphNodeIndex);
+                    }
+                    if (enemyGraphNodeIndex != GRAPH_EMPTY_NODE)
+                    {
+                        GraphRemoveNode(state, enemyGraphNodeIndex);
+                    }
+                }
             }
         }
     }

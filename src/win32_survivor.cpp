@@ -503,7 +503,6 @@ internal void Win32ProcessPendingMessages(Win32State* state)
 
             if (wasDown != isDown)
             {
-
                 if (vkCode == 'W' || vkCode == VK_UP)
                 {
                     Win32UpdateGameButtonState(&keyboard->moveUp, isDown);
@@ -533,6 +532,30 @@ internal void Win32ProcessPendingMessages(Win32State* state)
                     Log("ALT+F4 pressed, closing game...");
                     state->running = false;
                 }
+#if BUILD_TYPE_DEBUG
+                DebugInput* debug = &state->gameInput.debug;
+
+                if (vkCode == VK_F1)
+                {
+                    Win32UpdateGameButtonState(&debug->f1, isDown);
+                }
+                if (vkCode == VK_F2)
+                {
+                    Win32UpdateGameButtonState(&debug->f2, isDown);
+                }
+                if (vkCode == VK_F3)
+                {
+                    Win32UpdateGameButtonState(&debug->f3, isDown);
+                }
+                if (vkCode == VK_F4)
+                {
+                    Win32UpdateGameButtonState(&debug->f4, isDown);
+                }
+                if (vkCode == VK_F5)
+                {
+                    Win32UpdateGameButtonState(&debug->f5, isDown);
+                }
+#endif
             }
             break;
         }
@@ -903,6 +926,14 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             Mouse* mouse                             = &gWin32State.gameInput.mouse;
             mouse->buttons[mouseButtonIndex].wasDown = mouse->buttons[mouseButtonIndex].isDown;
         }
+
+#if BUILD_TYPE_DEBUG
+        for (u32 debugBtnIndex = 0; debugBtnIndex < ArrayCount(gWin32State.gameInput.debug.fkeys); debugBtnIndex++)
+        {
+            gWin32State.gameInput.debug.fkeys[debugBtnIndex].wasDown =
+                gWin32State.gameInput.debug.fkeys[debugBtnIndex].isDown;
+        }
+#endif
 
         Win32ProcessPendingMessages(&gWin32State);
 

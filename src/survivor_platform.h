@@ -12,6 +12,11 @@ struct GameButtonState
     b32 wasDown;
 };
 
+inline b32 ButtonIsPressed(GameButtonState button) { return (button.isDown && !button.wasDown); }
+inline b32 ButtonIsDown(GameButtonState button) { return button.isDown; }
+inline b32 ButtonIsUp(GameButtonState button) { return !button.isDown; }
+inline b32 ButtonWasDown(GameButtonState button) { return button.wasDown; }
+
 struct GameInputController
 {
     b32 isConnected;
@@ -64,6 +69,24 @@ struct Mouse
     };
 };
 
+struct DebugInput
+{
+    union
+    {
+        struct
+        {
+            GameButtonState f0;
+            GameButtonState f1;
+            GameButtonState f2;
+            GameButtonState f3;
+            GameButtonState f4;
+            GameButtonState f5;
+        };
+
+        GameButtonState fkeys[5];
+    };
+};
+
 struct GameInput
 {
     Mouse mouse;
@@ -78,6 +101,10 @@ struct GameInput
 
         GameInputController controllers[2];
     };
+
+#if BUILD_TYPE_DEBUG
+    DebugInput debug;
+#endif
 };
 
 inline GameInputController* GetController(GameInput* gameInput, u32 controllerIndex)
