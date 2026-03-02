@@ -223,7 +223,7 @@ union EntityWorldCorners
     v3 corners[4];
 };
 
-EntityWorldCorners EntityGetWorldCorners(GameState* state, Entity* entity)
+EntityWorldCorners EntityGetWorldCorners(Entity* entity)
 {
     v3 localCorners[4] = {
         { entity->aabb.min.x, 0.0f, entity->aabb.min.z }, // Top-left
@@ -266,7 +266,7 @@ union EntityCellCorners
     u32 cells[4];
 };
 // TODO: Get rid of this
-EntityCellCorners EntityGetCellCorners(GameState* state, Entity* entity)
+EntityCellCorners EntityGetCellCorners(Entity* entity)
 {
     v3 localCorners[4] = {
         { entity->aabb.min.x, 0.0f, entity->aabb.min.z }, // Top-left
@@ -566,7 +566,7 @@ void GraphInit(GameState* state)
         Entity* entity = EntityGet(state, entityIndex);
         if (entity->type == EntityType_Object)
         {
-            EntityCellCorners corners = EntityGetCellCorners(state, entity);
+            EntityCellCorners corners = EntityGetCellCorners(entity);
 
             // Top-left corner
             graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.topLeftCell) + 1, CELL_COL(corners.topLeftCell) - 1));
@@ -586,6 +586,133 @@ void GraphInit(GameState* state)
     {
         GraphComputeNodeEdges(state, nodeIndex);
     }
+}
+
+b32 SnapObstacles(Entity* a, Entity* b)
+{
+    Assert(a->type == EntityType_Object && b->type == EntityType_Object);
+
+    b32 result = false;
+
+    EntityWorldCorners aWorldCorners = EntityGetWorldCorners(a);
+    EntityWorldCorners bWorldCorners = EntityGetWorldCorners(b);
+
+    for (u32 aCornerIndex = 0; aCornerIndex < ArrayCount(bWorldCorners.corners); aCornerIndex++)
+    {
+        cell_index obstacleCellCorner = WorldPositionToGridCell(aWorldCorners.corners[aCornerIndex]);
+
+        for (u32 bCornerIndex = 0; bCornerIndex < ArrayCount(bWorldCorners.corners); bCornerIndex++)
+        {
+            cell_index entityCellCorner = WorldPositionToGridCell(bWorldCorners.corners[bCornerIndex]);
+
+            if (obstacleCellCorner == entityCellCorner)
+            {
+                f32 xDiff = aWorldCorners.corners[aCornerIndex].x - bWorldCorners.corners[bCornerIndex].x;
+                f32 zDiff = aWorldCorners.corners[aCornerIndex].z - bWorldCorners.corners[bCornerIndex].z;
+
+                b32 aIsVertical = (a->yaw == (Pi / 2.0f) || a->yaw == (3 * Pi / 2.0f));
+                b32 bIsVertical = (b->yaw == (Pi / 2.0f) || b->yaw == (3 * Pi / 2.0f));
+
+                // Vertical to vertical
+                if (aIsVertical && bIsVertical)
+                {
+                    a->position.x = b->position.x;
+                    a->position.z -= (zDiff * 0.5f);
+                    a->yaw = b->yaw;
+                }
+                // Horizontal to horizontal
+                else if (!aIsVertical && !bIsVertical)
+                {
+                    a->position.x -= (xDiff * 0.5f);
+                    a->position.z = b->position.z;
+                    a->yaw        = b->yaw;
+                }
+                // Mixed orientation (L-shape)
+                // Horizontal to vertical
+                else if (bIsVertical)
+                {
+                    v3 obstacleNormal{ sinf(a->yaw), 0.0f, cosf(a->yaw) };
+
+                    // Snapping from top
+                    if (a->position.z < b->position.z)
+                    {
+                        f32 entityTopZ = (b->position.z - b->aabb.max.x);
+                        a->position.z  = entityTopZ - a->aabb.max.z;
+                    }
+                    // Snapping from bottom
+                    else
+                    {
+                        f32 entityBottomZ = (b->position.z - b->aabb.min.x);
+                        a->position.z     = entityBottomZ - a->aabb.min.z;
+                    }
+
+                    // Snapping from the right side
+                    if (a->position.x > b->position.x)
+                    {
+                        f32 bWidth  = b->aabb.max.z - b->aabb.min.z;
+                        f32 aLength = (a->aabb.max.x - a->aabb.min.x);
+
+                        a->position.x = (b->position.x - (bWidth * 0.5f)) + (aLength * 0.5f);
+
+                        // Hack, fence model is not simetric
+                        if (obstacleNormal.z == 1.0f)
+                        {
+                            a->yaw += Pi;
+                        }
+                    }
+                    // Snapping from the left side
+                    else
+                    {
+                        f32 entityWidth    = b->aabb.max.z - b->aabb.min.z;
+                        f32 obstacleLength = (a->aabb.max.x - a->aabb.min.x);
+
+                        a->position.x = (b->position.x + (entityWidth * 0.5f)) - (obstacleLength * 0.5f);
+
+                        // Hack, fence model is not simetric
+                        if (obstacleNormal.z == 1.0f)
+                        {
+                            a->yaw += Pi;
+                        }
+                    }
+                }
+                // Vertical to horizontal
+                else
+                {
+                    f32 aLength = (a->aabb.max.x - a->aabb.min.x);
+                    f32 aDepth  = (a->aabb.max.z - a->aabb.min.z);
+                    f32 bDepth  = (b->aabb.max.z - b->aabb.min.z);
+                    f32 bLength = (b->aabb.max.x - b->aabb.min.x);
+
+                    // Snapping from top
+                    if (a->position.z < b->position.z)
+                    {
+                        a->position.z = (b->position.z - bDepth) - (aLength * 0.5f) + (bDepth * 0.5f);
+                    }
+                    // Snapping from bottom
+                    else
+                    {
+                        a->position.z = (b->position.z + bDepth) + (aLength * 0.5f) - (bDepth * 0.5f);
+                    }
+
+                    // Snapping from right
+                    if (a->position.x > b->position.x)
+                    {
+                        a->position.x = (b->position.x + (bLength * 0.5f)) - (aDepth * 0.5f);
+                    }
+                    // Snapping from left
+                    else
+                    {
+                        a->position.x = (b->position.x - (bLength * 0.5f)) + (aDepth * 0.5f);
+                    }
+                }
+
+                result = true;
+                break;
+            }
+        }
+    }
+
+    return result;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -872,11 +999,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // v3 fenceSize = state->fenceAABB->max - state->fenceAABB->min;
 
-        Entity* fence0   = EntityNew(state, EntityType_Object);
-        fence0->position = { 0.0f, 0.0f, -2.0f };
-        fence0->size     = { 1.0f, 1.0f, 1.0f };
-        // fence0->yaw      = Radians(-90.0f);
-        fence0->aabb = *state->fenceAABB;
+        // Entity* fence0   = EntityNew(state, EntityType_Object);
+        // fence0->position = { 0.0f, 0.0f, -2.0f };
+        // fence0->size     = { 1.0f, 1.0f, 1.0f };
+        //// fence0->yaw      = Radians(-90.0f);
+        // fence0->aabb = *state->fenceAABB;
 
 #if 0
         for (u32 i = 0; i < 20; i++)
@@ -897,8 +1024,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
         }
 #endif
-
-        AABB fence0WorldAABB = AABBToWorld(fence0->aabb, fence0->position);
 
         state->graph = PushStruct(arena, Graph);
         GraphInit(state);
@@ -1354,6 +1479,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     obstacle = 0;
                 }
             }
+            // Cancel placing
             else if (ButtonIsPressed(mouse->right))
             {
                 EntityRemove(state, obstacle->index);
@@ -1361,9 +1487,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
             else
             {
+                // Move obstacle
                 v3 newPosition     = WorldMousePicking(camera, projection, windowDim, mouse->pos);
                 obstacle->position = newPosition;
 
+                // Rotate obstacle
                 f32 yawStep = Radians(90.0f);
                 if (ButtonIsPressed(input->keyboard.moveLeft))
                 {
@@ -1379,60 +1507,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     obstacle->yaw += (2.0f * Pi);
                 }
 
-                EntityWorldCorners obstacleWorldCorners = EntityGetWorldCorners(state, obstacle);
-
+                // Try to snap obstacle
                 for (u32 entityIndex = 0; entityIndex < ArrayCount(state->entities); entityIndex++)
                 {
                     Entity* entity = EntityGet(state, entityIndex);
                     if (entity != obstacle && entity->type == EntityType_Object)
                     {
-                        EntityWorldCorners entityWorldCorners = EntityGetWorldCorners(state, entity);
-
-                        b32 matchObstacles = false;
-                        for (u32 i = 0; i < ArrayCount(entityWorldCorners.corners); i++)
-                        {
-                            cell_index obstacleCellCorner = WorldPositionToGridCell(obstacleWorldCorners.corners[i]);
-
-                            for (u32 j = 0; j < ArrayCount(entityWorldCorners.corners); j++)
-                            {
-                                cell_index entityCellCorner = WorldPositionToGridCell(entityWorldCorners.corners[j]);
-
-                                if (obstacleCellCorner == entityCellCorner)
-                                {
-                                    f32 xDiff = obstacleWorldCorners.corners[i].x - entityWorldCorners.corners[j].x;
-                                    f32 zDiff = obstacleWorldCorners.corners[i].z - entityWorldCorners.corners[j].z;
-
-                                    b32 obstacleVertical =
-                                        (obstacle->yaw == (Pi / 2.0f) || obstacle->yaw == (3 * Pi / 2.0f));
-                                    b32 entityVertical = (entity->yaw == (Pi / 2.0f) || entity->yaw == (3 * Pi / 2.0f));
-
-                                    // Vertical to vertical
-                                    if (obstacleVertical && entityVertical)
-                                    {
-                                        obstacle->position.x = entity->position.x;
-                                        obstacle->position.z -= (zDiff * 0.5f);
-                                        obstacle->yaw = entity->yaw;
-                                    }
-                                    // Horizontal to horizontal
-                                    else if (!obstacleVertical && !obstacleVertical)
-                                    {
-                                        obstacle->position.x -= (xDiff * 0.5f);
-                                        obstacle->position.z = entity->position.z;
-                                        obstacle->yaw        = entity->yaw;
-                                    }
-                                    // Mixed orientation (L-shape)
-                                    else
-                                    {
-                                        // TODO
-                                    }
-
-                                    matchObstacles = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (matchObstacles)
+                        if (SnapObstacles(obstacle, entity))
                         {
                             entity->flags |= EntityFlag_Positioning;
                         }
@@ -1722,7 +1803,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                         color = orange;
                     }
 
-                    EntityWorldCorners corners = EntityGetWorldCorners(state, entity);
+                    EntityWorldCorners corners = EntityGetWorldCorners(entity);
 
                     DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.topLeft), color);
                     DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.topRight), color);
