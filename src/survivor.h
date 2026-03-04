@@ -19,13 +19,16 @@ enum EntityType
 {
     EntityType_Player,
     EntityType_Enemy,
+    // TODO: Rename to obstacle
     EntityType_Object
 };
 
 enum EntityFlag
 {
-    EntityFlag_InKnockback = (1 << 0),
-    EntityFlag_Positioning = (1 << 1),
+    EntityFlag_InKnockback     = (1 << 0),
+    EntityFlag_Positioning     = (1 << 1),
+    EntityFlag_Snapping        = (1 << 2),
+    EntityFlag_InvalidPosition = (1 << 3),
 };
 
 struct Entity
@@ -83,6 +86,12 @@ struct Graph
     std::vector<std::vector<u32>> edges;
 };
 
+struct CellInfo
+{
+    Entity* entities[4];
+    u32     entityCount;
+};
+
 struct GameState
 {
     b32   initialized;
@@ -106,6 +115,7 @@ struct GameState
     u32             entityCount;
     Graph*          graph;
     b32             buildMode;
+    CellInfo*       cellInfo;
 
 #ifdef BUILD_TYPE_DEBUG
     DebugState* debug;

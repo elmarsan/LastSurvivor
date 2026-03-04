@@ -210,6 +210,15 @@ inline void EntityRemove(GameState* state, u32 index)
     state->entityCount--;
 }
 
+inline void EntitiesRemoveFlag(GameState* state, u32 flag)
+{
+    for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+    {
+        Entity* entity = EntityGet(state, entityIndex);
+        entity->flags &= ~flag;
+    }
+}
+
 union EntityWorldCorners
 {
     struct
@@ -588,7 +597,151 @@ void GraphInit(GameState* state)
     }
 }
 
-b32 SnapObstacles(Entity* a, Entity* b)
+inline void CellInfoAppendEntity(CellInfo* cellInfo, Entity* entity)
+{
+    b32 duplicated = false;
+    for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cellInfo->entities); entityPtrIndex++)
+    {
+        if (cellInfo->entities[entityPtrIndex] == entity)
+        {
+            duplicated = true;
+            break;
+        }
+    }
+
+    if (!duplicated)
+    {
+        Assert(cellInfo->entityCount < ArrayCount(cellInfo->entities));
+        cellInfo->entities[cellInfo->entityCount++] = entity;
+    }
+};
+
+// TODO: Mierdon de nombre
+b32 IsValidCellForEntity(CellInfo* cellInfo, Entity* entity)
+{
+    if (cellInfo->entityCount == 4)
+    {
+        return false;
+    }
+
+    u32 verticalOrientedEntityCount   = 0;
+    u32 horizontalOrientedEntityCount = 0;
+
+    for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cellInfo->entities); entityPtrIndex++)
+    {
+        Entity* entityPtr = cellInfo->entities[entityPtrIndex];
+        if (entityPtr)
+        {
+            Assert(entityPtr->type == EntityType_Object);
+
+            // TODO: Pull this into a function?
+            b32 entityIsVertical = (entityPtr->yaw == (Pi / 2.0f) || entityPtr->yaw == (3 * Pi / 2.0f));
+            if (entityIsVertical)
+            {
+                verticalOrientedEntityCount++;
+            }
+            else
+            {
+                horizontalOrientedEntityCount++;
+            }
+        }
+    }
+    Assert(verticalOrientedEntityCount <= 2);
+    Assert(horizontalOrientedEntityCount <= 2);
+
+    b32 newEntityIsVertical = (entity->yaw == (Pi / 2.0f) || entity->yaw == (3 * Pi / 2.0f));
+    if (newEntityIsVertical && verticalOrientedEntityCount < 2)
+    {
+        return true;
+    }
+    else if (!newEntityIsVertical && horizontalOrientedEntityCount < 2)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+inline b32 IsValidObstaclePosition(GameState* state, Entity* entity)
+{
+    Assert(entity->type == EntityType_Object);
+
+    if (!WorldIsPositionInBounds(entity->position))
+    {
+        return false;
+    }
+
+    EntityCellCorners cells = EntityGetCellCorners(entity);
+    for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.cells); cellIndex++)
+    {
+        // Note: cell can be invalid if dragging outside world bounds.
+        // TODO: Is player allowed to drag obstacle outside the world bounds?
+        cell_index cell = cells.cells[cellIndex];
+        if (WorldIsValidCell(cell))
+        {
+            CellInfo* cellInfo = &state->cellInfo[cell];
+
+            if (!IsValidCellForEntity(cellInfo, entity))
+            {
+                return false;
+            }
+        }
+    }
+
+    // TODO: Check it does not collide with other obstacles
+    // No obstacle in same position
+    EntityCellCorners entityCorners = EntityGetCellCorners(entity);
+    for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+    {
+        Entity* placedEntity = EntityGet(state, entityIndex);
+        if (placedEntity != entity && placedEntity->type == EntityType_Object)
+        {
+            EntityCellCorners placeEntityCorners = EntityGetCellCorners(placedEntity);
+
+            u32 sharedCount = 0;
+
+            for (u32 i = 0; i < 4; i++)
+            {
+                cell_index entityCell = entityCorners.cells[i];
+
+                for (u32 j = 0; j < 4; j++)
+                {
+                    cell_index placedEntityCell = placeEntityCorners.cells[j];
+
+                    if (entityCell == placedEntityCell)
+                    {
+                        sharedCount++;
+                        break;
+                    }
+                }
+            }
+
+            // Same position
+            if (sharedCount == 4)
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+void PlaceObstacle(GameState* state, Entity* entity)
+{
+    entity->flags &= ~EntityFlag_Positioning;
+
+    EntityCellCorners entityCells = EntityGetCellCorners(entity);
+
+    for (u32 cellIndex = 0; cellIndex < ArrayCount(entityCells.cells); cellIndex++)
+    {
+        cell_index cell     = entityCells.cells[cellIndex];
+        CellInfo*  cellInfo = &state->cellInfo[cell];
+        CellInfoAppendEntity(cellInfo, entity);
+    }
+}
+
+b32 SnapObstacles(GameState* state, Entity* a, Entity* b)
 {
     Assert(a->type == EntityType_Object && b->type == EntityType_Object);
 
@@ -607,15 +760,14 @@ b32 SnapObstacles(Entity* a, Entity* b)
 
             if (obstacleCellCorner == entityCellCorner)
             {
-                f32 xDiff = aWorldCorners.corners[aCornerIndex].x - bWorldCorners.corners[bCornerIndex].x;
-                f32 zDiff = aWorldCorners.corners[aCornerIndex].z - bWorldCorners.corners[bCornerIndex].z;
-
                 b32 aIsVertical = (a->yaw == (Pi / 2.0f) || a->yaw == (3 * Pi / 2.0f));
                 b32 bIsVertical = (b->yaw == (Pi / 2.0f) || b->yaw == (3 * Pi / 2.0f));
 
                 // Vertical to vertical
                 if (aIsVertical && bIsVertical)
                 {
+                    f32 zDiff = aWorldCorners.corners[aCornerIndex].z - bWorldCorners.corners[bCornerIndex].z;
+
                     a->position.x = b->position.x;
                     a->position.z -= (zDiff * 0.5f);
                     a->yaw = b->yaw;
@@ -623,11 +775,12 @@ b32 SnapObstacles(Entity* a, Entity* b)
                 // Horizontal to horizontal
                 else if (!aIsVertical && !bIsVertical)
                 {
+                    f32 xDiff = aWorldCorners.corners[aCornerIndex].x - bWorldCorners.corners[bCornerIndex].x;
+
                     a->position.x -= (xDiff * 0.5f);
                     a->position.z = b->position.z;
                     a->yaw        = b->yaw;
                 }
-                // Mixed orientation (L-shape)
                 // Horizontal to vertical
                 else if (bIsVertical)
                 {
@@ -678,6 +831,8 @@ b32 SnapObstacles(Entity* a, Entity* b)
                 // Vertical to horizontal
                 else
                 {
+                    v3 obstacleNormal{ sinf(a->yaw), 0.0f, cosf(a->yaw) };
+
                     f32 aLength = (a->aabb.max.x - a->aabb.min.x);
                     f32 aDepth  = (a->aabb.max.z - a->aabb.min.z);
                     f32 bDepth  = (b->aabb.max.z - b->aabb.min.z);
@@ -703,6 +858,12 @@ b32 SnapObstacles(Entity* a, Entity* b)
                     else
                     {
                         a->position.x = (b->position.x - (bLength * 0.5f)) + (aDepth * 0.5f);
+                    }
+
+                    // Hack, fence model is not simetric
+                    if (obstacleNormal.x == 1.0f)
+                    {
+                        a->yaw += Pi;
                     }
                 }
 
@@ -745,6 +906,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->glyphAtlas             = PushStruct(arena, Texture);
         state->batchBuffer            = PushStruct(arena, BatchBuffer);
         state->buildMode              = false;
+        state->cellInfo               = PushArray(arena, GRID_COLS * GRID_ROWS, CellInfo);
+        memset(state->cellInfo, 0, sizeof(CellInfo) * (GRID_COLS * GRID_ROWS));
 
 #ifdef BUILD_TYPE_DEBUG
         state->debug   = PushStruct(arena, DebugState);
@@ -1473,10 +1636,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             // Place object if valid position
             if (ButtonIsPressed(mouse->left))
             {
-                if (WorldIsValidPosition(obstacle->position))
+                if (IsValidObstaclePosition(state, obstacle))
                 {
-                    obstacle->flags &= ~EntityFlag_Positioning;
+                    PlaceObstacle(state, obstacle);
+                    obstacle->flags &= ~(EntityFlag_Positioning);
                     obstacle = 0;
+                    EntitiesRemoveFlag(state, EntityFlag_Snapping);
+                }
+                else
+                {
+                    platform.Logf("Invalid obstacle position");
                 }
             }
             // Cancel placing
@@ -1513,13 +1682,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     Entity* entity = EntityGet(state, entityIndex);
                     if (entity != obstacle && entity->type == EntityType_Object)
                     {
-                        if (SnapObstacles(obstacle, entity))
+                        if (IsValidObstaclePosition(state, obstacle))
                         {
-                            entity->flags |= EntityFlag_Positioning;
+                            obstacle->flags &= ~EntityFlag_InvalidPosition;
+
+                            if (SnapObstacles(state, obstacle, entity))
+                            {
+                                entity->flags |= EntityFlag_Snapping;
+                            }
+                            else
+                            {
+                                entity->flags &= ~EntityFlag_Snapping;
+                            }
                         }
                         else
                         {
-                            entity->flags &= ~EntityFlag_Positioning;
+                            obstacle->flags |= EntityFlag_InvalidPosition;
+                            EntitiesRemoveFlag(state, EntityFlag_Snapping);
                         }
                     }
                 }
@@ -1686,9 +1865,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 {
                     v4 tintColor = white;
 
-                    if (entity->flags & EntityFlag_Positioning)
+                    if (entity->flags & (EntityFlag_InvalidPosition))
                     {
-                        tintColor = WorldIsValidPosition(entity->position) ? green : red;
+                        tintColor = red;
+                    }
+                    else if (entity->flags & (EntityFlag_Positioning | EntityFlag_Snapping))
+                    {
+                        tintColor = green;
                     }
 
                     PushRenderUploadUniformInt(commandQueue, state->program->id, "hasDiffuse", 1);

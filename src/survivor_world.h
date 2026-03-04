@@ -13,7 +13,7 @@
 typedef u32 cell_index;
 
 v3  WorldMousePicking(Camera* camera, mat4x4 projection, v2u windowDim, v2u mouse);
-b32 WorldIsValidPosition(v3 position);
+b32 WorldIsPositionInBounds(v3 position);
 
 inline cell_index WorldPositionToGridCell(v3 position)
 {
@@ -39,3 +39,5 @@ inline v3 WorldGridCellToPosition(cell_index cellIndex)
 
     return v3{ x, 0.0f, z };
 }
+
+inline b32 WorldIsValidCell(cell_index cell) { return cell >= 0 && cell < GRID_ROWS * GRID_COLS; }

@@ -33,7 +33,7 @@ v3 WorldMousePicking(Camera* camera, mat4x4 projection, v2u windowDim, v2u mouse
     return point;
 }
 
-b32 WorldIsValidPosition(v3 position)
+b32 WorldIsPositionInBounds(v3 position)
 {
     // Left limit
     if (position.x < -(GRID_ROWS * 0.5))
