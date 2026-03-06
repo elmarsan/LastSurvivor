@@ -10,39 +10,11 @@
 #include "survivor_debug.h"
 #include "survivor_obj.h"
 #include "survivor_world.h"
+#include "survivor_entity.h"
 
 #define TTF_FIRST_GLYPH_OFFSET 32 // Space ascii code
 #define TTF_GLYPH_COUNT        95
 #define MAX_ENTITY_COUNT       128
-
-enum EntityType
-{
-    EntityType_Player,
-    EntityType_Enemy,
-    // TODO: Rename to obstacle
-    EntityType_Object
-};
-
-enum EntityFlag
-{
-    EntityFlag_InKnockback     = (1 << 0),
-    EntityFlag_Positioning     = (1 << 1),
-    EntityFlag_Snapping        = (1 << 2),
-    EntityFlag_InvalidPosition = (1 << 3),
-};
-
-struct Entity
-{
-    EntityType type;
-    v3         position;
-    v3         velocity;
-    v3         size;
-    f32        yaw;          // TODO: Replace by v3/quat for rotations?
-    Entity*    targetEntity; // TODO: Needed? All enemies will follow player
-    AABB       aabb;
-    u32        flags;
-    u32        index;
-};
 
 struct Vertex
 {

@@ -466,6 +466,14 @@ inline mat4x4 Rotate(mat4x4 mat, f32 angle, v3 rot)
     return mat * rotation;
 }
 
+inline v3 RotateVec3Y(v3 v, f32 angle)
+{
+    f32 c = cosf(angle);
+    f32 s = sinf(angle);
+
+    return v3{ v.x * c + v.z * s, v.y, -v.x * s + v.z * c };
+}
+
 inline mat4x4 Scale(mat4x4 mat4, v3 scale)
 {
     mat4x4 scaleMat = Identity();

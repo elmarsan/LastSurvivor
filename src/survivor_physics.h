@@ -104,8 +104,11 @@ inline b32 AABBIntersection(AABB a, AABB b, AABB* intersection)
     {
         overlaps = true;
 
-        intersection->min = { Max(a.min.x, b.min.x), Max(a.min.y, b.min.y), Max(a.min.z, b.min.z) };
-        intersection->max = { Min(a.max.x, b.max.x), Min(a.max.y, b.max.y), Min(a.max.z, b.max.z) };
+        if (intersection)
+        {
+            intersection->min = { Max(a.min.x, b.min.x), Max(a.min.y, b.min.y), Max(a.min.z, b.min.z) };
+            intersection->max = { Min(a.max.x, b.max.x), Min(a.max.y, b.max.y), Min(a.max.z, b.max.z) };
+        }
     }
 
     return overlaps;

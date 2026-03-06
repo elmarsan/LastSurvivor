@@ -5,6 +5,7 @@
 #include "survivor_debug.cpp"
 #include "survivor_obj.cpp"
 #include "survivor_world.cpp"
+#include "survivor_entity.cpp"
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "stb_rect_pack.h"
@@ -219,116 +220,9 @@ inline void EntitiesRemoveFlag(GameState* state, u32 flag)
     }
 }
 
-union EntityWorldCorners
+inline b32 EntityIsVerticalOriented(Entity* entity)
 {
-    struct
-    {
-        v3 topLeft;
-        v3 topRight;
-        v3 bottomLeft;
-        v3 bottomRight;
-    };
-
-    v3 corners[4];
-};
-
-EntityWorldCorners EntityGetWorldCorners(Entity* entity)
-{
-    v3 localCorners[4] = {
-        { entity->aabb.min.x, 0.0f, entity->aabb.min.z }, // Top-left
-        { entity->aabb.max.x, 0.0f, entity->aabb.min.z }, // Top-right
-        { entity->aabb.min.x, 0.0f, entity->aabb.max.z }, // Bottom-left
-        { entity->aabb.max.x, 0.0f, entity->aabb.max.z }, // Bottom-right
-    };
-
-    f32 c = cosf(entity->yaw);
-    f32 s = sinf(entity->yaw);
-
-    EntityWorldCorners worldCorners = { 0 };
-
-    for (u32 cornerIndex = 0; cornerIndex < 4; cornerIndex++)
-    {
-        // TODO: Use rotation matrix
-        f32 rotatedX = localCorners[cornerIndex].x * c + localCorners[cornerIndex].z * s;
-        f32 rotatedZ = localCorners[cornerIndex].x * -s + localCorners[cornerIndex].z * c;
-
-        worldCorners.corners[cornerIndex] = {
-            entity->position.x + rotatedX, //
-            entity->aabb.min.y,            //
-            entity->position.z + rotatedZ  //
-        };
-    }
-
-    return worldCorners;
-}
-
-union EntityCellCorners
-{
-    struct
-    {
-        u32 topLeftCell;
-        u32 topRightCell;
-        u32 bottomLeftCell;
-        u32 bottomRightCell;
-    };
-
-    u32 cells[4];
-};
-// TODO: Get rid of this
-EntityCellCorners EntityGetCellCorners(Entity* entity)
-{
-    v3 localCorners[4] = {
-        { entity->aabb.min.x, 0.0f, entity->aabb.min.z }, // Top-left
-        { entity->aabb.max.x, 0.0f, entity->aabb.min.z }, // Top-right
-        { entity->aabb.min.x, 0.0f, entity->aabb.max.z }, // Bottom-left
-        { entity->aabb.max.x, 0.0f, entity->aabb.max.z }, // Bottom-right
-    };
-
-    f32 c = cosf(entity->yaw);
-    f32 s = sinf(entity->yaw);
-
-    v3 worldCorners[4];
-
-    for (u32 cornerIndex = 0; cornerIndex < 4; cornerIndex++)
-    {
-        f32 rotatedX = localCorners[cornerIndex].x * c + localCorners[cornerIndex].z * s;
-        f32 rotatedZ = localCorners[cornerIndex].x * -s + localCorners[cornerIndex].z * c;
-
-        worldCorners[cornerIndex] = {
-            entity->position.x + rotatedX, //
-            entity->aabb.min.y,            //
-            entity->position.z + rotatedZ  //
-        };
-    }
-
-    v3 min = worldCorners[0];
-    v3 max = worldCorners[0];
-    for (u32 cornerIndex = 1; cornerIndex < 4; cornerIndex++)
-    {
-        min.x = Min(min.x, worldCorners[cornerIndex].x);
-        min.z = Min(min.z, worldCorners[cornerIndex].z);
-        max.x = Max(max.x, worldCorners[cornerIndex].x);
-        max.z = Max(max.z, worldCorners[cornerIndex].z);
-    }
-
-    // TODO: Check valid cell
-    cell_index minXCell = WorldPositionToGridCell({ min.x, 0.0f, 0.0f });
-    cell_index maxXCell = WorldPositionToGridCell({ max.x, 0.0f, 0.0f });
-    cell_index minZCell = WorldPositionToGridCell({ 0.0f, 0.0f, min.z });
-    cell_index maxZCell = WorldPositionToGridCell({ 0.0f, 0.0f, max.z });
-
-    u32 minCol = CELL_COL(minXCell);
-    u32 maxCol = CELL_COL(maxXCell);
-    u32 minRow = CELL_ROW(maxZCell);
-    u32 maxRow = CELL_ROW(minZCell);
-
-    EntityCellCorners corners = { 0 };
-    corners.topLeftCell       = CELL_INDEX(maxRow, minCol);
-    corners.topRightCell      = CELL_INDEX(maxRow, maxCol);
-    corners.bottomLeftCell    = CELL_INDEX(minRow, minCol);
-    corners.bottomRightCell   = CELL_INDEX(minRow, maxCol);
-
-    return corners;
+    return (entity->yaw == (Pi / 2.0f) || entity->yaw == (3 * Pi / 2.0f));
 }
 
 // TODO: Move to debug?
@@ -477,7 +371,7 @@ void GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex)
     for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
     {
         Entity* entity = EntityGet(state, entityIndex);
-        if (entity->type == EntityType_Object)
+        if (entity->type == EntityType_Obstacle)
         {
             for (u32 nodeIndex = 0; nodeIndex < graph->nodes.size(); nodeIndex++)
             {
@@ -573,7 +467,7 @@ void GraphInit(GameState* state)
     for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
     {
         Entity* entity = EntityGet(state, entityIndex);
-        if (entity->type == EntityType_Object)
+        if (entity->type == EntityType_Obstacle)
         {
             EntityCellCorners corners = EntityGetCellCorners(entity);
 
@@ -632,11 +526,8 @@ b32 IsValidCellForEntity(CellInfo* cellInfo, Entity* entity)
         Entity* entityPtr = cellInfo->entities[entityPtrIndex];
         if (entityPtr)
         {
-            Assert(entityPtr->type == EntityType_Object);
-
-            // TODO: Pull this into a function?
-            b32 entityIsVertical = (entityPtr->yaw == (Pi / 2.0f) || entityPtr->yaw == (3 * Pi / 2.0f));
-            if (entityIsVertical)
+            Assert(entityPtr->type == EntityType_Obstacle);
+            if (EntityIsVerticalOriented(entityPtr))
             {
                 verticalOrientedEntityCount++;
             }
@@ -649,7 +540,8 @@ b32 IsValidCellForEntity(CellInfo* cellInfo, Entity* entity)
     Assert(verticalOrientedEntityCount <= 2);
     Assert(horizontalOrientedEntityCount <= 2);
 
-    b32 newEntityIsVertical = (entity->yaw == (Pi / 2.0f) || entity->yaw == (3 * Pi / 2.0f));
+    // b32 newEntityIsVertical = (entity->yaw == (Pi / 2.0f) || entity->yaw == (3 * Pi / 2.0f));
+    b32 newEntityIsVertical = EntityIsVerticalOriented(entity);
     if (newEntityIsVertical && verticalOrientedEntityCount < 2)
     {
         return true;
@@ -662,14 +554,9 @@ b32 IsValidCellForEntity(CellInfo* cellInfo, Entity* entity)
     return false;
 }
 
-inline b32 IsValidObstaclePosition(GameState* state, Entity* entity)
+inline b32 ObstacleIsValidPosition(GameState* state, Entity* entity)
 {
-    Assert(entity->type == EntityType_Object);
-
-    if (!WorldIsPositionInBounds(entity->position))
-    {
-        return false;
-    }
+    Assert(entity->type == EntityType_Obstacle);
 
     EntityCellCorners cells = EntityGetCellCorners(entity);
     for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.cells); cellIndex++)
@@ -677,49 +564,63 @@ inline b32 IsValidObstaclePosition(GameState* state, Entity* entity)
         // Note: cell can be invalid if dragging outside world bounds.
         // TODO: Is player allowed to drag obstacle outside the world bounds?
         cell_index cell = cells.cells[cellIndex];
-        if (WorldIsValidCell(cell))
-        {
-            CellInfo* cellInfo = &state->cellInfo[cell];
+        Assert(WorldIsValidCell(cell));
+        // if (WorldIsValidCell(cell))
+        //{
+        CellInfo* cellInfo = &state->cellInfo[cell];
 
-            if (!IsValidCellForEntity(cellInfo, entity))
-            {
-                return false;
-            }
+        if (!IsValidCellForEntity(cellInfo, entity))
+        {
+            return false;
         }
+        //}
     }
 
-    // TODO: Check it does not collide with other obstacles
-    // No obstacle in same position
+    // Check for overlapping with other obstacles
     EntityCellCorners entityCorners = EntityGetCellCorners(entity);
     for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
     {
         Entity* placedEntity = EntityGet(state, entityIndex);
-        if (placedEntity != entity && placedEntity->type == EntityType_Object)
+        if (placedEntity != entity && placedEntity->type == EntityType_Obstacle)
         {
-            EntityCellCorners placeEntityCorners = EntityGetCellCorners(placedEntity);
-
-            u32 sharedCount = 0;
-
-            for (u32 i = 0; i < 4; i++)
+            // Hack XZ-axis
+            AABB intersection;
+            if (EntitiesIntersect(entity, placedEntity, &intersection) &&
+                (entity->position.z != placedEntity->position.z && entity->position.x != placedEntity->position.x))
             {
-                cell_index entityCell = entityCorners.cells[i];
+                v3 penetration = { 0 };
+                penetration.x  = intersection.max.x - intersection.min.x;
+                penetration.y  = intersection.max.y - intersection.min.y;
+                penetration.z  = intersection.max.z - intersection.min.z;
 
-                for (u32 j = 0; j < 4; j++)
+                return false;
+            }
+            else
+            {
+                EntityCellCorners placedEntityCorners = EntityGetCellCorners(placedEntity);
+
+                u32 sharedCellCount = 0;
+                for (u32 i = 0; i < 4; i++)
                 {
-                    cell_index placedEntityCell = placeEntityCorners.cells[j];
+                    cell_index entityCell = entityCorners.cells[i];
 
-                    if (entityCell == placedEntityCell)
+                    for (u32 j = 0; j < 4; j++)
                     {
-                        sharedCount++;
-                        break;
+                        cell_index placedEntityCell = placedEntityCorners.cells[j];
+
+                        if (entityCell == placedEntityCell)
+                        {
+                            sharedCellCount++;
+                            break;
+                        }
                     }
                 }
-            }
 
-            // Same position
-            if (sharedCount == 4)
-            {
-                return false;
+                // Same position
+                if (sharedCellCount == 4)
+                {
+                    return false;
+                }
             }
         }
     }
@@ -727,8 +628,10 @@ inline b32 IsValidObstaclePosition(GameState* state, Entity* entity)
     return true;
 }
 
-void PlaceObstacle(GameState* state, Entity* entity)
+void ObstaclePlace(GameState* state, Entity* entity)
 {
+    Assert(entity->type == EntityType_Obstacle);
+
     entity->flags &= ~EntityFlag_Positioning;
 
     EntityCellCorners entityCells = EntityGetCellCorners(entity);
@@ -741,9 +644,9 @@ void PlaceObstacle(GameState* state, Entity* entity)
     }
 }
 
-b32 SnapObstacles(GameState* state, Entity* a, Entity* b)
+b32 ObstaclesSnap(GameState* state, Entity* a, Entity* b)
 {
-    Assert(a->type == EntityType_Object && b->type == EntityType_Object);
+    Assert(a->type == EntityType_Obstacle && b->type == EntityType_Obstacle);
 
     b32 result = false;
 
@@ -760,8 +663,8 @@ b32 SnapObstacles(GameState* state, Entity* a, Entity* b)
 
             if (obstacleCellCorner == entityCellCorner)
             {
-                b32 aIsVertical = (a->yaw == (Pi / 2.0f) || a->yaw == (3 * Pi / 2.0f));
-                b32 bIsVertical = (b->yaw == (Pi / 2.0f) || b->yaw == (3 * Pi / 2.0f));
+                b32 aIsVertical = EntityIsVerticalOriented(a);
+                b32 bIsVertical = EntityIsVerticalOriented(b);
 
                 // Vertical to vertical
                 if (aIsVertical && bIsVertical)
@@ -874,6 +777,72 @@ b32 SnapObstacles(GameState* state, Entity* a, Entity* b)
     }
 
     return result;
+}
+
+void ObstacleDrag(Entity* obstacle, Camera* camera, mat4x4 projection, v2u windowDim, v2u mousePos)
+{
+    v3 newPosition = WorldMousePicking(camera, projection, windowDim, mousePos);
+
+    f32 halfWidth = (obstacle->aabb.max.x - obstacle->aabb.min.x) * 0.5f;
+    f32 halfDepth = (obstacle->aabb.max.z - obstacle->aabb.min.z) * 0.5f;
+    if (EntityIsVerticalOriented(obstacle))
+    {
+        f32 auxHalfWidth = halfWidth;
+        halfWidth        = halfDepth;
+        halfDepth        = auxHalfWidth;
+    }
+
+    f32 leftLimit   = -(GRID_ROWS * 0.5);
+    f32 rightLimit  = -leftLimit;
+    f32 topLimit    = -(GRID_COLS * 0.5);
+    f32 bottomLimit = -topLimit;
+
+    // Left limit
+    if ((newPosition.x - halfWidth) <= leftLimit)
+    {
+        newPosition.x = leftLimit + halfWidth;
+    }
+    // Right limit
+    if ((newPosition.x + halfWidth) > rightLimit)
+    {
+        newPosition.x = rightLimit - halfWidth;
+    }
+    // Top limit
+    if ((newPosition.z - halfDepth) < topLimit)
+    {
+        newPosition.z = topLimit + halfDepth;
+    }
+    // Bottom limit
+    if ((newPosition.z + halfDepth) > bottomLimit)
+    {
+        newPosition.z = bottomLimit - halfDepth;
+    }
+
+    obstacle->position = newPosition;
+}
+
+void ObstacleRotate(Entity* obstacle, b32 counterclockwise)
+{
+    Assert(obstacle->type == EntityType_Obstacle);
+
+    f32 yawStep = Radians(90.0f);
+
+    // Rotate left
+    if (counterclockwise)
+    {
+        obstacle->yaw -= -yawStep;
+    }
+    // Rotate right
+    else
+    {
+        obstacle->yaw += yawStep;
+    }
+
+    obstacle->yaw = fmodf(obstacle->yaw, 2.0f * Pi);
+    if (obstacle->yaw < 0.0f)
+    {
+        obstacle->yaw += (2.0f * Pi);
+    }
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -1162,7 +1131,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // v3 fenceSize = state->fenceAABB->max - state->fenceAABB->min;
 
-        // Entity* fence0   = EntityNew(state, EntityType_Object);
+        // Entity* fence0   = EntityNew(state, EntityType_Obstacle);
         // fence0->position = { 0.0f, 0.0f, -2.0f };
         // fence0->size     = { 1.0f, 1.0f, 1.0f };
         //// fence0->yaw      = Radians(-90.0f);
@@ -1353,10 +1322,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     }
                     else
                     {
-                        AABB entityWorldBbox = AABBToWorld(entity->aabb, entity->position);
-
                         AABB intersection;
-                        if (AABBIntersection(entityWorldBbox, playerWorldAABB, &intersection))
+                        if (EntitiesIntersect(player, entity, &intersection))
                         {
                             if (player->flags & EntityFlag_InKnockback)
                             {
@@ -1539,7 +1506,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     if (entitySubindex != entityIndex) // If is not the current enemy
                     {
                         Entity* object = EntityGet(state, entitySubindex);
-                        if (object->type == EntityType_Object)
+                        if (object->type == EntityType_Obstacle)
                         {
                             AABB objectWorldAABB = AABBToWorld(object->aabb, object->position);
 
@@ -1623,9 +1590,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // Spawn obstacle
         if (!obstacle && ButtonIsPressed(mouse->left))
         {
+            // TODO: Move this logic to `ObstacleSpawn` function
             v3 position = WorldMousePicking(camera, projection, windowDim, mouse->pos);
 
-            obstacle           = EntityNew(state, EntityType_Object);
+            obstacle           = EntityNew(state, EntityType_Obstacle);
             obstacle->position = position;
             obstacle->size     = { 1.0f, 1.0f, 1.0f };
             obstacle->flags |= EntityFlag_Positioning;
@@ -1636,9 +1604,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             // Place object if valid position
             if (ButtonIsPressed(mouse->left))
             {
-                if (IsValidObstaclePosition(state, obstacle))
+                if (ObstacleIsValidPosition(state, obstacle))
                 {
-                    PlaceObstacle(state, obstacle);
+                    ObstaclePlace(state, obstacle);
                     obstacle->flags &= ~(EntityFlag_Positioning);
                     obstacle = 0;
                     EntitiesRemoveFlag(state, EntityFlag_Snapping);
@@ -1654,52 +1622,67 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 EntityRemove(state, obstacle->index);
                 obstacle = 0;
             }
+            // Move obstacle
             else
             {
-                // Move obstacle
-                v3 newPosition     = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-                obstacle->position = newPosition;
+                ObstacleDrag(obstacle, camera, projection, windowDim, mouse->pos);
 
-                // Rotate obstacle
-                f32 yawStep = Radians(90.0f);
                 if (ButtonIsPressed(input->keyboard.moveLeft))
                 {
-                    obstacle->yaw -= -yawStep;
+                    ObstacleRotate(obstacle, true);
                 }
                 else if (ButtonIsPressed(input->keyboard.moveRight))
                 {
-                    obstacle->yaw += yawStep;
+                    ObstacleRotate(obstacle, false);
                 }
-                obstacle->yaw = fmodf(obstacle->yaw, 2.0f * Pi);
-                if (obstacle->yaw < 0.0f)
-                {
-                    obstacle->yaw += (2.0f * Pi);
-                }
+
+                // TODO: Keep obstacle count
+                b32 obstacleCount = 0;
 
                 // Try to snap obstacle
                 for (u32 entityIndex = 0; entityIndex < ArrayCount(state->entities); entityIndex++)
                 {
                     Entity* entity = EntityGet(state, entityIndex);
-                    if (entity != obstacle && entity->type == EntityType_Object)
-                    {
-                        if (IsValidObstaclePosition(state, obstacle))
-                        {
-                            obstacle->flags &= ~EntityFlag_InvalidPosition;
 
-                            if (SnapObstacles(state, obstacle, entity))
+                    if (entity->type == EntityType_Obstacle)
+                    {
+                        obstacleCount++;
+
+                        if (entity != obstacle)
+                        {
+                            if (ObstacleIsValidPosition(state, obstacle))
                             {
-                                entity->flags |= EntityFlag_Snapping;
+                                obstacle->flags &= ~EntityFlag_InvalidPosition;
+
+                                if (ObstaclesSnap(state, obstacle, entity))
+                                {
+                                    entity->flags |= EntityFlag_Snapping;
+                                }
+                                else
+                                {
+                                    entity->flags &= ~EntityFlag_Snapping;
+                                }
                             }
                             else
                             {
-                                entity->flags &= ~EntityFlag_Snapping;
+                                obstacle->flags |= EntityFlag_InvalidPosition;
+                                EntitiesRemoveFlag(state, EntityFlag_Snapping);
                             }
                         }
-                        else
-                        {
-                            obstacle->flags |= EntityFlag_InvalidPosition;
-                            EntitiesRemoveFlag(state, EntityFlag_Snapping);
-                        }
+                    }
+                }
+
+                // Hack: keep count of obstacles, when placing first obstacle we do above loop,
+                // so obstacle position is not validated.
+                if (obstacleCount <= 1)
+                {
+                    if (ObstacleIsValidPosition(state, obstacle))
+                    {
+                        obstacle->flags &= ~EntityFlag_InvalidPosition;
+                    }
+                    else
+                    {
+                        obstacle->flags |= EntityFlag_InvalidPosition;
                     }
                 }
             }
@@ -1854,7 +1837,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
                 mat4x4 model = translate * rotate * scale;
 
-                if (entity->type != EntityType_Object)
+                if (entity->type != EntityType_Obstacle)
                 {
                     PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
                     PushRenderUploadUniformVec4(commandQueue, state->program->id, "color",
@@ -1976,7 +1959,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             DebugDrawAABB(state->debug, opengl, entity->position, entity->yaw, entity->aabb, red);
 
             // Entity Y orientation
-            if (entity->type == EntityType_Object)
+            if (entity->type == EntityType_Obstacle)
             {
                 if (state->buildMode)
                 {

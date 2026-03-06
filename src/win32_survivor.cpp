@@ -46,6 +46,7 @@ struct Win32State
     HDC           deviceContext;
     HGLRC         openglContext;
     b32           running;
+    b32           paused;
     s64           performanceCounterFreq;
     f32           deltaTime;
     GameInput     gameInput;
@@ -628,6 +629,12 @@ LRESULT WndProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
             mouse->buttons[mouseButtonIndex].wasDown = false;
         }
 
+        gWin32State.paused = true;
+        break;
+    }
+    case WM_SETFOCUS:
+    {
+        gWin32State.paused = false;
         break;
     }
     default:
@@ -1005,12 +1012,16 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             Log("XInputGetState unable to get controller 0 state, error code: '%lu'", result);
         }
 
+        b32 exitGame = false;
+        if (!gWin32State.paused)
+        {
 #ifdef BUILD_TYPE_DEBUG
-        b32 exitGame = game.UpdateAndRender(&gameMemory, &gWin32State.gameInput, gWin32State.deltaTime);
+            exitGame = game.UpdateAndRender(&gameMemory, &gWin32State.gameInput, gWin32State.deltaTime);
 #elif defined(BUILD_TYPE_RELEASE)
-        b32 exitGame = GameUpdateAndRender(&gameMemory, &gWin32State.gameInput, gWin32State.deltaTime);
+            exitGame = GameUpdateAndRender(&gameMemory, &gWin32State.gameInput, gWin32State.deltaTime);
 #endif
-        SwapBuffers(gWin32State.deviceContext);
+            SwapBuffers(gWin32State.deviceContext);
+        }
 
         LARGE_INTEGER frameEndTime = Win32GetWallClock();
         gWin32State.deltaTime      = (f32)Win32GetSecondsElapsed(frameStartTime, frameEndTime);
