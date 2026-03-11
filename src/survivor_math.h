@@ -261,7 +261,7 @@ inline v3 operator/(f32 scalar, v3 a)
 inline b32 operator>(v3 a, v3 b) { return a.x > b.x && a.y > b.y && a.z > b.z; }
 // ----------------------------------------------------------------------------
 
-inline f32 Length(const v3& a) { return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z); }
+inline f32 Length(v3 a) { return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z); }
 
 inline v3 Norm(v3 a)
 {

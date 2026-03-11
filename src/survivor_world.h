@@ -1,7 +1,8 @@
 #pragma once
 
-#define GRID_COLS 30
-#define GRID_ROWS 30
+#define GRID_COLS  30
+#define GRID_ROWS  30
+#define GRID_CELLS (GRID_COLS * GRID_ROWS)
 
 #define CELL_SIZE 1.0f
 #define CELL_HALF (CELL_SIZE * 0.5f)
@@ -12,16 +13,25 @@
 
 typedef u32 cell_index;
 
+struct Entity;
+
+struct GridCell
+{
+    Entity* entities[4];
+    u32     entityCount;
+};
+
+// TODO: Rename this to coordinate space picking. Picking can be done with gamepad.
 v3  WorldMousePicking(Camera* camera, mat4x4 projection, v2u windowDim, v2u mouse);
 b32 WorldIsPositionInBounds(v3 position);
 
 inline cell_index WorldPositionToGridCell(v3 position)
 {
-    s32 minCol = -(GRID_COLS / 2);
-    s32 minRow = (GRID_ROWS / 2);
+    s32 minCol   = -(GRID_COLS / 2);
+    s32 halfRows = (GRID_ROWS / 2);
 
     s32 col = (s32)floorf((position.x) - minCol);
-    s32 row = (s32)((-position.z) + minRow);
+    s32 row = (s32)((-position.z) + halfRows);
 
     return CELL_INDEX(row, col);
 }
@@ -40,4 +50,6 @@ inline v3 WorldGridCellToPosition(cell_index cellIndex)
     return v3{ x, 0.0f, z };
 }
 
-inline b32 WorldIsValidCell(cell_index cell) { return cell >= 0 && cell < GRID_ROWS * GRID_COLS; }
+inline b32  WorldIsValidCellIndex(cell_index cellIndex) { return cellIndex >= 0 && cellIndex < GRID_CELLS; }
+inline void GridAppendEntity(GridCell* grid, cell_index cellIndex, Entity* entity);
+b32         GridIsValidCellForEntity(GridCell* cell, Entity* entity);

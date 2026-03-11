@@ -58,3 +58,69 @@ b32 WorldIsPositionInBounds(v3 position)
 
     return true;
 }
+
+inline void GridAppendEntity(GridCell* grid, cell_index cellIndex, Entity* entity)
+{
+    Assert(WorldIsValidCellIndex(cellIndex));
+
+    b32       duplicated = false;
+    GridCell* cell       = &grid[cellIndex];
+
+    for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cell->entities); entityPtrIndex++)
+    {
+        if (cell->entities[entityPtrIndex] == entity)
+        {
+            duplicated = true;
+            break;
+        }
+    }
+
+    if (!duplicated)
+    {
+        Assert(cell->entityCount < ArrayCount(cell->entities));
+        cell->entities[cell->entityCount++] = entity;
+    }
+}
+
+b32 GridIsValidCellForEntity(GridCell* cell, Entity* entity)
+{
+    // Cell occupied by 4 entities
+    if (cell->entityCount == 4)
+    {
+        return false;
+    }
+
+    u32 verticalOrientedEntityCount   = 0;
+    u32 horizontalOrientedEntityCount = 0;
+
+    for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cell->entities); entityPtrIndex++)
+    {
+        Entity* entityPtr = cell->entities[entityPtrIndex];
+        if (entityPtr)
+        {
+            Assert(entityPtr->type == EntityType_Obstacle);
+            if (EntityIsVerticalOriented(entityPtr))
+            {
+                verticalOrientedEntityCount++;
+            }
+            else
+            {
+                horizontalOrientedEntityCount++;
+            }
+        }
+    }
+    Assert(verticalOrientedEntityCount <= 2);
+    Assert(horizontalOrientedEntityCount <= 2);
+
+    b32 newEntityIsVertical = EntityIsVerticalOriented(entity);
+    if (newEntityIsVertical && verticalOrientedEntityCount < 2)
+    {
+        return true;
+    }
+    else if (!newEntityIsVertical && horizontalOrientedEntityCount < 2)
+    {
+        return true;
+    }
+
+    return false;
+}

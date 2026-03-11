@@ -93,6 +93,11 @@ EntityCellCorners EntityGetCellCorners(Entity* entity)
         max.z = Max(max.z, worldCorners.corners[cornerIndex].z);
     }
 
+    if (max.x > 15.0f)
+    {
+        max.x = 14.0f;
+    }
+
     // TODO: Check valid cell
     cell_index minXCell = WorldPositionToGridCell({ min.x, 0.0f, 0.0f });
     cell_index maxXCell = WorldPositionToGridCell({ max.x, 0.0f, 0.0f });
@@ -124,3 +129,8 @@ EntityCellCorners EntityGetCellCorners(Entity* entity)
 }
 
 b32 EntitiesIntersect(Entity* a, Entity* b, AABB* penetration);
+
+inline b32 EntityIsVerticalOriented(Entity* entity)
+{
+    return (entity->yaw == (Pi / 2.0f) || entity->yaw == (3 * Pi / 2.0f));
+}
