@@ -59,7 +59,7 @@ b32 WorldIsPositionInBounds(v3 position)
     return true;
 }
 
-inline void GridAppendEntity(GridCell* grid, cell_index cellIndex, Entity* entity)
+void GridAppendEntity(GridCell* grid, cell_index cellIndex, Entity* entity)
 {
     Assert(WorldIsValidCellIndex(cellIndex));
 
@@ -82,8 +82,10 @@ inline void GridAppendEntity(GridCell* grid, cell_index cellIndex, Entity* entit
     }
 }
 
-b32 GridIsValidCellForEntity(GridCell* cell, Entity* entity)
+b32 GridIsValidCellForEntity(GridCell* grid, cell_index cellIndex, Entity* entity)
 {
+    GridCell* cell = &grid[cellIndex];
+
     // Cell occupied by 4 entities
     if (cell->entityCount == 4)
     {

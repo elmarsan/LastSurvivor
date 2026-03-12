@@ -11,30 +11,25 @@ void ObstacleDrag(Entity* obstacle, Camera* camera, mat4x4 projection, v2u windo
         halfDepth        = auxHalfWidth;
     }
 
-    f32 leftLimit   = -(GRID_ROWS * 0.5);
-    f32 rightLimit  = -leftLimit;
-    f32 topLimit    = -(GRID_COLS * 0.5);
-    f32 bottomLimit = -topLimit;
-
     // Left limit
-    if ((newPosition.x - halfWidth) <= leftLimit)
+    if ((newPosition.x - halfWidth) <= GRID_LEFT_LIMIT)
     {
-        newPosition.x = leftLimit + halfWidth;
+        newPosition.x = GRID_LEFT_LIMIT + halfWidth;
     }
     // Right limits
-    if ((newPosition.x + halfWidth) > rightLimit)
+    if ((newPosition.x + halfWidth) > GRID_RIGHT_LIMIT)
     {
-        newPosition.x = rightLimit - halfWidth;
+        newPosition.x = GRID_RIGHT_LIMIT - halfWidth;
     }
     // Top limit
-    if ((newPosition.z - halfDepth) < topLimit)
+    if ((newPosition.z - halfDepth) < GRID_TOP_LIMIT)
     {
-        newPosition.z = topLimit + halfDepth;
+        newPosition.z = GRID_TOP_LIMIT + halfDepth;
     }
     // Bottom limit
-    if ((newPosition.z + halfDepth) > bottomLimit)
+    if ((newPosition.z + halfDepth) > GRID_BOTTOM_LIMIT)
     {
-        newPosition.z = bottomLimit - halfDepth;
+        newPosition.z = GRID_BOTTOM_LIMIT - halfDepth;
     }
 
     obstacle->position = newPosition;
@@ -66,17 +61,15 @@ void ObstacleRotate(Entity* obstacle, b32 counterclockwise)
 
 SnapCandidate ObstacleFindNearestSnap(GridCell* grid, Entity* obstacle)
 {
-    EntityWorldCorners worldCorners = EntityGetWorldCorners(obstacle);
-
     SnapCandidate result = { 0 };
 
-    f32 minSnapDistance = FLT_MAX;
+    EntityWorldCorners worldCorners    = EntityGetWorldCorners(obstacle);
+    f32                minSnapDistance = FLT_MAX;
 
-    for (u32 aCornerIndex = 0; aCornerIndex < ArrayCount(worldCorners.corners); aCornerIndex++)
+    for (u32 aCornerIndex = 0; aCornerIndex < ArrayCount(worldCorners.arr); aCornerIndex++)
     {
-        v3         aCornerPos = worldCorners.corners[aCornerIndex];
+        v3         aCornerPos = worldCorners.arr[aCornerIndex];
         cell_index cell       = WorldPositionToGridCell(aCornerPos);
-
         if (!WorldIsValidCellIndex(cell))
         {
             continue;
@@ -85,10 +78,10 @@ SnapCandidate ObstacleFindNearestSnap(GridCell* grid, Entity* obstacle)
         s32 row = CELL_ROW(cell);
         s32 col = CELL_COL(cell);
 
-        s32 startRow = Max(row - 1, 0);
-        s32 endRow   = Min(row + 1, GRID_ROWS - 1);
-        s32 startCol = Max(col - 1, 0);
-        s32 endCol   = Min(col + 1, GRID_COLS - 1);
+        s32 startRow = Max(row - 1, GRID_MIN_ROW);
+        s32 endRow   = Min(row + 1, GRID_MAX_ROW);
+        s32 startCol = Max(col - 1, GRID_MIN_COL);
+        s32 endCol   = Min(col + 1, GRID_MAX_COL);
 
         for (s32 r = startRow; r <= endRow; r++)
         {
@@ -99,7 +92,6 @@ SnapCandidate ObstacleFindNearestSnap(GridCell* grid, Entity* obstacle)
                 for (u32 entityIndex = 0; entityIndex < 4; entityIndex++)
                 {
                     Entity* entity = cell->entities[entityIndex];
-
                     if (!entity || entity == obstacle)
                     {
                         continue;
@@ -107,12 +99,12 @@ SnapCandidate ObstacleFindNearestSnap(GridCell* grid, Entity* obstacle)
 
                     EntityWorldCorners bWorldCorners = EntityGetWorldCorners(entity);
 
-                    for (u32 bCornerIndex = 0; bCornerIndex < ArrayCount(bWorldCorners.corners); bCornerIndex++)
+                    for (u32 bCornerIndex = 0; bCornerIndex < ArrayCount(bWorldCorners.arr); bCornerIndex++)
                     {
-                        v3 bCornerPos = bWorldCorners.corners[bCornerIndex];
+                        v3 bCornerPos = bWorldCorners.arr[bCornerIndex];
 
                         f32 dist = Length(aCornerPos - bCornerPos);
-                        if (dist < minSnapDistance)
+                        if (dist <= CELL_SIZE && dist < minSnapDistance)
                         {
                             minSnapDistance = dist;
                             result.entity   = entity;
@@ -145,21 +137,24 @@ void ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate)
     f32 aHalfDepth  = aDepth * 0.5f;
     f32 bHalfDepth  = bDepth * 0.5f;
 
+    v3 oldPosition = a->position;
+    v3 newPosition = a->position;
+
     // Vertical to vertical
     if (aIsVertical && bIsVertical)
     {
         // Snapping from top
         if (a->position.z < b->position.z)
         {
-            a->position.z = b->position.z - aLength;
+            newPosition.z = b->position.z - aLength;
         }
         // Snapping from bottom
         else
         {
-            a->position.z = b->position.z + aLength;
+            newPosition.z = b->position.z + aLength;
         }
 
-        a->position.x = b->position.x;
+        newPosition.x = b->position.x;
     }
     // Horizontal to horizontal
     else if (!aIsVertical && !bIsVertical)
@@ -167,15 +162,15 @@ void ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate)
         // Snapping from right
         if (a->position.x > b->position.x)
         {
-            a->position.x = b->position.x + aLength;
+            newPosition.x = b->position.x + aLength;
         }
         // Snapping from left
         else
         {
-            a->position.x = b->position.x - aLength;
+            newPosition.x = b->position.x - aLength;
         }
 
-        a->position.z = b->position.z;
+        newPosition.z = b->position.z;
     }
     // (A)Horizontal to B(vertical)
     else if (bIsVertical)
@@ -183,12 +178,12 @@ void ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate)
         // Snapping from top
         if (a->position.z < b->position.z)
         {
-            a->position.z = b->position.z - bHalfLength - aHalfDepth;
+            newPosition.z = b->position.z - bHalfLength - aHalfDepth;
         }
         // Snapping from bottom
         else
         {
-            a->position.z = b->position.z + bHalfLength + aHalfDepth;
+            newPosition.z = b->position.z + bHalfLength + aHalfDepth;
         }
 
         b32        snappingToTwoObstacles = false;
@@ -202,19 +197,19 @@ void ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate)
         // Snapping from right
         if (a->position.x > b->position.x)
         {
-            a->position.x = b->position.x - bHalfDepth + aHalfLength;
+            newPosition.x = b->position.x - bHalfDepth + aHalfLength;
             if (snappingToTwoObstacles)
             {
-                a->position.x += bDepth;
+                newPosition.x += bDepth;
             }
         }
         // Snapping from left
         else
         {
-            a->position.x = b->position.x + bHalfDepth - aHalfLength;
+            newPosition.x = b->position.x + bHalfDepth - aHalfLength;
             if (snappingToTwoObstacles)
             {
-                a->position.x -= bDepth;
+                newPosition.x -= bDepth;
             }
         }
     }
@@ -224,23 +219,41 @@ void ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate)
         // Snapping from top
         if (a->position.z < b->position.z)
         {
-            a->position.z = b->position.z - bHalfDepth - aHalfLength;
+            newPosition.z = b->position.z - bHalfDepth - aHalfLength;
         }
         // Snapping from bottom
         else
         {
-            a->position.z = b->position.z + bHalfDepth + aHalfLength;
+            newPosition.z = b->position.z + bHalfDepth + aHalfLength;
         }
 
         // Snapping from right
         if (a->position.x > b->position.x)
         {
-            a->position.x = b->position.x + bHalfLength - aHalfDepth;
+            newPosition.x = b->position.x + bHalfLength - aHalfDepth;
         }
         // Snapping from left
         else
         {
-            a->position.x = b->position.x - bHalfLength + aHalfDepth;
+            newPosition.x = b->position.x - bHalfLength + aHalfDepth;
+        }
+    }
+
+    // Revert snap if obstacle end ups outside grid bounds
+    {
+        a->position                = newPosition;
+        EntityWorldCorners corners = EntityGetWorldCorners(a);
+
+        for (u32 cornerIndex = 0; cornerIndex < ArrayCount(corners.arr); cornerIndex++)
+        {
+            v3 cornerPos = corners.arr[cornerIndex];
+
+            if (!(cornerPos.x >= GRID_LEFT_LIMIT && cornerPos.x <= GRID_RIGHT_LIMIT) ||
+                !(cornerPos.z <= GRID_BOTTOM_LIMIT && cornerPos.z >= GRID_TOP_LIMIT))
+            {
+                a->position = oldPosition;
+                break;
+            }
         }
     }
 }
@@ -252,8 +265,42 @@ void ObstaclePlace(GridCell* grid, Entity* entity)
     entity->flags &= ~EntityFlag_Positioning;
     EntityCellCorners entityCells = EntityGetCellCorners(entity);
 
-    for (u32 cellIndex = 0; cellIndex < ArrayCount(entityCells.cells); cellIndex++)
+    for (u32 cellIndex = 0; cellIndex < ArrayCount(entityCells.arr); cellIndex++)
     {
-        GridAppendEntity(grid, entityCells.cells[cellIndex], entity);
+        GridAppendEntity(grid, entityCells.arr[cellIndex], entity);
     }
+}
+
+b32 ObstacleIsValidPosition(Entity* entities, u32 entityCount, GridCell* grid, Entity* entity)
+{
+    Assert(entity->type == EntityType_Obstacle);
+
+    EntityCellCorners cells = EntityGetCellCorners(entity);
+    for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.arr); cellIndex++)
+    {
+        cell_index cell     = cells.arr[cellIndex];
+        GridCell*  cellInfo = &grid[cell];
+
+        if (!WorldIsValidCellIndex(cell) || !GridIsValidCellForEntity(grid, cell, entity))
+        {
+            return false;
+        }
+    }
+
+    // Check for overlapping with other obstacles
+    EntityCellCorners entityCorners = EntityGetCellCorners(entity);
+    for (u32 entityIndex = 0; entityIndex < entityCount; entityIndex++)
+    {
+        Entity* placedEntity = &entities[entityIndex];
+        if (placedEntity != entity && placedEntity->type == EntityType_Obstacle)
+        {
+            AABB intersection;
+            if (EntitiesIntersect(entity, placedEntity, &intersection))
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }

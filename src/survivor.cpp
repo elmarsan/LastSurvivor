@@ -376,7 +376,7 @@ void GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex)
                     v3 nodeB = WorldGridCellToPosition(graph->nodes[nodeIndex]);
 
                     AABB entityWorldAABB = AABBToWorld(entity->aabb, entity->position);
-                    AABB expandedAABB    = ExpandAABB(entityWorldAABB, CELL_SIZE);
+                    AABB expandedAABB    = AABBExpandXZ(entityWorldAABB, CELL_SIZE);
 
                     if (!AABBSegmentIntersection(expandedAABB, nodeA, nodeB))
                     {
@@ -468,15 +468,13 @@ void GraphInit(GameState* state)
             EntityCellCorners corners = EntityGetCellCorners(entity);
 
             // Top-left corner
-            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.topLeftCell) + 1, CELL_COL(corners.topLeftCell) - 1));
+            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.topLeft) + 1, CELL_COL(corners.topLeft) - 1));
             // Top-right corner
-            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.topRightCell) + 1, CELL_COL(corners.topRightCell) + 1));
+            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.topRight) + 1, CELL_COL(corners.topRight) + 1));
             // Bottom-left corner
-            graph->nodes.push_back(
-                CELL_INDEX(CELL_ROW(corners.bottomLeftCell) - 1, CELL_COL(corners.bottomLeftCell) - 1));
+            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.bottomLeft) - 1, CELL_COL(corners.bottomLeft) - 1));
             // Bottom-right corner
-            graph->nodes.push_back(
-                CELL_INDEX(CELL_ROW(corners.bottomRightCell) - 1, CELL_COL(corners.bottomRightCell) + 1));
+            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.bottomRight) - 1, CELL_COL(corners.bottomRight) + 1));
         }
     }
 
@@ -486,168 +484,6 @@ void GraphInit(GameState* state)
         GraphComputeNodeEdges(state, nodeIndex);
     }
 }
-
-// inline void CellInfoAppendEntity(GridCell* cellInfo, Entity* entity)
-//{
-//     b32 duplicated = false;
-//     for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cellInfo->entities); entityPtrIndex++)
-//     {
-//         if (cellInfo->entities[entityPtrIndex] == entity)
-//         {
-//             duplicated = true;
-//             break;
-//         }
-//     }
-
-//    if (!duplicated)
-//    {
-//        Assert(cellInfo->entityCount < ArrayCount(cellInfo->entities));
-//        cellInfo->entities[cellInfo->entityCount++] = entity;
-//    }
-//};
-
-// TODO: Mierdon de nombre
-b32 IsValidCellForEntity(GridCell* cellInfo, Entity* entity)
-{
-    if (cellInfo->entityCount == 4)
-    {
-        return false;
-    }
-
-    u32 verticalOrientedEntityCount   = 0;
-    u32 horizontalOrientedEntityCount = 0;
-
-    for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cellInfo->entities); entityPtrIndex++)
-    {
-        Entity* entityPtr = cellInfo->entities[entityPtrIndex];
-        if (entityPtr)
-        {
-            Assert(entityPtr->type == EntityType_Obstacle);
-            if (EntityIsVerticalOriented(entityPtr))
-            {
-                verticalOrientedEntityCount++;
-            }
-            else
-            {
-                horizontalOrientedEntityCount++;
-            }
-        }
-    }
-    Assert(verticalOrientedEntityCount <= 2);
-    Assert(horizontalOrientedEntityCount <= 2);
-
-    b32 newEntityIsVertical = EntityIsVerticalOriented(entity);
-    if (newEntityIsVertical && verticalOrientedEntityCount < 2)
-    {
-        return true;
-    }
-    else if (!newEntityIsVertical && horizontalOrientedEntityCount < 2)
-    {
-        return true;
-    }
-
-    return false;
-}
-
-//// TODO: Check if position is valid by looking every cell occupied by the obstacle
-inline b32 ObstacleIsValidPosition(GameState* state, Entity* entity)
-{
-    Assert(entity->type == EntityType_Obstacle);
-
-    EntityCellCorners cells = EntityGetCellCorners(entity);
-    for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.cells); cellIndex++)
-    {
-        cell_index cell     = cells.cells[cellIndex];
-        GridCell*  cellInfo = &state->grid[cell];
-
-        if (!WorldIsValidCellIndex(cell) || !IsValidCellForEntity(cellInfo, entity))
-        {
-            return false;
-        }
-    }
-
-    // Check for overlapping with other obstacles
-    EntityCellCorners entityCorners = EntityGetCellCorners(entity);
-    for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
-    {
-        Entity* placedEntity = EntityGet(state, entityIndex);
-        if (placedEntity != entity && placedEntity->type == EntityType_Obstacle)
-        {
-            if (EntitiesIntersect(entity, placedEntity, 0))
-            {
-                return false;
-            }
-            //          else
-            //          {
-            //              EntityCellCorners placedEntityCorners = EntityGetCellCorners(placedEntity);
-
-            //              u32 sharedCellCount = 0;
-            //              for (u32 i = 0; i < 4; i++)
-            //              {
-            //                  cell_index entityCell = entityCorners.cells[i];
-
-            //                  for (u32 j = 0; j < 4; j++)
-            //                  {
-            //                      cell_index placedEntityCell = placedEntityCorners.cells[j];
-
-            //                      if (entityCell == placedEntityCell)
-            //                      {
-            //                          sharedCellCount++;
-            //                          break;
-            //                      }
-            //                  }
-            //              }
-
-            //              // Same position
-            //              if (sharedCellCount == 4)
-            //              {
-            //                  return false;
-            //              }
-            //          }
-        }
-    }
-
-    return true;
-}
-
-//// TODO: Check if position is valid by looking every cell occupied by the obstacle
-// inline b32 ObstacleIsValidPosition(GridCell* grid, Entity* entity)
-//{
-//     Assert(entity->type == EntityType_Obstacle);
-
-//    EntityCellCorners corners = EntityGetCellCorners(entity);
-//    for (u32 cellIndex = 0; cellIndex < ArrayCount(corners.cells); cellIndex++)
-//    {
-//        cell_index cell     = corners.cells[cellIndex];
-//        GridCell*  cellInfo = &grid[cell];
-
-//        if (!WorldIsValidCellIndex(cell) || !IsValidCellForEntity(cellInfo, entity))
-//        {
-//            return false;
-//        }
-//    }
-
-//    // Check for overlapping with other obstacles
-//    u32 minRow = CELL_ROW(corners.bottomLeftCell);
-//    u32 maxRow = CELL_ROW(corners.topLeftCell);
-//    u32 minCol = CELL_COL(corners.topLeftCell);
-//    u32 maxCol = CELL_COL(corners.topRightCell);
-
-//    for (u32 r = minRow; r < maxRow; r++)
-//    {
-//        for (u32 c = minCol; c < maxCol; c++)
-//        {
-//            cell_index cellIndex = CELL_INDEX(r, c);
-//            // GridCell*  cell      = &grid[cellIndex];
-//            if (grid[cellIndex].entityCount > 0)
-//            {
-//                // return false;
-//            }
-//        }
-//    }
-
-//    return true;
-//}
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
@@ -878,6 +714,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                                       platform.FileFree, platform.Logf, arena);
                 platform.FileFree(fenceFile.content);
 
+                // TODO: Fix Y-axis
                 state->fenceAABB = PushStruct(arena, AABB);
 
                 // Simetric hack
@@ -1112,9 +949,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                             targetMaxCorner.x = entity->targetEntity->position.x + (entity->size.x * 0.5f);
                             targetMaxCorner.y = entity->targetEntity->position.z + (entity->size.z * 0.5f);
 
-                            bool overlapsX =
+                            b32 overlapsX =
                                 hitRectMinCorner.x <= targetMaxCorner.x && hitRectMaxCorner.x >= targetMinCorner.x;
-                            bool overlapsZ =
+                            b32 overlapsZ =
                                 hitRectMinCorner.y <= targetMaxCorner.y && hitRectMaxCorner.y >= targetMinCorner.y;
                             if (overlapsX && overlapsZ)
                             {
@@ -1386,9 +1223,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         GraphRemoveNode(state, playerGraphNodeIndex);
     }
 
-    ///////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////
     Mouse* mouse = &input->mouse;
 
     if (state->buildMode)
@@ -1412,12 +1246,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             // Place object if valid position
             if (ButtonIsPressed(mouse->left))
             {
-                // if (ObstacleIsValidPosition(state->grid, obstacle))
-                if (ObstacleIsValidPosition(state, obstacle))
+                if (ObstacleIsValidPosition(state->entities, state->entityCount, state->grid, obstacle))
                 {
                     ObstaclePlace(state->grid, obstacle);
-
-                    // ObstaclePlace(state->cells, obstacle);
                     obstacle->flags &= ~(EntityFlag_Positioning);
                     obstacle = 0;
                     EntitiesRemoveFlag(state, EntityFlag_Snapping);
@@ -1447,21 +1278,19 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     ObstacleRotate(obstacle, false);
                 }
 
-                SnapCandidate snapCandidate = ObstacleFindNearestSnap(state->grid, obstacle);
-                if (snapCandidate.entity)
-                {
-                    ObstaclesSnap(state->grid, obstacle, &snapCandidate);
-                    obstacle->flags |= EntityFlag_Snapping;
-                }
-                else
-                {
-                    obstacle->flags &= ~EntityFlag_Snapping;
-                }
-
-                // if (ObstacleIsValidPosition(state->grid, obstacle))
-                if (ObstacleIsValidPosition(state, obstacle))
+                if (ObstacleIsValidPosition(state->entities, state->entityCount, state->grid, obstacle))
                 {
                     obstacle->flags &= ~EntityFlag_InvalidPosition;
+                    SnapCandidate snapCandidate = ObstacleFindNearestSnap(state->grid, obstacle);
+                    if (snapCandidate.entity)
+                    {
+                        ObstaclesSnap(state->grid, obstacle, &snapCandidate);
+                        obstacle->flags |= EntityFlag_Snapping;
+                    }
+                    else
+                    {
+                        obstacle->flags &= ~EntityFlag_Snapping;
+                    }
                 }
                 else
                 {
@@ -1478,10 +1307,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             debugSelectedCellIndex = WorldPositionToGridCell(mousePoint);
         }
     }
-    ///////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////
-
     // ----------------------------------------------------------------------------
 
     // ----------------------------------------------------------------------------
@@ -1743,21 +1568,38 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             // Entity Y orientation
             if (entity->type == EntityType_Obstacle)
             {
+                // Snap points
                 if (state->buildMode)
                 {
-                    v4 color = blue;
-                    if (entity->flags & EntityFlag_Positioning)
+                    EntityWorldCorners worldCorners = EntityGetWorldCorners(entity);
+                    for (u32 cornerIndex = 0; cornerIndex < ArrayCount(worldCorners.arr); cornerIndex++)
                     {
-                        color = orange;
+                        v3 snapPoint = worldCorners.arr[cornerIndex];
+                        snapPoint.y  = 0.0f;
+
+                        DebugDrawPlane(state->debug, opengl, snapPoint, { CELL_HALF, 0.0f, CELL_HALF }, yellow);
                     }
-
-                    EntityWorldCorners corners = EntityGetWorldCorners(entity);
-
-                    DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.topLeft), color);
-                    DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.topRight), color);
-                    DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.bottomLeft), color);
-                    DebugDrawGridCell(state->debug, opengl, WorldPositionToGridCell(corners.bottomRight), color);
                 }
+
+                // Occupied cells
+#if 0
+                {
+                    EntityCellCorners cellCorners = EntityGetCellCorners(entity);
+
+                    u32 beginRow = CELL_ROW(cellCorners.bottomRight);
+                    u32 endRow   = CELL_ROW(cellCorners.topRight);
+                    u32 beginCol = CELL_COL(cellCorners.bottomLeft);
+                    u32 endCol   = CELL_COL(cellCorners.bottomRight);
+
+                    for (u32 row = beginRow; row <= endRow; row++)
+                    {
+                        for (u32 col = beginCol; col <= endCol; col++)
+                        {
+                            DebugDrawGridCell(state->debug, opengl, CELL_INDEX(row, col), orange);
+                        }
+                    }
+                }
+#endif
             }
             else if (entity->type == EntityType_Enemy)
             {

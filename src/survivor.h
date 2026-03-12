@@ -59,12 +59,6 @@ struct Graph
     std::vector<std::vector<u32>> edges;
 };
 
-// struct CellInfo
-//{
-//     Entity* entities[4];
-//     u32     entityCount;
-// };
-
 struct GameState
 {
     b32   initialized;

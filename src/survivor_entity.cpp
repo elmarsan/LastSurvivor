@@ -1,65 +1,139 @@
-internal AABB AABBFromCorners(EntityWorldCorners corners, AABB local)
+EntityWorldCorners EntityGetWorldCorners(Entity* entity)
 {
-    AABB world = { 0 };
+    v3 localCorners[4] = {
+        { entity->aabb.min.x, 0.0f, entity->aabb.min.z }, // Top-left
+        { entity->aabb.max.x, 0.0f, entity->aabb.min.z }, // Top-right
+        { entity->aabb.min.x, 0.0f, entity->aabb.max.z }, // Bottom-left
+        { entity->aabb.max.x, 0.0f, entity->aabb.max.z }, // Bottom-right
+    };
 
-    world.min = corners.corners[0];
-    world.max = corners.corners[0];
+    EntityWorldCorners worldCorners = { 0 };
 
-    for (u32 cornerIndex = 1; cornerIndex < ArrayCount(corners.corners); cornerIndex++)
+    for (u32 cornerIndex = 0; cornerIndex < ArrayCount(localCorners); cornerIndex++)
     {
-        v3 p = corners.corners[cornerIndex];
+        v3 rotatedCorner = RotateVec3Y(localCorners[cornerIndex], entity->yaw);
 
-        world.min.x = Min(world.min.x, p.x);
-        world.min.z = Min(world.min.z, p.z);
-        world.max.x = Max(world.max.x, p.x);
-        world.max.z = Max(world.max.z, p.z);
+        worldCorners.arr[cornerIndex] = {
+            entity->position.x + rotatedCorner.x, //
+            entity->aabb.min.y,                   //
+            entity->position.z + rotatedCorner.z  //
+        };
     }
 
-    world.min.y = local.min.y;
-    world.max.y = local.max.y;
+    return worldCorners;
+}
 
-    return world;
+EntityCellCorners EntityGetCellCorners(Entity* entity)
+{
+    EntityWorldCorners worldCorners = EntityGetWorldCorners(entity);
+
+    v3 min = worldCorners.arr[0];
+    v3 max = worldCorners.arr[0];
+    for (u32 cornerIndex = 1; cornerIndex < 4; cornerIndex++)
+    {
+        min.x = Min(min.x, worldCorners.arr[cornerIndex].x);
+        min.z = Min(min.z, worldCorners.arr[cornerIndex].z);
+        max.x = Max(max.x, worldCorners.arr[cornerIndex].x);
+        max.z = Max(max.z, worldCorners.arr[cornerIndex].z);
+    }
+
+    if (max.x >= GRID_RIGHT_LIMIT)
+    {
+        max.x = GRID_RIGHT_LIMIT - CELL_SIZE;
+    }
+
+    // TODO: Check valid cell
+    cell_index minXCell = WorldPositionToGridCell({ min.x, 0.0f, 0.0f });
+    cell_index maxXCell = WorldPositionToGridCell({ max.x, 0.0f, 0.0f });
+    cell_index minZCell = WorldPositionToGridCell({ 0.0f, 0.0f, min.z });
+    cell_index maxZCell = WorldPositionToGridCell({ 0.0f, 0.0f, max.z });
+
+    u32 minCol = CELL_COL(minXCell);
+    u32 maxCol = CELL_COL(maxXCell);
+    u32 minRow = CELL_ROW(maxZCell);
+    u32 maxRow = CELL_ROW(minZCell);
+
+    if (maxRow > GRID_MAX_ROW)
+    {
+        maxRow = GRID_MAX_ROW;
+    }
+    if (minRow < GRID_MIN_ROW)
+    {
+        minRow = GRID_MIN_ROW;
+    }
+
+    EntityCellCorners corners = { 0 };
+    corners.topLeft           = CELL_INDEX(maxRow, minCol);
+    corners.topRight          = CELL_INDEX(maxRow, maxCol);
+    corners.bottomLeft        = CELL_INDEX(minRow, minCol);
+    corners.bottomRight       = CELL_INDEX(minRow, maxCol);
+
+    return corners;
+}
+
+internal AABB EntityWorldAABB(Entity* entity)
+{
+    AABB result = { 0 };
+
+    if (entity->type == EntityType_Obstacle)
+    {
+        if (EntityIsVerticalOriented(entity))
+        {
+            f32 halfWidth = (entity->aabb.max.x - entity->aabb.min.x) * 0.5f;
+            f32 halfDepth = (entity->aabb.max.z - entity->aabb.min.z) * 0.5f;
+
+            result.min.x = entity->position.x - halfDepth;
+            result.max.x = entity->position.x + halfDepth;
+            result.min.z = entity->position.z - halfWidth;
+            result.max.z = entity->position.z + halfWidth;
+        }
+        else if (EntityIsHorizontalOriented(entity))
+        {
+            result.min.x = entity->position.x + entity->aabb.min.x;
+            result.max.x = entity->position.x + entity->aabb.max.x;
+            result.min.z = entity->position.z + entity->aabb.min.z;
+            result.max.z = entity->position.z + entity->aabb.max.z;
+        }
+        else
+        {
+            Assert(0);
+        }
+
+        result.min.y = entity->aabb.min.y;
+        result.max.y = entity->aabb.max.y;
+    }
+    else
+    {
+        EntityWorldCorners corners = EntityGetWorldCorners(entity);
+
+        result.min = corners.arr[0];
+        result.max = corners.arr[0];
+
+        for (u32 cornerIndex = 1; cornerIndex < ArrayCount(corners.arr); cornerIndex++)
+        {
+            v3 p = corners.arr[cornerIndex];
+
+            result.min.x = Min(result.min.x, p.x);
+            result.min.z = Min(result.min.z, p.z);
+            result.max.x = Max(result.max.x, p.x);
+            result.max.z = Max(result.max.z, p.z);
+        }
+
+        result.min.y = entity->aabb.min.y;
+        result.max.y = entity->aabb.max.y;
+    }
+
+    return result;
 }
 
 b32 EntitiesIntersect(Entity* a, Entity* b, AABB* intersection = 0)
 {
-    AABB aWorldAABB = AABBFromCorners(EntityGetWorldCorners(a), a->aabb);
-    AABB bWorldAABB = AABBFromCorners(EntityGetWorldCorners(b), b->aabb);
+    AABB aWorldAABB = EntityWorldAABB(a);
+    AABB bWorldAABB = EntityWorldAABB(b);
 
     if (a->type == EntityType_Obstacle && b->type == EntityType_Obstacle)
     {
-        Rect aRect = { 0 };
-        Rect bRect = { 0 };
-
-        // Convert to top-left coordinates system
-        aRect.x = aWorldAABB.min.x + 15.0f;
-        aRect.w = (aWorldAABB.max.x + 15.0f) - (aWorldAABB.min.x + 15.0f);
-        aRect.y = aWorldAABB.min.z + 15.0f;
-        aRect.h = (aWorldAABB.max.z + 15.0f) - (aWorldAABB.min.z + 15.0f);
-
-        bRect.x = bWorldAABB.min.x + 15.0f;
-        bRect.w = (bWorldAABB.max.x + 15.0f) - (bWorldAABB.min.x + 15.0f);
-        bRect.y = bWorldAABB.min.z + 15.0f;
-        bRect.h = (bWorldAABB.max.z + 15.0f) - (bWorldAABB.min.z + 15.0f);
-
-        //      aRect.x = aWorldAABB.min.x;
-        //      aRect.w = Abs(aWorldAABB.max.x - aWorldAABB.min.x);
-        //      aRect.y = aWorldAABB.min.z;
-        //      aRect.h = Abs(aWorldAABB.max.z - aWorldAABB.min.z);
-
-        //      bRect.x = bWorldAABB.min.x;
-        //      bRect.w = Abs(bWorldAABB.max.x - bWorldAABB.min.x);
-        //      bRect.y = bWorldAABB.min.z;
-        //      bRect.h = Abs(bWorldAABB.max.z - bWorldAABB.min.z);
-
-        if (RectIntersection(aRect, bRect))
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        return AABBIntersectionXZ(aWorldAABB, bWorldAABB);
     }
 
     return AABBIntersection(aWorldAABB, bWorldAABB, intersection);

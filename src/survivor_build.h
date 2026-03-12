@@ -12,3 +12,4 @@ void          ObstacleRotate(Entity* obstacle, b32 counterclockwise);
 SnapCandidate ObstacleFindNearestSnap(GridCell* grid, Entity* obstacle);
 void          ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate);
 void          ObstaclePlace(GridCell* grid, Entity* entity);
+b32           ObstacleIsValidPosition(Entity* entities, u32 entityCount, GridCell* grid, Entity* entity);

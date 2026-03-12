@@ -97,9 +97,9 @@ inline b32 AABBIntersection(AABB a, AABB b, AABB* intersection)
 {
     b32 overlaps = false;
 
-    bool x = (a.max.x >= b.min.x) && (a.min.x <= b.max.x);
-    bool y = (a.max.y >= b.min.y) && (a.min.y <= b.max.y);
-    bool z = (a.max.z >= b.min.z) && (a.min.z <= b.max.z);
+    b32 x = (a.max.x >= b.min.x) && (a.min.x <= b.max.x);
+    b32 y = (a.max.y >= b.min.y) && (a.min.y <= b.max.y);
+    b32 z = (a.max.z >= b.min.z) && (a.min.z <= b.max.z);
     if (x && y && z)
     {
         overlaps = true;
@@ -114,6 +114,28 @@ inline b32 AABBIntersection(AABB a, AABB b, AABB* intersection)
     return overlaps;
 }
 
+inline b32 AABBIntersectionXZ(AABB a, AABB b)
+{
+    if (a.max.x <= b.min.x)
+    {
+        return false;
+    }
+    if (b.max.x <= a.min.x)
+    {
+        return false;
+    }
+    if (a.max.z <= b.min.z)
+    {
+        return false;
+    }
+    if (b.max.z <= a.min.z)
+    {
+        return false;
+    }
+
+    return true;
+}
+
 inline AABB AABBToWorld(AABB local, v3 pos)
 {
     AABB world;
@@ -122,7 +144,7 @@ inline AABB AABBToWorld(AABB local, v3 pos)
     return world;
 }
 
-inline AABB ExpandAABB(AABB aabb, float radius)
+inline AABB AABBExpandXZ(AABB aabb, f32 radius)
 {
     AABB expanded = aabb;
     expanded.min.x -= radius;
