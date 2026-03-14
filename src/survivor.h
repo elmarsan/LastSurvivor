@@ -12,6 +12,7 @@
 #include "survivor_world.h"
 #include "survivor_entity.h"
 #include "survivor_build.h"
+#include "survivor_weapon.h"
 
 #define TTF_FIRST_GLYPH_OFFSET 32 // Space ascii code
 #define TTF_GLYPH_COUNT        95
@@ -59,6 +60,14 @@ struct Graph
     std::vector<std::vector<u32>> edges;
 };
 
+enum GameMode
+{
+    GameMode_Pause,
+    GameMode_Build,
+    GameMode_GameOver,
+    GameMode_Round
+};
+
 struct GameState
 {
     b32   initialized;
@@ -81,7 +90,7 @@ struct GameState
     Entity          entities[MAX_ENTITY_COUNT];
     u32             entityCount;
     Graph*          graph;
-    b32             buildMode;
+    GameMode        mode;
     GridCell*       grid;
 
 #ifdef BUILD_TYPE_DEBUG

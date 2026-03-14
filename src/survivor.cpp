@@ -194,14 +194,22 @@ inline Entity* EntityNew(GameState* state, EntityType type)
 
     Entity* entity = &state->entities[state->entityCount++];
     entity->type   = type;
-    entity->index  = state->entityCount - 1;
+    entity->health = 100;
 
     return entity;
 }
 
-inline void EntityRemove(GameState* state, u32 index)
+inline void EntityRemove(GameState* state, Entity* entity)
 {
-    Assert(index < state->entityCount);
+    u32 index = 0;
+    for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+    {
+        if (entity == &state->entities[entityIndex])
+        {
+            index = entityIndex;
+            break;
+        }
+    }
 
     while (index < state->entityCount)
     {
@@ -492,9 +500,51 @@ internal f32 frictionForce     = 20.0f;
 internal f32 moveAcceleration  = 40.0f;
 internal f32 knockbackForce    = 17.0f;
 internal f32 enemyHitRadius    = 0.75f;
-internal f32 enemyMaxSpeed     = 0.5f;
+internal f32 enemyMaxSpeed     = 1.0f;
 internal f32 enemyAcceleration = 10.0f;
 // ----------------------------------------------------------------------------
+
+void EntityAttack(GameState* state, Entity* entity, Weapon* weapon, v3 dir)
+{
+    if (weapon->type == WeaponType_Hand)
+    {
+        // TODO: Range attack
+    }
+    else
+    {
+        Ray shot    = { 0 };
+        shot.origin = entity->position;
+        shot.dir    = dir;
+
+        for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+        {
+            Entity* targetEntity = EntityGet(state, entityIndex);
+            if (targetEntity->type == EntityType_Enemy)
+            {
+                AABB entityWorldAABB = AABBToWorld(targetEntity->aabb, targetEntity->position);
+
+                if (AABBRayIntersection(entityWorldAABB, shot))
+                {
+                    v3 shotDir = Norm(targetEntity->position - entity->position);
+
+                    targetEntity->flags |= EntityFlag_InKnockback;
+                    targetEntity->velocity += shotDir * weapon->knockbackforce;
+                    targetEntity->health -= weapon->damage;
+
+                    // TODO: Move to update ???
+                    if (targetEntity->health <= 0)
+                    {
+                        EntityRemove(state, targetEntity);
+                    }
+
+                    // Note: break stops the projectile trajectory, this way projectile can only impact once.
+                    // TODO: Decide if allow penetration
+                    break;
+                }
+            }
+        }
+    }
+}
 
 void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* platform, GameInputController* controller,
                   Mouse* mouse, v3 cameraOffset)
@@ -541,33 +591,11 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
             }
             playerDirection = Norm(playerDirection);
 
-            if (ButtonIsDown(mouse->left))
+            if (ButtonIsPressed(mouse->left))
             {
-                v3  crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-                Ray shot           = { 0 };
-                shot.origin        = player->position;
-                shot.dir           = Norm(crosshairPoint - shot.origin);
-
-                for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
-                {
-                    Entity* entity = EntityGet(state, entityIndex);
-                    if (entity->type == EntityType_Enemy)
-                    {
-                        AABB entityWorldAABB = AABBToWorld(entity->aabb, entity->position);
-
-                        if (AABBRayIntersection(entityWorldAABB, shot))
-                        {
-                            // Reduce health
-                            // Push back
-
-                            platform->Logf("Hit");
-                        }
-                        else
-                        {
-                            platform->Logf("\n");
-                        }
-                    }
-                }
+                v3 crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+                v3 dir            = Norm(crosshairPoint - player->position);
+                EntityAttack(state, player, &gWeaponPistol, dir);
             }
 
             // Deceleration
@@ -620,6 +648,36 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
 
                     if (entity->type == EntityType_Enemy)
                     {
+                        //                      Rect entityRect;
+                        //                      entityRect.x = entity->position.x - enemyHitRadius;
+                        //                      // entityRect.w = entity->position.x + enemyHitRadius;
+                        //                      entityRect.y = entity->position.z - enemyHitRadius;
+                        //                      // entityRect.h = entity->position.z + enemyHitRadius;
+
+                        //                      entityRect.w = enemyHitRadius;
+                        //                      entityRect.h = enemyHitRadius;
+
+                        //                      Rect targetRect;
+                        //                      targetRect.x = entity->targetEntity->position.x - (entity->size.x *
+                        //                      0.5f); targetRect.y = entity->targetEntity->position.z - (entity->size.z
+                        //                      * 0.5f);
+                        //                      // targetRect.w = entity->targetEntity->position.x + (entity->size.x *
+                        //                      0.5f);
+                        //                      // targetRect.h = entity->targetEntity->position.z + (entity->size.z *
+                        //                      0.5f);
+
+                        //                      targetRect.w = (entity->size.x * 0.5f);
+                        //                      targetRect.h = (entity->size.z * 0.5f);
+
+                        //                      if (RectIntersection(entityRect, targetRect))
+                        //                      {
+                        //                          v3 pushDir = { dir.x, 0.0f, dir.z };
+
+                        //                          // entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
+                        //                          // entity->targetEntity->velocity += pushDir * (knockbackForce);
+                        //                          // entity->targetEntity->flags |= EntityFlag_InKnockback;
+                        //                      }
+
                         v2 hitRectMinCorner{ entity->position.x - enemyHitRadius, entity->position.z - enemyHitRadius };
                         v2 hitRectMaxCorner{ entity->position.x + enemyHitRadius, entity->position.z + enemyHitRadius };
 
@@ -733,24 +791,24 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
             //
             {
                 // Left limit
-                if (newPlayerPosition.x < -(GRID_ROWS * 0.5))
+                if (newPlayerPosition.x < GRID_LEFT_LIMIT)
                 {
-                    newPlayerPosition.x = -(GRID_ROWS * 0.5);
+                    newPlayerPosition.x = GRID_LEFT_LIMIT;
                 }
                 // Right limit
-                if (newPlayerPosition.x > (GRID_ROWS * 0.5))
+                if (newPlayerPosition.x > GRID_RIGHT_LIMIT)
                 {
-                    newPlayerPosition.x = (GRID_ROWS * 0.5);
+                    newPlayerPosition.x = GRID_RIGHT_LIMIT;
                 }
                 // Top limit
-                if (newPlayerPosition.z < -(GRID_COLS * 0.5))
+                if (newPlayerPosition.z < GRID_TOP_LIMIT)
                 {
-                    newPlayerPosition.z = -(GRID_COLS * 0.5);
+                    newPlayerPosition.z = GRID_TOP_LIMIT;
                 }
-                // Bottom limit
-                if (newPlayerPosition.z > (GRID_COLS * 0.5))
+                // Bottom limitd
+                if (newPlayerPosition.z > GRID_BOTTOM_LIMIT)
                 {
-                    newPlayerPosition.z = (GRID_COLS * 0.5);
+                    newPlayerPosition.z = GRID_BOTTOM_LIMIT;
                 }
             }
 
@@ -802,21 +860,40 @@ void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
         v3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
         entityDir         = Norm(targetPosition - entity->position);
         entityDir.y       = 0.0f;
-        //  entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);d
+        //   entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);d
     }
 
     //----------------------------------------------------------------------------
 
     //----------------------------------------------------------------------------
     // Entity acceleration
-    v3 acceleration = entityDir * enemyAcceleration;
-    entity->velocity += acceleration * delta;
-    // TODO: Use constant speed for enemies???
-    if (Length(entity->velocity) > enemyMaxSpeed)
+    if (!(entity->flags & EntityFlag_InKnockback))
     {
-        entity->velocity = Norm(entity->velocity) * enemyMaxSpeed;
+        v3 acceleration = entityDir * enemyAcceleration;
+        entity->velocity += acceleration * delta;
+        // TODO: Use constant speed for enemies???
+        if (Length(entity->velocity) > enemyMaxSpeed)
+        {
+            entity->velocity = Norm(entity->velocity) * enemyMaxSpeed;
+        }
     }
+    else
+    {
+        // Friction force
+        entity->velocity *= 0.70f;
+
+        f32 speed = Length(entity->velocity);
+        if (speed <= 0.01f)
+        {
+            entity->velocity = { 0, 0, 0 };
+            entity->flags &= ~EntityFlag_InKnockback;
+        }
+
+        entity->position += entity->velocity * delta;
+    }
+
     v3 newEntityPosition = entity->position + (entity->velocity * delta);
+
     //----------------------------------------------------------------------------
 
     // -----------------------------------------------------------
@@ -920,9 +997,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->crosshairAtlas         = PushStruct(arena, Texture);
         state->glyphAtlas             = PushStruct(arena, Texture);
         state->batchBuffer            = PushStruct(arena, BatchBuffer);
-        state->buildMode              = false;
         state->grid                   = PushArray(arena, GRID_CELLS, GridCell);
         memset(state->grid, 0, sizeof(GridCell) * GRID_CELLS);
+
+        state->mode = GameMode_Round;
 
 #ifdef BUILD_TYPE_DEBUG
         state->debug   = PushStruct(arena, DebugState);
@@ -1178,7 +1256,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         enemy0->aabb         = characterAABB;
         enemy0->targetEntity = player;
 
-        // v3 fenceSize = state->fenceAABB->max - state->fenceAABB->min;
+        Entity* enemy1       = EntityNew(state, EntityType_Enemy);
+        enemy1->position     = { -2.0f, 0.0f, -10.0f };
+        enemy1->size         = { 1.0f, 1.0f, 1.0f };
+        enemy1->aabb         = characterAABB;
+        enemy1->targetEntity = player;
 
         Entity* fence0   = EntityNew(state, EntityType_Obstacle);
         fence0->position = { 0.0f, 0.0f, -2.0f };
@@ -1223,7 +1305,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     v4 playerColor = white;
 
     local_persist cell_index debugSelectedCellIndex = 0xFFFFFFFF;
-    u32                      playerGraphNodeIndex   = GraphAddNode(state, WorldPositionToGridCell(player->position));
+
+    // TODO: Assign controller to player
+    // for (u32 controllerIndex = 0; controllerIndex < ArrayCount(input->controllers); controllerIndex++)
+    //{
+    //    GameInputController* controller = GetController(input, controllerIndex);
+    //}
+
+    GameInputController* controller = GetController(input, 0);
 
 #if 1
     v3 cameraOffset{ 0.0f, 16.0f, 5.0f };
@@ -1236,37 +1325,49 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 #if BUILD_TYPE_DEBUG
     if (ButtonIsPressed(input->debug.f1))
     {
-        state->buildMode = !state->buildMode;
+        // state->buildMode = !state->buildMode;
+        if (state->mode != GameMode_Build)
+        {
+            state->mode = GameMode_Build;
+        }
+        else
+        {
+            state->mode = GameMode_Round;
+        }
     }
 #endif
 
-    // TODO: Assign controller to player
+    if (player->health <= 0)
+    {
+        state->mode = GameMode_GameOver;
+    }
+
     Mouse* mouse = &input->mouse;
-    for (u32 controllerIndex = 0; controllerIndex < ArrayCount(input->controllers); controllerIndex++)
-    {
-        GameInputController* controller = GetController(input, controllerIndex);
 
-        PlayerUpdate(state, player, delta, &platform, controller, mouse, cameraOffset);
+    switch (state->mode)
+    {
+    case GameMode_Pause:
+    {
+        break;
     }
-
-    // Enemy update
-    for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+    case GameMode_Build:
     {
-        Entity* entity = EntityGet(state, entityIndex);
-        if (entity->type == EntityType_Enemy)
+#if 0
+        // No enemies in build mode
         {
-            EnemyUpdate(state, entity, delta);
+            u32 enemyCount = 0;
+            for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+            {
+                Entity* entity = EntityGet(state, entityIndex);
+                if (entity->type == EntityType_Enemy)
+                {
+                    enemyCount++;
+                }
+            }
+            Assert(enemyCount == 0);
         }
-    }
+#endif
 
-    // Remove playerNode
-    if (playerGraphNodeIndex != GRAPH_EMPTY_NODE)
-    {
-        GraphRemoveNode(state, playerGraphNodeIndex);
-    }
-
-    if (state->buildMode)
-    {
         local_persist Entity* obstacle;
 
         // Spawn obstacle
@@ -1301,7 +1402,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             // Cancel placing
             else if (ButtonIsPressed(mouse->right))
             {
-                EntityRemove(state, obstacle->index);
+                EntityRemove(state, obstacle);
                 obstacle = 0;
             }
             // Drag, rotate and snap obstacle
@@ -1338,14 +1439,45 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 }
             }
         }
+        break;
     }
-    else
+    case GameMode_GameOver:
     {
-        if (ButtonIsPressed(mouse->middle))
+        if (ButtonIsPressed(mouse->left))
         {
-            v3 mousePoint          = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-            debugSelectedCellIndex = WorldPositionToGridCell(mousePoint);
+            state->mode = GameMode_Round;
         }
+        break;
+    }
+    case GameMode_Round:
+    {
+        u32 playerGraphNodeIndex = GraphAddNode(state, WorldPositionToGridCell(player->position));
+
+        PlayerUpdate(state, player, delta, &platform, controller, mouse, cameraOffset);
+
+        for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+        {
+            Entity* entity = EntityGet(state, entityIndex);
+            if (entity->type == EntityType_Enemy)
+            {
+                EnemyUpdate(state, entity, delta);
+            }
+        }
+
+        // Remove playerNode
+        if (playerGraphNodeIndex != GRAPH_EMPTY_NODE)
+        {
+            GraphRemoveNode(state, playerGraphNodeIndex);
+        }
+
+        break;
+    }
+    }
+
+    if (ButtonIsPressed(mouse->middle))
+    {
+        v3 mousePoint          = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+        debugSelectedCellIndex = WorldPositionToGridCell(mousePoint);
     }
     // ----------------------------------------------------------------------------
 
@@ -1410,7 +1542,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
         }
 
-        if (state->buildMode)
+        if (state->mode == GameMode_Build)
         {
             BatchText(state, batch, "Build", { 0.0f, 150.0f }, green);
         }
@@ -1619,7 +1751,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             if (entity->type == EntityType_Obstacle)
             {
                 // Snap points
-                if (state->buildMode)
+                if (state->mode == GameMode_Build)
                 {
                     EntityWorldCorners worldCorners = EntityGetWorldCorners(entity);
                     for (u32 cornerIndex = 0; cornerIndex < ArrayCount(worldCorners.arr); cornerIndex++)
@@ -1654,7 +1786,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             else if (entity->type == EntityType_Enemy)
             {
                 // Enemy hitbox
-                DebugDrawPlane(state->debug, opengl, entity->position, { enemyHitRadius, 0, enemyHitRadius }, yellow);
+                // DebugDrawPlane(state->debug, opengl, entity->position, { enemyHitRadius, 0, enemyHitRadius },
+                // yellow);
+
+                v3 plane = { 0 };
+
+                plane.x = entity->position.x - enemyHitRadius;
+                plane.z = entity->position.z - enemyHitRadius;
+
+                v3 planeSize = { enemyHitRadius, 0.0f, enemyHitRadius };
+
+                DebugDrawPlane(state->debug, opengl, plane, planeSize, yellow);
 
                 // Path finding
                 {

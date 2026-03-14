@@ -49,7 +49,7 @@ inline v3 WorldGridCellToPosition(cell_index cellIndex)
     u32 row = CELL_ROW(cellIndex);
     u32 col = CELL_COL(cellIndex);
 
-    f32 offsetX = GRID_RIGHT_LIMIT;
+    f32 offsetX = GRID_LEFT_LIMIT;
     f32 offsetZ = (GRID_ROWS / 2);
 
     f32 x = (col * CELL_SIZE) + offsetX + CELL_HALF;

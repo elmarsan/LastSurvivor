@@ -13,7 +13,7 @@ enum EntityFlag
     EntityFlag_InKnockback     = (1 << 0),
     EntityFlag_Positioning     = (1 << 1),
     EntityFlag_Snapping        = (1 << 2),
-    EntityFlag_InvalidPosition = (1 << 3),
+    EntityFlag_InvalidPosition = (1 << 3)
 };
 
 struct Entity
@@ -26,7 +26,7 @@ struct Entity
     Entity*    targetEntity; // TODO: Needed? All enemies will follow player
     AABB       aabb;
     u32        flags;
-    u32        index;
+    s32        health;
 };
 
 union EntityWorldCorners
