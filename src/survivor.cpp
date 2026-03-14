@@ -485,6 +485,412 @@ void GraphInit(GameState* state)
     }
 }
 
+// ----------------------------------------------------------------------------
+// TODO: Tweak movement mechanics
+internal f32 maxSpeed          = 8.3f;
+internal f32 frictionForce     = 20.0f;
+internal f32 moveAcceleration  = 40.0f;
+internal f32 knockbackForce    = 17.0f;
+internal f32 enemyHitRadius    = 0.75f;
+internal f32 enemyMaxSpeed     = 0.5f;
+internal f32 enemyAcceleration = 10.0f;
+// ----------------------------------------------------------------------------
+
+void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* platform, GameInputController* controller,
+                  Mouse* mouse, v3 cameraOffset)
+{
+    Assert(player->type == EntityType_Player);
+
+    v2u     windowDim  = platform->WindowGetDimension();
+    Camera* camera     = state->camera;
+    mat4x4  projection = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
+    mat4x4  view       = CameraView(camera);
+
+    if (controller->isConnected)
+    {
+        if (controller->isAnalog)
+        {
+            if (ButtonIsPressed(controller->rightTrigger))
+            {
+                platform->AudioClipPlay(state->pistolShot, 0);
+            }
+            if (ButtonIsDown(controller->leftTrigger))
+            {
+                platform->Logf("Gamepad aiming");
+            }
+        }
+        else
+        {
+            v3 playerDirection = { 0.0f, 0.0f, 0.0f };
+
+            if (ButtonIsDown(controller->moveUp))
+            {
+                playerDirection.z = -1.0f;
+            }
+            if (ButtonIsDown(controller->moveDown))
+            {
+                playerDirection.z = 1.0f;
+            }
+            if (ButtonIsDown(controller->moveLeft))
+            {
+                playerDirection.x = -1.0f;
+            }
+            if (ButtonIsDown(controller->moveRight))
+            {
+                playerDirection.x = 1.0f;
+            }
+            playerDirection = Norm(playerDirection);
+
+            if (ButtonIsDown(mouse->left))
+            {
+                v3  crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+                Ray shot           = { 0 };
+                shot.origin        = player->position;
+                shot.dir           = Norm(crosshairPoint - shot.origin);
+
+                for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+                {
+                    Entity* entity = EntityGet(state, entityIndex);
+                    if (entity->type == EntityType_Enemy)
+                    {
+                        AABB entityWorldAABB = AABBToWorld(entity->aabb, entity->position);
+
+                        if (AABBRayIntersection(entityWorldAABB, shot))
+                        {
+                            // Reduce health
+                            // Push back
+
+                            platform->Logf("Hit");
+                        }
+                        else
+                        {
+                            platform->Logf("\n");
+                        }
+                    }
+                }
+            }
+
+            // Deceleration
+            f32 playerSpeed = Length(player->velocity);
+            if (playerSpeed > 0.0f)
+            {
+                f32 decelerationStep = frictionForce * delta;
+
+                if (playerSpeed <= decelerationStep)
+                {
+                    player->velocity = { 0.0f, 0.0f, 0.0f };
+                    player->flags &= ~EntityFlag_InKnockback;
+                }
+                else
+                {
+                    if (player->flags & EntityFlag_InKnockback)
+                    {
+                        decelerationStep *= 2.0f;
+                    }
+
+                    player->velocity -= (player->velocity / playerSpeed) * decelerationStep;
+                }
+            }
+
+            // Acceleration
+            if (!(player->flags & EntityFlag_InKnockback))
+            {
+                v3 acceleration = playerDirection * moveAcceleration;
+                player->velocity += acceleration * delta;
+                if (Length(player->velocity) > maxSpeed)
+                {
+                    player->velocity = Norm(player->velocity) * maxSpeed;
+                }
+            }
+
+            v3 newPlayerPosition = player->position + (player->velocity * delta);
+            v3 correction        = { 0.0f, 0.0f, 0.0f };
+            v3 totalCorrection   = { 0 };
+
+            AABB playerWorldAABB = AABBToWorld(player->aabb, player->position);
+
+            // Collision detection
+            for (u32 entityIndex = 1; entityIndex < state->entityCount; entityIndex++)
+            {
+                Entity* entity = EntityGet(state, entityIndex);
+
+                if (entity->targetEntity)
+                {
+                    v3 dir = Norm(entity->velocity);
+
+                    if (entity->type == EntityType_Enemy)
+                    {
+                        v2 hitRectMinCorner{ entity->position.x - enemyHitRadius, entity->position.z - enemyHitRadius };
+                        v2 hitRectMaxCorner{ entity->position.x + enemyHitRadius, entity->position.z + enemyHitRadius };
+
+                        v2 targetMinCorner;
+                        v2 targetMaxCorner;
+                        targetMinCorner.x = entity->targetEntity->position.x - (entity->size.x * 0.5f);
+                        targetMinCorner.y = entity->targetEntity->position.z - (entity->size.z * 0.5f);
+                        targetMaxCorner.x = entity->targetEntity->position.x + (entity->size.x * 0.5f);
+                        targetMaxCorner.y = entity->targetEntity->position.z + (entity->size.z * 0.5f);
+
+                        b32 overlapsX =
+                            hitRectMinCorner.x <= targetMaxCorner.x && hitRectMaxCorner.x >= targetMinCorner.x;
+                        b32 overlapsZ =
+                            hitRectMinCorner.y <= targetMaxCorner.y && hitRectMaxCorner.y >= targetMinCorner.y;
+                        if (overlapsX && overlapsZ)
+                        {
+                            v3 pushDir = { dir.x, 0.0f, dir.z };
+
+                            entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
+                            entity->targetEntity->velocity += pushDir * (knockbackForce);
+                            entity->targetEntity->flags |= EntityFlag_InKnockback;
+
+                            // playerColor = red;
+                        }
+                    }
+                }
+                else
+                {
+                    AABB intersection;
+                    if (EntitiesIntersect(player, entity, &intersection))
+                    {
+                        if (player->flags & EntityFlag_InKnockback)
+                        {
+                            player->flags &= ~EntityFlag_InKnockback;
+                        }
+
+                        // playerColor = white;
+
+                        v3 penetration;
+                        penetration.x = intersection.max.x - intersection.min.x;
+                        penetration.y = intersection.max.y - intersection.min.y;
+                        penetration.z = intersection.max.z - intersection.min.z;
+
+                        // ----------------------------------------------------------------------------
+                        // Correct using the minimal penetration axis
+                        if (penetration.x < penetration.y && penetration.x < penetration.z)
+                        {
+                            correction.x = penetration.x;
+                        }
+                        else if (penetration.y < penetration.z)
+                        {
+                            correction.y = penetration.y;
+                        }
+                        else
+                        {
+                            correction.z = penetration.z;
+                        }
+                        // ----------------------------------------------------------------------------
+
+                        // ----------------------------------------------------------------------------
+                        // Determine correction axis
+                        if (newPlayerPosition.x < entity->position.x)
+                        {
+                            correction.x = -correction.x;
+                        }
+                        if (newPlayerPosition.y < entity->position.y)
+                        {
+                            correction.y = -correction.y;
+                        }
+                        if (newPlayerPosition.z < entity->position.z)
+                        {
+                            correction.z = -correction.z;
+                        }
+                        // ----------------------------------------------------------------------------
+
+                        // ----------------------------------------------------------------------------
+                        // Use the greatest penetration to resolve collisions
+                        if (Abs(correction.x) > Abs(totalCorrection.x))
+                        {
+                            totalCorrection.x = correction.x;
+                        }
+                        if (Abs(correction.y) > Abs(totalCorrection.y))
+                        {
+                            totalCorrection.y = correction.y;
+                        }
+                        if (Abs(correction.z) > Abs(totalCorrection.z))
+                        {
+                            totalCorrection.z = correction.z;
+                        }
+                        // ----------------------------------------------------------------------------
+                    }
+                }
+            }
+
+            // if (totalCorrection.x != 0.0f)
+            //{
+            //     player->velocity.x = 0.0f;
+            // }
+            // if (totalCorrection.y != 0.0f)
+            //{
+            //     player->velocity.y = 0.0f;
+            // }
+            // if (totalCorrection.z != 0.0f)
+            //{
+            //     player->velocity.z = 0.0f;
+            // }
+
+            // World limit
+            // Note: Enemies might spawn away the limit.
+            // This logic does not affect enemies.
+            //
+            {
+                // Left limit
+                if (newPlayerPosition.x < -(GRID_ROWS * 0.5))
+                {
+                    newPlayerPosition.x = -(GRID_ROWS * 0.5);
+                }
+                // Right limit
+                if (newPlayerPosition.x > (GRID_ROWS * 0.5))
+                {
+                    newPlayerPosition.x = (GRID_ROWS * 0.5);
+                }
+                // Top limit
+                if (newPlayerPosition.z < -(GRID_COLS * 0.5))
+                {
+                    newPlayerPosition.z = -(GRID_COLS * 0.5);
+                }
+                // Bottom limit
+                if (newPlayerPosition.z > (GRID_COLS * 0.5))
+                {
+                    newPlayerPosition.z = (GRID_COLS * 0.5);
+                }
+            }
+
+            newPlayerPosition += totalCorrection;
+            player->position = newPlayerPosition;
+            camera->position = player->position + cameraOffset;
+
+            // Player rotation
+            {
+                v3 point = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+
+                // Direction from the player to the point
+                v3 dir = point - player->position;
+
+                f32 targetYaw = -atan2f(dir.x, -dir.z);
+                f32 deltaYaw  = targetYaw - player->yaw;
+                // Wrap to [-Pi, Pi]
+                deltaYaw          = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi;
+                f32 rotationSpeed = 0.05f;
+                player->yaw += deltaYaw * rotationSpeed;
+            }
+
+            if (ButtonIsPressed(mouse->left))
+            {
+                // platform->AudioClipPlay(state->pistolShot, 0);
+            }
+        }
+    }
+}
+
+void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
+{
+    Assert(entity->type == EntityType_Enemy);
+    Assert(entity->targetEntity);
+
+    cell_index enemyCell           = WorldPositionToGridCell(entity->position);
+    u32        enemyGraphNodeIndex = GraphAddNode(state, enemyCell);
+
+    AABB entityWorldAABB = AABBToWorld(entity->aabb, entity->position);
+
+    v3 entityDir{ 0.0f, 0.0f, 0.0f };
+
+    cell_index originCellIndex = WorldPositionToGridCell(entity->position);
+    cell_index targetCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
+
+    std::vector<cell_index> path = GraphFindBestPath(state->graph, originCellIndex, targetCellIndex);
+    if (!path.empty())
+    {
+        v3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
+        entityDir         = Norm(targetPosition - entity->position);
+        entityDir.y       = 0.0f;
+        //  entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);d
+    }
+
+    //----------------------------------------------------------------------------
+
+    //----------------------------------------------------------------------------
+    // Entity acceleration
+    v3 acceleration = entityDir * enemyAcceleration;
+    entity->velocity += acceleration * delta;
+    // TODO: Use constant speed for enemies???
+    if (Length(entity->velocity) > enemyMaxSpeed)
+    {
+        entity->velocity = Norm(entity->velocity) * enemyMaxSpeed;
+    }
+    v3 newEntityPosition = entity->position + (entity->velocity * delta);
+    //----------------------------------------------------------------------------
+
+    // -----------------------------------------------------------
+    // Collision detection
+    v3 correction      = { 0.0f, 0.0f, 0.0f };
+    v3 totalCorrection = { 0 };
+
+    for (u32 entitySubindex = 0; entitySubindex < state->entityCount; entitySubindex++)
+    {
+        Entity* object = EntityGet(state, entitySubindex);
+        if (object != entity)
+        {
+            if (object->type == EntityType_Obstacle)
+            {
+                AABB objectWorldAABB = AABBToWorld(object->aabb, object->position);
+
+                // Collisions
+                AABB intersection;
+                if (AABBIntersection(objectWorldAABB, entityWorldAABB, &intersection))
+                {
+                    v3 penetration;
+                    penetration.x = intersection.max.x - intersection.min.x;
+                    penetration.y = intersection.max.y - intersection.min.y;
+                    penetration.z = intersection.max.z - intersection.min.z;
+
+                    //----------------------------------------------------------------------------
+                    // Correct using the minimal penetration axis
+                    if (penetration.x < penetration.z)
+                    {
+                        correction.x = penetration.x;
+                    }
+                    else
+                    {
+                        correction.z = penetration.z;
+                    }
+                    //----------------------------------------------------------------------------
+
+                    //----------------------------------------------------------------------------
+                    // Determine correction axis
+                    if (newEntityPosition.x < entity->position.x)
+                    {
+                        correction.x = -correction.x;
+                    }
+                    if (newEntityPosition.z > entity->position.z)
+                    {
+                        correction.z = -correction.z;
+                    }
+                    //----------------------------------------------------------------------------
+
+                    //----------------------------------------------------------------------------
+                    // Use the greatest penetration to resolve collisions
+                    if (Abs(correction.x) > Abs(totalCorrection.x))
+                    {
+                        totalCorrection.x = correction.x;
+                    }
+                    if (Abs(correction.z) > Abs(totalCorrection.z))
+                    {
+                        totalCorrection.z = correction.z;
+                    }
+                    //----------------------------------------------------------------------------
+                }
+            }
+        }
+    }
+    // -----------------------------------------------------------
+    newEntityPosition += totalCorrection;
+    entity->position = newEntityPosition;
+
+    if (enemyGraphNodeIndex != GRAPH_EMPTY_NODE)
+    {
+        GraphRemoveNode(state, enemyGraphNodeIndex);
+    }
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     Assert(sizeof(GameState) <= memory->permanentStorageSize);
@@ -766,19 +1172,19 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         player->size     = { 1.0f, 1.0f, 1.0f };
         player->aabb     = characterAABB;
 
-        // Entity* enemy0       = EntityNew(state, EntityType_Enemy);
-        // enemy0->position     = { -2.0f, 0.0f, -8.0f };
-        // enemy0->size         = { 1.0f, 1.0f, 1.0f };
-        // enemy0->aabb         = characterAABB;
-        // enemy0->targetEntity = player;
+        Entity* enemy0       = EntityNew(state, EntityType_Enemy);
+        enemy0->position     = { -2.0f, 0.0f, -8.0f };
+        enemy0->size         = { 1.0f, 1.0f, 1.0f };
+        enemy0->aabb         = characterAABB;
+        enemy0->targetEntity = player;
 
         // v3 fenceSize = state->fenceAABB->max - state->fenceAABB->min;
 
-        // Entity* fence0   = EntityNew(state, EntityType_Obstacle);
-        // fence0->position = { 0.0f, 0.0f, -2.0f };
-        // fence0->size     = { 1.0f, 1.0f, 1.0f };
-        //// fence0->yaw      = Radians(-90.0f);
-        // fence0->aabb = *state->fenceAABB;
+        Entity* fence0   = EntityNew(state, EntityType_Obstacle);
+        fence0->position = { 0.0f, 0.0f, -2.0f };
+        fence0->size     = { 1.0f, 1.0f, 1.0f };
+        // fence0->yaw      = Radians(-90.0f);
+        fence0->aabb = *state->fenceAABB;
 
 #if 0
         for (u32 i = 0; i < 20; i++)
@@ -827,18 +1233,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     CameraSetPitch(camera, -26.0f);
 #endif
 
-    // ----------------------------------------------------------------------------
-    // TODO: Tweak movement mechanics
-    f32 maxSpeed         = 8.3f;
-    f32 frictionForce    = 20.0f;
-    f32 moveAcceleration = 40.0f;
-    f32 knockbackForce   = 17.0f;
-    f32 enemyHitRadius   = 0.75f;
-
-    f32 enemyMaxSpeed     = 0.5f;
-    f32 enemyAcceleration = 10.0f;
-    // ----------------------------------------------------------------------------
-
 #if BUILD_TYPE_DEBUG
     if (ButtonIsPressed(input->debug.f1))
     {
@@ -846,374 +1240,22 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
 #endif
 
+    // TODO: Assign controller to player
+    Mouse* mouse = &input->mouse;
     for (u32 controllerIndex = 0; controllerIndex < ArrayCount(input->controllers); controllerIndex++)
     {
         GameInputController* controller = GetController(input, controllerIndex);
 
-        if (controller->isConnected)
+        PlayerUpdate(state, player, delta, &platform, controller, mouse, cameraOffset);
+    }
+
+    // Enemy update
+    for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+    {
+        Entity* entity = EntityGet(state, entityIndex);
+        if (entity->type == EntityType_Enemy)
         {
-            if (controller->isAnalog)
-            {
-                if (ButtonIsPressed(controller->rightTrigger))
-                {
-                    platform.AudioClipPlay(state->pistolShot, 0);
-                }
-                if (ButtonIsDown(controller->leftTrigger))
-                {
-                    platform.Logf("Gamepad aiming");
-                }
-            }
-            else
-            {
-                Mouse* mouse = &input->mouse;
-
-                v3 playerDirection = { 0.0f, 0.0f, 0.0f };
-
-                if (ButtonIsDown(controller->moveUp))
-                {
-                    playerDirection.z = -1.0f;
-                }
-                if (ButtonIsDown(controller->moveDown))
-                {
-                    playerDirection.z = 1.0f;
-                }
-                if (ButtonIsDown(controller->moveLeft))
-                {
-                    playerDirection.x = -1.0f;
-                }
-                if (ButtonIsDown(controller->moveRight))
-                {
-                    playerDirection.x = 1.0f;
-                }
-                playerDirection = Norm(playerDirection);
-
-                // Deceleration
-                f32 playerSpeed = Length(player->velocity);
-                if (playerSpeed > 0.0f)
-                {
-                    f32 decelerationStep = frictionForce * delta;
-
-                    if (playerSpeed <= decelerationStep)
-                    {
-                        player->velocity = { 0.0f, 0.0f, 0.0f };
-                        player->flags &= ~EntityFlag_InKnockback;
-                    }
-                    else
-                    {
-                        if (player->flags & EntityFlag_InKnockback)
-                        {
-                            decelerationStep *= 2.0f;
-                        }
-
-                        player->velocity -= (player->velocity / playerSpeed) * decelerationStep;
-                    }
-                }
-
-                // Acceleration
-                if (!(player->flags & EntityFlag_InKnockback))
-                {
-                    v3 acceleration = playerDirection * moveAcceleration;
-                    player->velocity += acceleration * delta;
-                    if (Length(player->velocity) > maxSpeed)
-                    {
-                        player->velocity = Norm(player->velocity) * maxSpeed;
-                    }
-                }
-
-                v3 newPlayerPosition = player->position + (player->velocity * delta);
-                v3 correction        = { 0.0f, 0.0f, 0.0f };
-                v3 totalCorrection   = { 0 };
-
-                AABB playerWorldAABB = AABBToWorld(player->aabb, player->position);
-
-                // Collision detection
-                for (u32 entityIndex = 1; entityIndex < state->entityCount; entityIndex++)
-                {
-                    Entity* entity = EntityGet(state, entityIndex);
-
-                    if (entity->targetEntity)
-                    {
-                        v3 dir = Norm(entity->velocity);
-
-                        if (entity->type == EntityType_Enemy)
-                        {
-                            v2 hitRectMinCorner{ entity->position.x - enemyHitRadius,
-                                                 entity->position.z - enemyHitRadius };
-                            v2 hitRectMaxCorner{ entity->position.x + enemyHitRadius,
-                                                 entity->position.z + enemyHitRadius };
-
-                            v2 targetMinCorner;
-                            v2 targetMaxCorner;
-                            targetMinCorner.x = entity->targetEntity->position.x - (entity->size.x * 0.5f);
-                            targetMinCorner.y = entity->targetEntity->position.z - (entity->size.z * 0.5f);
-                            targetMaxCorner.x = entity->targetEntity->position.x + (entity->size.x * 0.5f);
-                            targetMaxCorner.y = entity->targetEntity->position.z + (entity->size.z * 0.5f);
-
-                            b32 overlapsX =
-                                hitRectMinCorner.x <= targetMaxCorner.x && hitRectMaxCorner.x >= targetMinCorner.x;
-                            b32 overlapsZ =
-                                hitRectMinCorner.y <= targetMaxCorner.y && hitRectMaxCorner.y >= targetMinCorner.y;
-                            if (overlapsX && overlapsZ)
-                            {
-                                v3 pushDir = { dir.x, 0.0f, dir.z };
-
-                                entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
-                                entity->targetEntity->velocity += pushDir * (knockbackForce);
-                                entity->targetEntity->flags |= EntityFlag_InKnockback;
-
-                                playerColor = red;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        AABB intersection;
-                        if (EntitiesIntersect(player, entity, &intersection))
-                        {
-                            if (player->flags & EntityFlag_InKnockback)
-                            {
-                                player->flags &= ~EntityFlag_InKnockback;
-                            }
-
-                            playerColor = white;
-
-                            v3 penetration;
-                            penetration.x = intersection.max.x - intersection.min.x;
-                            penetration.y = intersection.max.y - intersection.min.y;
-                            penetration.z = intersection.max.z - intersection.min.z;
-
-                            // ----------------------------------------------------------------------------
-                            // Correct using the minimal penetration axis
-                            if (penetration.x < penetration.y && penetration.x < penetration.z)
-                            {
-                                correction.x = penetration.x;
-                            }
-                            else if (penetration.y < penetration.z)
-                            {
-                                correction.y = penetration.y;
-                            }
-                            else
-                            {
-                                correction.z = penetration.z;
-                            }
-                            // ----------------------------------------------------------------------------
-
-                            // ----------------------------------------------------------------------------
-                            // Determine correction axis
-                            if (newPlayerPosition.x < entity->position.x)
-                            {
-                                correction.x = -correction.x;
-                            }
-                            if (newPlayerPosition.y < entity->position.y)
-                            {
-                                correction.y = -correction.y;
-                            }
-                            if (newPlayerPosition.z < entity->position.z)
-                            {
-                                correction.z = -correction.z;
-                            }
-                            // ----------------------------------------------------------------------------
-
-                            // ----------------------------------------------------------------------------
-                            // Use the greatest penetration to resolve collisions
-                            if (Abs(correction.x) > Abs(totalCorrection.x))
-                            {
-                                totalCorrection.x = correction.x;
-                            }
-                            if (Abs(correction.y) > Abs(totalCorrection.y))
-                            {
-                                totalCorrection.y = correction.y;
-                            }
-                            if (Abs(correction.z) > Abs(totalCorrection.z))
-                            {
-                                totalCorrection.z = correction.z;
-                            }
-                            // ----------------------------------------------------------------------------
-                        }
-                    }
-                }
-
-                // if (totalCorrection.x != 0.0f)
-                //{
-                //     player->velocity.x = 0.0f;
-                // }
-                // if (totalCorrection.y != 0.0f)
-                //{
-                //     player->velocity.y = 0.0f;
-                // }
-                // if (totalCorrection.z != 0.0f)
-                //{
-                //     player->velocity.z = 0.0f;
-                // }
-
-                // World limit
-                // Note: Enemies might spawn away the limit.
-                // This logic does not affect enemies.
-                //
-                {
-                    // Left limit
-                    if (newPlayerPosition.x < -(GRID_ROWS * 0.5))
-                    {
-                        newPlayerPosition.x = -(GRID_ROWS * 0.5);
-                    }
-                    // Right limit
-                    if (newPlayerPosition.x > (GRID_ROWS * 0.5))
-                    {
-                        newPlayerPosition.x = (GRID_ROWS * 0.5);
-                    }
-                    // Top limit
-                    if (newPlayerPosition.z < -(GRID_COLS * 0.5))
-                    {
-                        newPlayerPosition.z = -(GRID_COLS * 0.5);
-                    }
-                    // Bottom limit
-                    if (newPlayerPosition.z > (GRID_COLS * 0.5))
-                    {
-                        newPlayerPosition.z = (GRID_COLS * 0.5);
-                    }
-                }
-
-                newPlayerPosition += totalCorrection;
-                player->position = newPlayerPosition;
-                camera->position = player->position + cameraOffset;
-
-                // Player rotation
-                {
-                    v3 point = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-
-                    // Direction from the player to the point
-                    v3 dir = point - player->position;
-
-                    f32 targetYaw = -atan2f(dir.x, -dir.z);
-                    f32 deltaYaw  = targetYaw - player->yaw;
-                    // Wrap to [-Pi, Pi]
-                    deltaYaw          = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi;
-                    f32 rotationSpeed = 0.05f;
-                    player->yaw += deltaYaw * rotationSpeed;
-                }
-
-                if (ButtonIsPressed(mouse->left))
-                {
-                    // platform.AudioClipPlay(state->pistolShot, 0);
-                }
-            }
-        }
-
-        // Enemy update
-        for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
-        {
-            Entity* entity = EntityGet(state, entityIndex);
-
-            if (entity->type == EntityType_Enemy)
-            {
-                Assert(entity->targetEntity);
-
-                u32 enemyCell           = WorldPositionToGridCell(entity->position);
-                u32 enemyGraphNodeIndex = GraphAddNode(state, enemyCell);
-
-                AABB entityWorldAABB = AABBToWorld(entity->aabb, entity->position);
-
-                v3 entityDir{ 0.0f, 0.0f, 0.0f };
-
-                cell_index originCellIndex = WorldPositionToGridCell(entity->position);
-                cell_index targetCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
-
-                std::vector<cell_index> path = GraphFindBestPath(state->graph, originCellIndex, targetCellIndex);
-                if (!path.empty())
-                {
-                    v3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
-                    entityDir         = Norm(targetPosition - entity->position);
-                    entityDir.y       = 0.0f;
-                    // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);d
-                }
-
-                //----------------------------------------------------------------------------
-
-                //----------------------------------------------------------------------------
-                // Entity acceleration
-                v3 acceleration = entityDir * enemyAcceleration;
-                entity->velocity += acceleration * delta;
-                // TODO: Use constant speed for enemies???
-                if (Length(entity->velocity) > enemyMaxSpeed)
-                {
-                    entity->velocity = Norm(entity->velocity) * enemyMaxSpeed;
-                }
-                v3 newEntityPosition = entity->position + (entity->velocity * delta);
-                //----------------------------------------------------------------------------
-
-                // -----------------------------------------------------------
-                // Collision detection
-                v3 correction      = { 0.0f, 0.0f, 0.0f };
-                v3 totalCorrection = { 0 };
-
-                for (u32 entitySubindex = 0; entitySubindex < state->entityCount; entitySubindex++)
-                {
-                    if (entitySubindex != entityIndex) // If is not the current enemy
-                    {
-                        Entity* object = EntityGet(state, entitySubindex);
-                        if (object->type == EntityType_Obstacle)
-                        {
-                            AABB objectWorldAABB = AABBToWorld(object->aabb, object->position);
-
-                            // AABB newEntityWorldAABB = AABBToWorld(entity->aabb, newEntityPosition);
-
-                            // Collisions
-                            AABB intersection;
-                            if (AABBIntersection(objectWorldAABB, entityWorldAABB, &intersection))
-                            {
-                                v3 penetration;
-                                penetration.x = intersection.max.x - intersection.min.x;
-                                penetration.y = intersection.max.y - intersection.min.y;
-                                penetration.z = intersection.max.z - intersection.min.z;
-
-                                //----------------------------------------------------------------------------
-                                // Correct using the minimal penetration axis
-                                if (penetration.x < penetration.z)
-                                {
-                                    correction.x = penetration.x;
-                                }
-                                else
-                                {
-                                    correction.z = penetration.z;
-                                }
-                                //----------------------------------------------------------------------------
-
-                                //----------------------------------------------------------------------------
-                                // Determine correction axis
-                                if (newEntityPosition.x < entity->position.x)
-                                {
-                                    correction.x = -correction.x;
-                                }
-                                if (newEntityPosition.z > entity->position.z)
-                                {
-                                    correction.z = -correction.z;
-                                }
-                                //----------------------------------------------------------------------------
-
-                                //----------------------------------------------------------------------------
-                                // Use the greatest penetration to resolve collisions
-                                if (Abs(correction.x) > Abs(totalCorrection.x))
-                                {
-                                    totalCorrection.x = correction.x;
-                                }
-                                if (Abs(correction.z) > Abs(totalCorrection.z))
-                                {
-                                    totalCorrection.z = correction.z;
-                                }
-                                //----------------------------------------------------------------------------
-                            }
-                        }
-                    }
-                }
-                // -----------------------------------------------------------
-                newEntityPosition += totalCorrection;
-                entity->position = newEntityPosition;
-
-                if (enemyGraphNodeIndex != GRAPH_EMPTY_NODE)
-                {
-                    GraphRemoveNode(state, enemyGraphNodeIndex);
-                }
-            }
+            EnemyUpdate(state, entity, delta);
         }
     }
 
@@ -1222,8 +1264,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         GraphRemoveNode(state, playerGraphNodeIndex);
     }
-
-    Mouse* mouse = &input->mouse;
 
     if (state->buildMode)
     {
@@ -1503,6 +1543,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             if (debugSelectedCellIndex != -1)
             {
                 DebugDrawGridCell(state->debug, opengl, debugSelectedCellIndex, magenta);
+            }
+        }
+
+        // Shooting
+        {
+            if (ButtonIsDown(mouse->left))
+            {
+                v3 end = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+
+                DebugDrawLine(state->debug, opengl, player->position, end, green);
             }
         }
 

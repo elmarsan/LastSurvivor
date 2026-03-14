@@ -4,7 +4,8 @@ enum EntityType
 {
     EntityType_Player,
     EntityType_Enemy,
-    EntityType_Obstacle
+    EntityType_Obstacle,
+    EntityType_Count
 };
 
 enum EntityFlag
@@ -67,3 +68,5 @@ inline b32 EntityIsHorizontalOriented(Entity* entity)
 {
     return (entity->yaw == Pi) || (entity->yaw == (2 * Pi)) || (entity->yaw == 0.0f);
 }
+
+void EntityUpdate(Entity* entity);

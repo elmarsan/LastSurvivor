@@ -138,3 +138,29 @@ b32 EntitiesIntersect(Entity* a, Entity* b, AABB* intersection = 0)
 
     return AABBIntersection(aWorldAABB, bWorldAABB, intersection);
 }
+
+// typedef void (*EntityUpdateFunc)(GameState* state, f32 delta, Entity* entity);
+//
+// internal void PlayerUpdate(GameState* state, f32 delta, PlatformAPI platform, Entity* entity)
+//{
+// }
+//  internal void EnemyUpdate(GameState* state, Entity* entity)
+//{
+//      //
+//      Assert(0);
+//  }
+//  internal void ObstacleUpdate(GameState* state, Entity* entity)
+//{
+//      //
+//      Assert(0);
+//  }
+//
+// void EntityUpdate(GameState* state, f32 delta, Entity* entity)
+//{
+//     local_persist EntityUpdateFunc updateTable[EntityType_Count] = {
+//         PlayerUpdate,
+//         // EnemyUpdate,
+//         // ObstacleUpdate
+//     };
+//     updateTable[entity->type](state, entity);
+// }
