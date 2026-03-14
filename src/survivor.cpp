@@ -25,6 +25,17 @@ global_variable v4  magenta{ 1.0f, 0.0f, 1.0f, 1.0f };
 global_variable v4  yellow{ 1.0f, 1.0f, 0.0f, 1.0f };
 global_variable v4  orange{ 0.87f, 0.39f, 0.04f, 1.0f };
 
+// TODO: Tweak values
+global_variable f32 maxSpeed          = 8.3f;
+global_variable f32 frictionForce     = 20.0f;
+global_variable f32 moveAcceleration  = 40.0f;
+global_variable f32 knockbackForce    = 17.0f;
+global_variable f32 rotationSpeed     = 0.05f;
+global_variable f32 enemyHitRadius    = 0.75f;
+global_variable f32 enemyMaxSpeed     = 1.0f;
+global_variable f32 enemyAcceleration = 10.0f;
+global_variable s32 maxHealth         = 100;
+
 // TODO
 /*
 - (Batch) Review batch buffer size: Ideally, should be large enough to handle a single render call per
@@ -194,7 +205,7 @@ inline Entity* EntityNew(GameState* state, EntityType type)
 
     Entity* entity = &state->entities[state->entityCount++];
     entity->type   = type;
-    entity->health = 100;
+    entity->health = maxHealth;
 
     return entity;
 }
@@ -493,22 +504,16 @@ void GraphInit(GameState* state)
     }
 }
 
-// ----------------------------------------------------------------------------
-// TODO: Tweak movement mechanics
-internal f32 maxSpeed          = 8.3f;
-internal f32 frictionForce     = 20.0f;
-internal f32 moveAcceleration  = 40.0f;
-internal f32 knockbackForce    = 17.0f;
-internal f32 enemyHitRadius    = 0.75f;
-internal f32 enemyMaxSpeed     = 1.0f;
-internal f32 enemyAcceleration = 10.0f;
-// ----------------------------------------------------------------------------
-
 void EntityAttack(GameState* state, Entity* entity, Weapon* weapon, v3 dir)
 {
     if (weapon->type == WeaponType_Hand)
     {
-        // TODO: Range attack
+        Assert(entity->targetEntity);
+
+        entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
+        entity->targetEntity->velocity += dir * weapon->knockbackforce;
+        entity->targetEntity->flags |= EntityFlag_InKnockback;
+        entity->targetEntity->health -= weapon->damage;
     }
     else
     {
@@ -572,6 +577,7 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
         else
         {
             v3 playerDirection = { 0.0f, 0.0f, 0.0f };
+            v3 crosshairPoint  = WorldMousePicking(camera, projection, windowDim, mouse->pos);
 
             if (ButtonIsDown(controller->moveUp))
             {
@@ -593,9 +599,17 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
 
             if (ButtonIsPressed(mouse->left))
             {
-                v3 crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-                v3 dir            = Norm(crosshairPoint - player->position);
+                v3 dir = Norm(crosshairPoint - player->position);
                 EntityAttack(state, player, &gWeaponPistol, dir);
+            }
+
+            // Player rotation
+            {
+                v3  dir       = Norm(crosshairPoint - player->position);
+                f32 targetYaw = -atan2f(dir.x, -dir.z);
+                f32 deltaYaw  = targetYaw - player->yaw;
+                deltaYaw      = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi; // Wrap to [-Pi, Pi]
+                player->yaw += deltaYaw * rotationSpeed;
             }
 
             // Deceleration
@@ -642,148 +656,56 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
             {
                 Entity* entity = EntityGet(state, entityIndex);
 
-                if (entity->targetEntity)
+                AABB intersection;
+                if (EntitiesIntersect(player, entity, &intersection))
                 {
-                    v3 dir = Norm(entity->velocity);
-
-                    if (entity->type == EntityType_Enemy)
+                    if (player->flags & EntityFlag_InKnockback)
                     {
-                        //                      Rect entityRect;
-                        //                      entityRect.x = entity->position.x - enemyHitRadius;
-                        //                      // entityRect.w = entity->position.x + enemyHitRadius;
-                        //                      entityRect.y = entity->position.z - enemyHitRadius;
-                        //                      // entityRect.h = entity->position.z + enemyHitRadius;
-
-                        //                      entityRect.w = enemyHitRadius;
-                        //                      entityRect.h = enemyHitRadius;
-
-                        //                      Rect targetRect;
-                        //                      targetRect.x = entity->targetEntity->position.x - (entity->size.x *
-                        //                      0.5f); targetRect.y = entity->targetEntity->position.z - (entity->size.z
-                        //                      * 0.5f);
-                        //                      // targetRect.w = entity->targetEntity->position.x + (entity->size.x *
-                        //                      0.5f);
-                        //                      // targetRect.h = entity->targetEntity->position.z + (entity->size.z *
-                        //                      0.5f);
-
-                        //                      targetRect.w = (entity->size.x * 0.5f);
-                        //                      targetRect.h = (entity->size.z * 0.5f);
-
-                        //                      if (RectIntersection(entityRect, targetRect))
-                        //                      {
-                        //                          v3 pushDir = { dir.x, 0.0f, dir.z };
-
-                        //                          // entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
-                        //                          // entity->targetEntity->velocity += pushDir * (knockbackForce);
-                        //                          // entity->targetEntity->flags |= EntityFlag_InKnockback;
-                        //                      }
-
-                        v2 hitRectMinCorner{ entity->position.x - enemyHitRadius, entity->position.z - enemyHitRadius };
-                        v2 hitRectMaxCorner{ entity->position.x + enemyHitRadius, entity->position.z + enemyHitRadius };
-
-                        v2 targetMinCorner;
-                        v2 targetMaxCorner;
-                        targetMinCorner.x = entity->targetEntity->position.x - (entity->size.x * 0.5f);
-                        targetMinCorner.y = entity->targetEntity->position.z - (entity->size.z * 0.5f);
-                        targetMaxCorner.x = entity->targetEntity->position.x + (entity->size.x * 0.5f);
-                        targetMaxCorner.y = entity->targetEntity->position.z + (entity->size.z * 0.5f);
-
-                        b32 overlapsX =
-                            hitRectMinCorner.x <= targetMaxCorner.x && hitRectMaxCorner.x >= targetMinCorner.x;
-                        b32 overlapsZ =
-                            hitRectMinCorner.y <= targetMaxCorner.y && hitRectMaxCorner.y >= targetMinCorner.y;
-                        if (overlapsX && overlapsZ)
-                        {
-                            v3 pushDir = { dir.x, 0.0f, dir.z };
-
-                            entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
-                            entity->targetEntity->velocity += pushDir * (knockbackForce);
-                            entity->targetEntity->flags |= EntityFlag_InKnockback;
-
-                            // playerColor = red;
-                        }
+                        player->flags &= ~EntityFlag_InKnockback;
                     }
-                }
-                else
-                {
-                    AABB intersection;
-                    if (EntitiesIntersect(player, entity, &intersection))
+
+                    v3 penetration;
+                    penetration.x = intersection.max.x - intersection.min.x;
+                    penetration.y = intersection.max.y - intersection.min.y;
+                    penetration.z = intersection.max.z - intersection.min.z;
+
+                    // ----------------------------------------------------------------------------
+                    // Correct using the minimal penetration axis
+                    if (penetration.x < penetration.z)
                     {
-                        if (player->flags & EntityFlag_InKnockback)
-                        {
-                            player->flags &= ~EntityFlag_InKnockback;
-                        }
-
-                        // playerColor = white;
-
-                        v3 penetration;
-                        penetration.x = intersection.max.x - intersection.min.x;
-                        penetration.y = intersection.max.y - intersection.min.y;
-                        penetration.z = intersection.max.z - intersection.min.z;
-
-                        // ----------------------------------------------------------------------------
-                        // Correct using the minimal penetration axis
-                        if (penetration.x < penetration.y && penetration.x < penetration.z)
-                        {
-                            correction.x = penetration.x;
-                        }
-                        else if (penetration.y < penetration.z)
-                        {
-                            correction.y = penetration.y;
-                        }
-                        else
-                        {
-                            correction.z = penetration.z;
-                        }
-                        // ----------------------------------------------------------------------------
-
-                        // ----------------------------------------------------------------------------
-                        // Determine correction axis
-                        if (newPlayerPosition.x < entity->position.x)
-                        {
-                            correction.x = -correction.x;
-                        }
-                        if (newPlayerPosition.y < entity->position.y)
-                        {
-                            correction.y = -correction.y;
-                        }
-                        if (newPlayerPosition.z < entity->position.z)
-                        {
-                            correction.z = -correction.z;
-                        }
-                        // ----------------------------------------------------------------------------
-
-                        // ----------------------------------------------------------------------------
-                        // Use the greatest penetration to resolve collisions
-                        if (Abs(correction.x) > Abs(totalCorrection.x))
-                        {
-                            totalCorrection.x = correction.x;
-                        }
-                        if (Abs(correction.y) > Abs(totalCorrection.y))
-                        {
-                            totalCorrection.y = correction.y;
-                        }
-                        if (Abs(correction.z) > Abs(totalCorrection.z))
-                        {
-                            totalCorrection.z = correction.z;
-                        }
-                        // ----------------------------------------------------------------------------
+                        correction.x = penetration.x;
                     }
+                    else
+                    {
+                        correction.z = penetration.z;
+                    }
+                    // ----------------------------------------------------------------------------
+
+                    // ----------------------------------------------------------------------------
+                    // Determine correction axis
+                    if (newPlayerPosition.x < entity->position.x)
+                    {
+                        correction.x = -correction.x;
+                    }
+                    if (newPlayerPosition.z < entity->position.z)
+                    {
+                        correction.z = -correction.z;
+                    }
+                    // ----------------------------------------------------------------------------
+
+                    // ----------------------------------------------------------------------------
+                    // Use the greatest penetration to resolve collisions
+                    if (Abs(correction.x) > Abs(totalCorrection.x))
+                    {
+                        totalCorrection.x = correction.x;
+                    }
+                    if (Abs(correction.z) > Abs(totalCorrection.z))
+                    {
+                        totalCorrection.z = correction.z;
+                    }
+                    // ----------------------------------------------------------------------------
                 }
             }
-
-            // if (totalCorrection.x != 0.0f)
-            //{
-            //     player->velocity.x = 0.0f;
-            // }
-            // if (totalCorrection.y != 0.0f)
-            //{
-            //     player->velocity.y = 0.0f;
-            // }
-            // if (totalCorrection.z != 0.0f)
-            //{
-            //     player->velocity.z = 0.0f;
-            // }
 
             // World limit
             // Note: Enemies might spawn away the limit.
@@ -815,26 +737,6 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
             newPlayerPosition += totalCorrection;
             player->position = newPlayerPosition;
             camera->position = player->position + cameraOffset;
-
-            // Player rotation
-            {
-                v3 point = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-
-                // Direction from the player to the point
-                v3 dir = point - player->position;
-
-                f32 targetYaw = -atan2f(dir.x, -dir.z);
-                f32 deltaYaw  = targetYaw - player->yaw;
-                // Wrap to [-Pi, Pi]
-                deltaYaw          = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi;
-                f32 rotationSpeed = 0.05f;
-                player->yaw += deltaYaw * rotationSpeed;
-            }
-
-            if (ButtonIsPressed(mouse->left))
-            {
-                // platform->AudioClipPlay(state->pistolShot, 0);
-            }
         }
     }
 }
@@ -843,6 +745,27 @@ void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
 {
     Assert(entity->type == EntityType_Enemy);
     Assert(entity->targetEntity);
+
+    // Attack
+    {
+        v3 dir = Norm(entity->velocity);
+        v2 hitRectMinCorner{ entity->position.x - enemyHitRadius, entity->position.z - enemyHitRadius };
+        v2 hitRectMaxCorner{ entity->position.x + enemyHitRadius, entity->position.z + enemyHitRadius };
+
+        v2 targetMinCorner;
+        v2 targetMaxCorner;
+        targetMinCorner.x = entity->targetEntity->position.x - (entity->size.x * 0.5f);
+        targetMinCorner.y = entity->targetEntity->position.z - (entity->size.z * 0.5f);
+        targetMaxCorner.x = entity->targetEntity->position.x + (entity->size.x * 0.5f);
+        targetMaxCorner.y = entity->targetEntity->position.z + (entity->size.z * 0.5f);
+
+        b32 overlapsX = hitRectMinCorner.x <= targetMaxCorner.x && hitRectMaxCorner.x >= targetMinCorner.x;
+        b32 overlapsZ = hitRectMinCorner.y <= targetMaxCorner.y && hitRectMaxCorner.y >= targetMinCorner.y;
+        if (overlapsX && overlapsZ)
+        {
+            EntityAttack(state, entity, &gWeaponHand, dir);
+        }
+    }
 
     cell_index enemyCell           = WorldPositionToGridCell(entity->position);
     u32        enemyGraphNodeIndex = GraphAddNode(state, enemyCell);
@@ -893,7 +816,6 @@ void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
     }
 
     v3 newEntityPosition = entity->position + (entity->velocity * delta);
-
     //----------------------------------------------------------------------------
 
     // -----------------------------------------------------------
@@ -901,60 +823,58 @@ void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
     v3 correction      = { 0.0f, 0.0f, 0.0f };
     v3 totalCorrection = { 0 };
 
-    for (u32 entitySubindex = 0; entitySubindex < state->entityCount; entitySubindex++)
+    for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
     {
-        Entity* object = EntityGet(state, entitySubindex);
-        if (object != entity)
+        Entity* entityPtr = EntityGet(state, entityIndex);
+        if (entityPtr != entity && entityPtr->type == EntityType_Obstacle)
         {
-            if (object->type == EntityType_Obstacle)
+
+            AABB objectWorldAABB = AABBToWorld(entityPtr->aabb, entityPtr->position);
+
+            // Collisions
+            AABB intersection;
+            if (AABBIntersection(objectWorldAABB, entityWorldAABB, &intersection))
             {
-                AABB objectWorldAABB = AABBToWorld(object->aabb, object->position);
+                v3 penetration;
+                penetration.x = intersection.max.x - intersection.min.x;
+                penetration.y = intersection.max.y - intersection.min.y;
+                penetration.z = intersection.max.z - intersection.min.z;
 
-                // Collisions
-                AABB intersection;
-                if (AABBIntersection(objectWorldAABB, entityWorldAABB, &intersection))
+                //----------------------------------------------------------------------------
+                // Correct using the minimal penetration axis
+                if (penetration.x < penetration.z)
                 {
-                    v3 penetration;
-                    penetration.x = intersection.max.x - intersection.min.x;
-                    penetration.y = intersection.max.y - intersection.min.y;
-                    penetration.z = intersection.max.z - intersection.min.z;
-
-                    //----------------------------------------------------------------------------
-                    // Correct using the minimal penetration axis
-                    if (penetration.x < penetration.z)
-                    {
-                        correction.x = penetration.x;
-                    }
-                    else
-                    {
-                        correction.z = penetration.z;
-                    }
-                    //----------------------------------------------------------------------------
-
-                    //----------------------------------------------------------------------------
-                    // Determine correction axis
-                    if (newEntityPosition.x < entity->position.x)
-                    {
-                        correction.x = -correction.x;
-                    }
-                    if (newEntityPosition.z > entity->position.z)
-                    {
-                        correction.z = -correction.z;
-                    }
-                    //----------------------------------------------------------------------------
-
-                    //----------------------------------------------------------------------------
-                    // Use the greatest penetration to resolve collisions
-                    if (Abs(correction.x) > Abs(totalCorrection.x))
-                    {
-                        totalCorrection.x = correction.x;
-                    }
-                    if (Abs(correction.z) > Abs(totalCorrection.z))
-                    {
-                        totalCorrection.z = correction.z;
-                    }
-                    //----------------------------------------------------------------------------
+                    correction.x = penetration.x;
                 }
+                else
+                {
+                    correction.z = penetration.z;
+                }
+                //----------------------------------------------------------------------------
+
+                //----------------------------------------------------------------------------
+                // Determine correction axis
+                if (newEntityPosition.x < entity->position.x)
+                {
+                    correction.x = -correction.x;
+                }
+                if (newEntityPosition.z > entity->position.z)
+                {
+                    correction.z = -correction.z;
+                }
+                //----------------------------------------------------------------------------
+
+                //----------------------------------------------------------------------------
+                // Use the greatest penetration to resolve collisions
+                if (Abs(correction.x) > Abs(totalCorrection.x))
+                {
+                    totalCorrection.x = correction.x;
+                }
+                if (Abs(correction.z) > Abs(totalCorrection.z))
+                {
+                    totalCorrection.z = correction.z;
+                }
+                //----------------------------------------------------------------------------
             }
         }
     }
@@ -1546,7 +1466,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             BatchText(state, batch, "Build", { 0.0f, 150.0f }, green);
         }
-
+        else if (state->mode == GameMode_GameOver)
+        {
+            BatchText(state, batch, "GameOver", { 0.0f, 150.0f }, green);
+        }
 #if 0
         BatchRect(batch, { 0.0f, 220.0f }, { (f32)windowDim.w, 50.0f }, { 1.0f, 0.0f, 0.2f, 1.0f });
         BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 250.0f },
