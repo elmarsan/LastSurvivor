@@ -260,7 +260,7 @@ void DebugDrawGridCell(DebugState* debug, OpenGL* opengl, cell_index cell, v4 co
 f32                     GraphGetMovementCost(cell_index from, cell_index to);
 std::vector<cell_index> GraphFindBestPath(Graph* graph, cell_index start, cell_index goal);
 void                    GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex);
-u32                     GraphAddNode(GameState* state, cell_index cell);
+u32                     GraphAddNode(GameState* state, cell_index cell, EntityType type);
 void                    GraphRemoveNode(GameState* state, u32 nodeIndex);
 void                    GraphInit(GameState* state);
 f32                     GraphHeuristicLength(cell_index a, cell_index b);
@@ -377,37 +377,46 @@ std::vector<cell_index> GraphFindBestPath(Graph* graph, cell_index start, cell_i
     return path;
 }
 
-void GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex)
+void GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex, EntityType type)
 {
     Graph* graph = state->graph;
+    v3     nodeA = WorldGridCellToPosition(graph->nodes[targetNodeIndex]);
 
-    v3 nodeA = WorldGridCellToPosition(graph->nodes[targetNodeIndex]);
-
-    for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+    for (u32 nodeIndex = 0; nodeIndex < graph->nodes.size(); nodeIndex++)
     {
-        Entity* entity = EntityGet(state, entityIndex);
-        if (entity->type == EntityType_Obstacle)
+        if (nodeIndex != targetNodeIndex && graph->nodes[nodeIndex] != GRAPH_EMPTY_NODE)
         {
-            for (u32 nodeIndex = 0; nodeIndex < graph->nodes.size(); nodeIndex++)
+            v3 nodeB = WorldGridCellToPosition(graph->nodes[nodeIndex]);
+
+            b32 intersectEntity = false;
+            for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
             {
-                if (nodeIndex != targetNodeIndex)
+                Entity* entity = EntityGet(state, entityIndex);
+                if (entity->type == EntityType_Obstacle)
                 {
-                    v3 nodeB = WorldGridCellToPosition(graph->nodes[nodeIndex]);
-
-                    AABB entityWorldAABB = AABBToWorld(entity->aabb, entity->position);
-                    AABB expandedAABB    = AABBExpandXZ(entityWorldAABB, CELL_SIZE);
-
-                    if (!AABBSegmentIntersection(expandedAABB, nodeA, nodeB))
+                    AABB entityWorldAABB = EntityWorldAABB(entity);
+                    if (type == EntityType_Enemy)
                     {
-                        graph->edges[targetNodeIndex].push_back(nodeIndex);
+                        // entityWorldAABB = AABBExpandXZ(entityWorldAABB, CELL_SIZE);
+                    }
+
+                    if (AABBSegmentIntersection(entityWorldAABB, nodeA, nodeB))
+                    {
+                        intersectEntity = true;
+                        break;
                     }
                 }
+            }
+
+            if (!intersectEntity)
+            {
+                graph->edges[targetNodeIndex].push_back(nodeIndex);
             }
         }
     }
 }
 
-u32 GraphAddNode(GameState* state, cell_index cell)
+u32 GraphAddNode(GameState* state, cell_index cell, EntityType entityType)
 {
     Graph* graph = state->graph;
 
@@ -434,7 +443,7 @@ u32 GraphAddNode(GameState* state, cell_index cell)
         graph->edges.push_back({});
     }
 
-    GraphComputeNodeEdges(state, newNodeIndex);
+    GraphComputeNodeEdges(state, newNodeIndex, entityType);
 
     // Bidirectional edges
     std::vector<u32>& edges = graph->edges[newNodeIndex];
@@ -475,32 +484,44 @@ inline void GraphRemoveNode(GameState* state, u32 nodeIndex)
     }
 }
 
+void GraphAddEntity(GameState* state, Entity* entity)
+{
+    Graph*            graph   = state->graph;
+    EntityCellCorners corners = EntityGetCellCorners(entity);
+
+    // Top-left corner
+    GraphAddNode(state, CELL_INDEX(CELL_ROW(corners.topLeft) + 1, CELL_COL(corners.topLeft) - 1), entity->type);
+    // Top-right corner
+    GraphAddNode(state, CELL_INDEX(CELL_ROW(corners.topRight) + 1, CELL_COL(corners.topRight) + 1), entity->type);
+    // Bottom-left corner
+    GraphAddNode(state, CELL_INDEX(CELL_ROW(corners.bottomLeft) - 1, CELL_COL(corners.bottomLeft) - 1), entity->type);
+    // Bottom-right corner
+    GraphAddNode(state, CELL_INDEX(CELL_ROW(corners.bottomRight) - 1, CELL_COL(corners.bottomRight) + 1), entity->type);
+
+    // for (u32 nodeIndex = 0; nodeIndex < graph->nodes.size(); nodeIndex++)
+    //{
+    //     GraphComputeNodeEdges(state, nodeIndex);
+    // }
+
+    graph->edges.clear();
+    graph->edges.resize(graph->nodes.size());
+    for (u32 nodeIndex = 0; nodeIndex < graph->nodes.size(); nodeIndex++)
+    {
+        GraphComputeNodeEdges(state, nodeIndex, entity->type);
+    }
+}
+
 void GraphInit(GameState* state)
 {
-    Graph* graph = state->graph;
+    // Graph* graph = state->graph;
 
     for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
     {
         Entity* entity = EntityGet(state, entityIndex);
         if (entity->type == EntityType_Obstacle)
         {
-            EntityCellCorners corners = EntityGetCellCorners(entity);
-
-            // Top-left corner
-            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.topLeft) + 1, CELL_COL(corners.topLeft) - 1));
-            // Top-right corner
-            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.topRight) + 1, CELL_COL(corners.topRight) + 1));
-            // Bottom-left corner
-            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.bottomLeft) - 1, CELL_COL(corners.bottomLeft) - 1));
-            // Bottom-right corner
-            graph->nodes.push_back(CELL_INDEX(CELL_ROW(corners.bottomRight) - 1, CELL_COL(corners.bottomRight) + 1));
+            GraphAddEntity(state, entity);
         }
-    }
-
-    graph->edges.resize(graph->nodes.size());
-    for (u32 nodeIndex = 0; nodeIndex < graph->nodes.size(); nodeIndex++)
-    {
-        GraphComputeNodeEdges(state, nodeIndex);
     }
 }
 
@@ -513,7 +534,7 @@ void EntityAttack(GameState* state, Entity* entity, Weapon* weapon, v3 dir)
         entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
         entity->targetEntity->velocity += dir * weapon->knockbackforce;
         entity->targetEntity->flags |= EntityFlag_InKnockback;
-        entity->targetEntity->health -= weapon->damage;
+        // entity->targetEntity->health -= weapon->damage;
     }
     else
     {
@@ -767,25 +788,23 @@ void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
         }
     }
 
+    //----------------------------------------------------------------------------
+    // Path finding
     cell_index enemyCell           = WorldPositionToGridCell(entity->position);
-    u32        enemyGraphNodeIndex = GraphAddNode(state, enemyCell);
+    u32        enemyGraphNodeIndex = GraphAddNode(state, enemyCell, entity->type);
 
-    AABB entityWorldAABB = AABBToWorld(entity->aabb, entity->position);
+    v3                      entityDir{ 0.0f, 0.0f, 0.0f };
+    cell_index              originCellIndex = WorldPositionToGridCell(entity->position);
+    cell_index              targetCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
+    std::vector<cell_index> path            = GraphFindBestPath(state->graph, originCellIndex, targetCellIndex);
 
-    v3 entityDir{ 0.0f, 0.0f, 0.0f };
-
-    cell_index originCellIndex = WorldPositionToGridCell(entity->position);
-    cell_index targetCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
-
-    std::vector<cell_index> path = GraphFindBestPath(state->graph, originCellIndex, targetCellIndex);
     if (!path.empty())
     {
         v3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
         entityDir         = Norm(targetPosition - entity->position);
         entityDir.y       = 0.0f;
-        //   entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);d
+        // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);d
     }
-
     //----------------------------------------------------------------------------
 
     //----------------------------------------------------------------------------
@@ -828,12 +847,8 @@ void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
         Entity* entityPtr = EntityGet(state, entityIndex);
         if (entityPtr != entity && entityPtr->type == EntityType_Obstacle)
         {
-
-            AABB objectWorldAABB = AABBToWorld(entityPtr->aabb, entityPtr->position);
-
-            // Collisions
             AABB intersection;
-            if (AABBIntersection(objectWorldAABB, entityWorldAABB, &intersection))
+            if (EntitiesIntersect(entity, entityPtr, &intersection))
             {
                 v3 penetration;
                 penetration.x = intersection.max.x - intersection.min.x;
@@ -1176,17 +1191,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         enemy0->aabb         = characterAABB;
         enemy0->targetEntity = player;
 
-        Entity* enemy1       = EntityNew(state, EntityType_Enemy);
-        enemy1->position     = { -2.0f, 0.0f, -10.0f };
-        enemy1->size         = { 1.0f, 1.0f, 1.0f };
-        enemy1->aabb         = characterAABB;
-        enemy1->targetEntity = player;
+        // Entity* enemy1       = EntityNew(state, EntityType_Enemy);
+        // enemy1->position     = { -2.0f, 0.0f, -10.0f };
+        // enemy1->size         = { 1.0f, 1.0f, 1.0f };
+        // enemy1->aabb         = characterAABB;
+        // enemy1->targetEntity = player;
 
         Entity* fence0   = EntityNew(state, EntityType_Obstacle);
         fence0->position = { 0.0f, 0.0f, -2.0f };
         fence0->size     = { 1.0f, 1.0f, 1.0f };
-        // fence0->yaw      = Radians(-90.0f);
-        fence0->aabb = *state->fenceAABB;
+        fence0->aabb     = *state->fenceAABB;
+        ObstaclePlace(state->grid, fence0);
 
 #if 0
         for (u32 i = 0; i < 20; i++)
@@ -1310,6 +1325,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 if (ObstacleIsValidPosition(state->entities, state->entityCount, state->grid, obstacle))
                 {
                     ObstaclePlace(state->grid, obstacle);
+                    GraphAddEntity(state, obstacle);
                     obstacle->flags &= ~(EntityFlag_Positioning);
                     obstacle = 0;
                     EntitiesRemoveFlag(state, EntityFlag_Snapping);
@@ -1371,9 +1387,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
     case GameMode_Round:
     {
-        u32 playerGraphNodeIndex = GraphAddNode(state, WorldPositionToGridCell(player->position));
-
         PlayerUpdate(state, player, delta, &platform, controller, mouse, cameraOffset);
+        u32 playerGraphNodeIndex = GraphAddNode(state, WorldPositionToGridCell(player->position), player->type);
 
         for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
         {
@@ -1620,8 +1635,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             cell_index enemyCell  = WorldPositionToGridCell(enemy->position);
             cell_index playerCell = WorldPositionToGridCell(player->position);
 
-            u32 playerGraphNodeIndex = GraphAddNode(state, playerCell);
-            u32 enemyGraphNodeIndex  = GraphAddNode(state, enemyCell);
+            u32 playerGraphNodeIndex = GraphAddNode(state, playerCell, player->type);
+            u32 enemyGraphNodeIndex  = GraphAddNode(state, enemyCell, enemy->type);
 
             for (u32 nodeIndex = 0; nodeIndex < graph->nodes.size(); nodeIndex++)
             {
@@ -1632,6 +1647,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     DebugDrawGridCell(state->debug, opengl, nodeCell, green);
 
                     v3 nodePos = WorldGridCellToPosition(nodeCell);
+
                     for (auto edgeIndex : graph->edges[nodeIndex])
                     {
                         cell_index dstCell    = graph->nodes[edgeIndex];
@@ -1709,22 +1725,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             else if (entity->type == EntityType_Enemy)
             {
                 // Enemy hitbox
-                // DebugDrawPlane(state->debug, opengl, entity->position, { enemyHitRadius, 0, enemyHitRadius },
-                // yellow);
-
-                v3 plane = { 0 };
-
-                plane.x = entity->position.x - enemyHitRadius;
-                plane.z = entity->position.z - enemyHitRadius;
-
-                v3 planeSize = { enemyHitRadius, 0.0f, enemyHitRadius };
-
-                DebugDrawPlane(state->debug, opengl, plane, planeSize, yellow);
+                DebugDrawPlane(state->debug, opengl, entity->position, { enemyHitRadius, 0, enemyHitRadius }, yellow);
 
                 // Path finding
                 {
-                    u32 playerGraphNodeIndex = GraphAddNode(state, WorldPositionToGridCell(player->position));
-                    u32 enemyGraphNodeIndex  = GraphAddNode(state, WorldPositionToGridCell(entity->position));
+                    u32 playerGraphNodeIndex =
+                        GraphAddNode(state, WorldPositionToGridCell(player->position), player->type);
+                    u32 enemyGraphNodeIndex =
+                        GraphAddNode(state, WorldPositionToGridCell(entity->position), entity->type);
 
                     cell_index startCell = WorldPositionToGridCell(entity->position);
                     cell_index dstCell   = WorldPositionToGridCell(entity->targetEntity->position);
