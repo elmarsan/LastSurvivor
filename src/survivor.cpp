@@ -531,7 +531,12 @@ void EntityAttack(GameState* state, Entity* entity, Weapon* weapon, v3 dir)
         entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
         entity->targetEntity->velocity += dir * weapon->knockbackforce;
         entity->targetEntity->flags |= EntityFlag_InKnockback;
-        // entity->targetEntity->health -= weapon->damage;
+        entity->targetEntity->health -= weapon->damage;
+
+        if (entity->targetEntity->health <= 0)
+        {
+            EntityRemove(state, entity->targetEntity);
+        }
     }
     else
     {
@@ -795,12 +800,20 @@ void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
     cell_index              targetCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
     std::vector<cell_index> path            = GraphFindBestPath(state->graph, originCellIndex, targetCellIndex);
 
+    b32 availablePath = false;
+
     if (!path.empty())
     {
         v3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
         entityDir         = Norm(targetPosition - entity->position);
         entityDir.y       = 0.0f;
-        // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);d
+        // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
+        availablePath = true;
+    }
+    else
+    {
+        entityDir   = Norm(entity->targetEntity->position - entity->position);
+        entityDir.y = 0.0f;
     }
     //----------------------------------------------------------------------------
 
@@ -844,49 +857,65 @@ void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
         Entity* entityPtr = EntityGet(state, entityIndex);
         if (entityPtr != entity && entityPtr->type == EntityType_Obstacle)
         {
-            AABB intersection;
-            if (EntitiesIntersect(entity, entityPtr, &intersection))
+            v3 lookAt{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
+            lookAt   = Norm(lookAt);
+            v3 start = entity->position;
+            v3 end   = start + (lookAt * 1.5f);
+
+            if (AABBSegmentIntersection(EntityWorldAABB(entityPtr), start, end))
             {
-                v3 penetration;
-                penetration.x = intersection.max.x - intersection.min.x;
-                penetration.y = intersection.max.y - intersection.min.y;
-                penetration.z = intersection.max.z - intersection.min.z;
+                Entity* target       = entity->targetEntity;
+                entity->targetEntity = entityPtr;
+                EntityAttack(state, entity, &gWeaponHand, Norm(entity->velocity));
+                entity->targetEntity = target;
+                break;
+            }
+            else
+            {
+                AABB intersection;
+                if (EntitiesIntersect(entity, entityPtr, &intersection))
+                {
+                    v3 penetration;
+                    penetration.x = intersection.max.x - intersection.min.x;
+                    penetration.y = intersection.max.y - intersection.min.y;
+                    penetration.z = intersection.max.z - intersection.min.z;
 
-                //----------------------------------------------------------------------------
-                // Correct using the minimal penetration axis
-                if (penetration.x < penetration.z)
-                {
-                    correction.x = penetration.x;
-                }
-                else
-                {
-                    correction.z = penetration.z;
-                }
-                //----------------------------------------------------------------------------
+                    //----------------------------------------------------------------------------
+                    // Correct using the minimal penetration axis
+                    if (penetration.x < penetration.z)
+                    {
+                        correction.x = penetration.x;
+                    }
+                    else
+                    {
+                        correction.z = penetration.z;
+                    }
+                    //----------------------------------------------------------------------------
 
-                //----------------------------------------------------------------------------
-                // Determine correction axis
-                if (newEntityPosition.x < entity->position.x)
-                {
-                    correction.x = -correction.x;
-                }
-                if (newEntityPosition.z > entity->position.z)
-                {
-                    correction.z = -correction.z;
-                }
-                //----------------------------------------------------------------------------
+                    //----------------------------------------------------------------------------
+                    // Determine correction axis
+                    if (newEntityPosition.x < entity->position.x)
+                    {
+                        correction.x = -correction.x;
+                    }
+                    if (newEntityPosition.z > entity->position.z)
+                    {
+                        correction.z = -correction.z;
+                    }
+                    //----------------------------------------------------------------------------
 
-                //----------------------------------------------------------------------------
-                // Use the greatest penetration to resolve collisions
-                if (Abs(correction.x) > Abs(totalCorrection.x))
-                {
-                    totalCorrection.x = correction.x;
+                    //----------------------------------------------------------------------------
+                    // Use the greatest penetration to resolve collisions
+                    if (Abs(correction.x) > Abs(totalCorrection.x))
+                    {
+                        totalCorrection.x = correction.x;
+                    }
+                    if (Abs(correction.z) > Abs(totalCorrection.z))
+                    {
+                        totalCorrection.z = correction.z;
+                    }
+                    //----------------------------------------------------------------------------
                 }
-                if (Abs(correction.z) > Abs(totalCorrection.z))
-                {
-                    totalCorrection.z = correction.z;
-                }
-                //----------------------------------------------------------------------------
             }
         }
     }
@@ -933,7 +962,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         memset(state->grid, 0, sizeof(GridCell) * GRID_CELLS);
 
         state->mode                  = GameMode_Round;
-        state->roundMaxEnemy         = 3;
+        state->roundMaxEnemy         = 1;
         state->roundCount            = 1;
         state->roundSpawnIntervalSec = 0.3;
         state->roundLastSpawnTime    = 0;
@@ -1267,11 +1296,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // state->buildMode = !state->buildMode;
         if (state->mode != GameMode_Build)
         {
-            state->mode = GameMode_Build;
+            state->mode                 = GameMode_Build;
+            state->buildModeDurationSec = 2000;
         }
         else
         {
-            state->mode = GameMode_Round;
+            state->mode                 = GameMode_Round;
+            state->buildModeDurationSec = 10;
         }
     }
 #endif
@@ -1291,6 +1322,44 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
     case GameMode_Build:
     {
+#if BUILD_TYPE_DEBUG
+        // Destroy entity
+        {
+            if (ButtonIsPressed(mouse->middle))
+            {
+                v3         crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+                cell_index crosshairCell  = WorldPositionToGridCell(crosshairPoint);
+
+                for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+                {
+                    Entity* entity = EntityGet(state, entityIndex);
+                    if (entity->type != EntityType_Obstacle)
+                    {
+                        continue;
+                    }
+
+                    EntityCellCorners cellCorners = EntityGetCellCorners(entity);
+                    u32               beginRow    = CELL_ROW(cellCorners.bottomRight);
+                    u32               endRow      = CELL_ROW(cellCorners.topRight);
+                    u32               beginCol    = CELL_COL(cellCorners.bottomLeft);
+                    u32               endCol      = CELL_COL(cellCorners.bottomRight);
+
+                    for (u32 row = beginRow; row <= endRow; row++)
+                    {
+                        for (u32 col = beginCol; col <= endCol; col++)
+                        {
+                            if (crosshairCell == CELL_INDEX(row, col))
+                            {
+                                // platform.Logf("Found entity");
+                                EntityRemove(state, entity);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+#endif
+
         // Start timer
         if (state->buildModeBeginTime == 0)
         {
