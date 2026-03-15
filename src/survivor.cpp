@@ -395,10 +395,7 @@ void GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex, EntityType typ
                 if (entity->type == EntityType_Obstacle)
                 {
                     AABB entityWorldAABB = EntityWorldAABB(entity);
-                    if (type == EntityType_Enemy)
-                    {
-                        // entityWorldAABB = AABBExpandXZ(entityWorldAABB, CELL_SIZE);
-                    }
+                    entityWorldAABB      = AABBExpandXZ(entityWorldAABB, CELL_SIZE);
 
                     if (AABBSegmentIntersection(entityWorldAABB, nodeA, nodeB))
                     {
@@ -935,7 +932,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->grid                   = PushArray(arena, GRID_CELLS, GridCell);
         memset(state->grid, 0, sizeof(GridCell) * GRID_CELLS);
 
-        state->mode = GameMode_Round;
+        state->mode                  = GameMode_Round;
+        state->roundMaxEnemy         = 3;
+        state->roundCount            = 1;
+        state->roundSpawnIntervalSec = 0.3;
+        state->roundLastSpawnTime    = 0;
+        state->roundEnemyCount       = 0;
+        state->buildObstacle         = 0;
+        state->buildModeDurationSec  = 10;
+        state->buildModeBeginTime    = 0;
 
 #ifdef BUILD_TYPE_DEBUG
         state->debug   = PushStruct(arena, DebugState);
@@ -1121,8 +1126,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
         }
 
-        AABB characterAABB = { 0 };
-
         // Obj test
         {
             // Fence
@@ -1170,7 +1173,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 Obj characterObj = ObjReadData(characterFile.content, characterFile.contentSize,
                                                platform.FileReadEntire, platform.FileFree, platform.Logf, arena);
                 platform.FileFree(characterFile.content);
-                characterAABB = characterObj.aabb;
+                state->characterAABB  = PushStruct(arena, AABB);
+                *state->characterAABB = characterObj.aabb;
 
                 ObjInitGeometryBuffer(&characterObj, arena, opengl, state->characterBuffer);
             }
@@ -1183,13 +1187,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         Entity* player   = EntityNew(state, EntityType_Player);
         player->position = { 0.0f, 0.0f, 0.0f };
         player->size     = { 1.0f, 1.0f, 1.0f };
-        player->aabb     = characterAABB;
+        player->aabb     = *state->characterAABB;
 
-        Entity* enemy0       = EntityNew(state, EntityType_Enemy);
-        enemy0->position     = { -2.0f, 0.0f, -8.0f };
-        enemy0->size         = { 1.0f, 1.0f, 1.0f };
-        enemy0->aabb         = characterAABB;
-        enemy0->targetEntity = player;
+        // Entity* enemy0       = EntityNew(state, EntityType_Enemy);
+        // enemy0->position     = { -2.0f, 0.0f, -8.0f };
+        // enemy0->size         = { 1.0f, 1.0f, 1.0f };
+        // enemy0->aabb         = *state->characterAABB;
+        // enemy0->targetEntity = player;
 
         // Entity* enemy1       = EntityNew(state, EntityType_Enemy);
         // enemy1->position     = { -2.0f, 0.0f, -10.0f };
@@ -1287,47 +1291,56 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
     case GameMode_Build:
     {
-#if 0
-        // No enemies in build mode
+        // Start timer
+        if (state->buildModeBeginTime == 0)
         {
-            u32 enemyCount = 0;
-            for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
-            {
-                Entity* entity = EntityGet(state, entityIndex);
-                if (entity->type == EntityType_Enemy)
-                {
-                    enemyCount++;
-                }
-            }
-            Assert(enemyCount == 0);
+            state->buildModeBeginTime = time(0);
         }
-#endif
+        else
+        {
+            int elapsedSeconds = (int)difftime(time(0), state->buildModeBeginTime);
 
-        local_persist Entity* obstacle;
+            if (elapsedSeconds >= (int)state->buildModeDurationSec)
+            {
+                // Set round mode stuff
+                state->mode = GameMode_Round;
+                // state->roundMaxEnemy *= 2;
+                state->roundCount++;
+                // state->roundSpawnIntervalSec = 0.3;
+                state->roundLastSpawnTime = 0;
+                state->roundEnemyCount    = 0;
+
+                // Clean up build mode stuff
+                state->buildModeBeginTime = 0;
+                state->buildObstacle      = 0;
+
+                break;
+            }
+        }
 
         // Spawn obstacle
-        if (!obstacle && ButtonIsPressed(mouse->left))
+        if (!state->buildObstacle && ButtonIsPressed(mouse->left))
         {
             // TODO: Move this logic to `ObstacleSpawn` function
             v3 position = WorldMousePicking(camera, projection, windowDim, mouse->pos);
 
-            obstacle           = EntityNew(state, EntityType_Obstacle);
-            obstacle->position = position;
-            obstacle->size     = { 1.0f, 1.0f, 1.0f };
-            obstacle->flags |= EntityFlag_Positioning;
-            obstacle->aabb = *state->fenceAABB;
+            state->buildObstacle           = EntityNew(state, EntityType_Obstacle);
+            state->buildObstacle->position = position;
+            state->buildObstacle->size     = { 1.0f, 1.0f, 1.0f };
+            state->buildObstacle->flags |= EntityFlag_Positioning;
+            state->buildObstacle->aabb = *state->fenceAABB;
         }
-        else if (obstacle)
+        else if (state->buildObstacle)
         {
             // Place object if valid position
             if (ButtonIsPressed(mouse->left))
             {
-                if (ObstacleIsValidPosition(state->entities, state->entityCount, state->grid, obstacle))
+                if (ObstacleIsValidPosition(state->entities, state->entityCount, state->grid, state->buildObstacle))
                 {
-                    ObstaclePlace(state->grid, obstacle);
-                    GraphAddEntity(state, obstacle);
-                    obstacle->flags &= ~(EntityFlag_Positioning);
-                    obstacle = 0;
+                    ObstaclePlace(state->grid, state->buildObstacle);
+                    GraphAddEntity(state, state->buildObstacle);
+                    state->buildObstacle->flags &= ~(EntityFlag_Positioning);
+                    state->buildObstacle = 0;
                     EntitiesRemoveFlag(state, EntityFlag_Snapping);
                 }
                 else
@@ -1338,40 +1351,40 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             // Cancel placing
             else if (ButtonIsPressed(mouse->right))
             {
-                EntityRemove(state, obstacle);
-                obstacle = 0;
+                EntityRemove(state, state->buildObstacle);
+                state->buildObstacle = 0;
             }
             // Drag, rotate and snap obstacle
             else
             {
-                ObstacleDrag(obstacle, camera, projection, windowDim, mouse->pos);
+                ObstacleDrag(state->buildObstacle, camera, projection, windowDim, mouse->pos);
 
                 if (ButtonIsPressed(input->keyboard.moveLeft))
                 {
-                    ObstacleRotate(obstacle, true);
+                    ObstacleRotate(state->buildObstacle, true);
                 }
                 else if (ButtonIsPressed(input->keyboard.moveRight))
                 {
-                    ObstacleRotate(obstacle, false);
+                    ObstacleRotate(state->buildObstacle, false);
                 }
 
-                if (ObstacleIsValidPosition(state->entities, state->entityCount, state->grid, obstacle))
+                if (ObstacleIsValidPosition(state->entities, state->entityCount, state->grid, state->buildObstacle))
                 {
-                    obstacle->flags &= ~EntityFlag_InvalidPosition;
-                    SnapCandidate snapCandidate = ObstacleFindNearestSnap(state->grid, obstacle);
+                    state->buildObstacle->flags &= ~EntityFlag_InvalidPosition;
+                    SnapCandidate snapCandidate = ObstacleFindNearestSnap(state->grid, state->buildObstacle);
                     if (snapCandidate.entity)
                     {
-                        ObstaclesSnap(state->grid, obstacle, &snapCandidate);
-                        obstacle->flags |= EntityFlag_Snapping;
+                        ObstaclesSnap(state->grid, state->buildObstacle, &snapCandidate);
+                        state->buildObstacle->flags |= EntityFlag_Snapping;
                     }
                     else
                     {
-                        obstacle->flags &= ~EntityFlag_Snapping;
+                        state->buildObstacle->flags &= ~EntityFlag_Snapping;
                     }
                 }
                 else
                 {
-                    obstacle->flags |= EntityFlag_InvalidPosition;
+                    state->buildObstacle->flags |= EntityFlag_InvalidPosition;
                 }
             }
         }
@@ -1403,6 +1416,53 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         if (playerGraphNodeIndex != GRAPH_EMPTY_NODE)
         {
             GraphRemoveNode(state, playerGraphNodeIndex);
+        }
+
+        if (state->roundLastSpawnTime == 0)
+        {
+            Assert(state->roundEnemyCount == 0);
+            state->roundLastSpawnTime = time(0);
+            state->roundEnemyCount++;
+
+            Entity* enemy       = EntityNew(state, EntityType_Enemy);
+            enemy->position     = { -2.0f, 0.0f, -8.0f };
+            enemy->size         = { 1.0f, 1.0f, 1.0f };
+            enemy->aabb         = *state->characterAABB;
+            enemy->targetEntity = player;
+        }
+        else if (state->roundEnemyCount < state->roundMaxEnemy)
+        {
+            time_t now = time(0);
+
+            f64 seconds = difftime(now, state->roundLastSpawnTime);
+            if (seconds > state->roundSpawnIntervalSec)
+            {
+                state->roundLastSpawnTime = now;
+                state->roundEnemyCount++;
+
+                Entity* enemy       = EntityNew(state, EntityType_Enemy);
+                enemy->position     = { -2.0f, 0.0f, -8.0f };
+                enemy->size         = { 1.0f, 1.0f, 1.0f };
+                enemy->aabb         = *state->characterAABB;
+                enemy->targetEntity = player;
+            }
+        }
+
+        if (state->roundEnemyCount == state->roundMaxEnemy)
+        {
+            u32 enemyCount = 0;
+            for (u32 entityIndex = 0; entityIndex < state->entityCount; entityIndex++)
+            {
+                Entity* entity = EntityGet(state, entityIndex);
+                if (entity->type == EntityType_Enemy)
+                {
+                    enemyCount++;
+                }
+            }
+            if (enemyCount == 0)
+            {
+                state->mode = GameMode_Build;
+            }
         }
 
         break;
@@ -1480,23 +1540,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         if (state->mode == GameMode_Build)
         {
             BatchText(state, batch, "Build", { 0.0f, 150.0f }, green);
+
+            char timerBuf[100];
+            int  elapsedSeconds   = (int)difftime(time(0), state->buildModeBeginTime);
+            int  remainingSeconds = (int)state->buildModeDurationSec - elapsedSeconds;
+            sprintf(timerBuf, "%d", remainingSeconds);
+            BatchText(state, batch, timerBuf, { windowDim.w - 150.0f, 50.0f }, red);
         }
         else if (state->mode == GameMode_GameOver)
         {
             BatchText(state, batch, "GameOver", { 0.0f, 150.0f }, green);
         }
-#if 0
-        BatchRect(batch, { 0.0f, 220.0f }, { (f32)windowDim.w, 50.0f }, { 1.0f, 0.0f, 0.2f, 1.0f });
-        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 250.0f },
-                  { 0.5f, 1.0f, 1.0f, 1.0f }, 0.5f);
-
-        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 320.0f }, white, 0.7f);
-        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 390.0f }, red);
-
-        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 460.0f }, green, 1.2f);
-        BatchText(state, batch, "The quick brown fox jumps over the lazy dog", { 0.0f, 540.0f },
-                  { 1.0f, 0.0f, 1.0f, 1.0f }, 1.5f);
-#endif
+        else if (state->mode == GameMode_Round)
+        {
+            char buff[100];
+            sprintf(buff, "Round %d", state->roundCount);
+            BatchText(state, batch, buff, { 0.0f, 150.0f }, green);
+        }
 
         // Batch
         if (batch->vertexCount > 0)

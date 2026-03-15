@@ -77,6 +77,7 @@ struct GameState
     GeometryBuffer* characterBuffer;
     GeometryBuffer* fenceBuffer;
     AABB*           fenceAABB;
+    AABB*           characterAABB;
     Program*        program;
     Camera*         camera;
     AudioClip*      pistolShot;
@@ -92,6 +93,18 @@ struct GameState
     Graph*          graph;
     GameMode        mode;
     GridCell*       grid;
+
+    // Round mode
+    u32    roundEnemyCount;
+    u32    roundMaxEnemy;
+    u32    roundCount;
+    time_t roundLastSpawnTime;
+    f64    roundSpawnIntervalSec;
+
+    // Build mode
+    Entity* buildObstacle;
+    f64     buildModeDurationSec;
+    time_t  buildModeBeginTime;
 
 #ifdef BUILD_TYPE_DEBUG
     DebugState* debug;
