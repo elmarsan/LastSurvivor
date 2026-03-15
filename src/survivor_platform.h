@@ -81,9 +81,10 @@ struct DebugInput
             GameButtonState f3;
             GameButtonState f4;
             GameButtonState f5;
+            GameButtonState space;
         };
 
-        GameButtonState fkeys[5];
+        GameButtonState fkeys[7];
     };
 };
 

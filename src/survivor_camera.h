@@ -22,6 +22,10 @@ internal void _CameraUpdateVectors(Camera* camera)
     v3 up      = Norm(Cross(right, camera->target));
 
     camera->up = up;
+
+    camera->target = { 0.0f, -1.0f, 0.0f };
+    v3 forward     = { 0.0f, 0.0f, -1.0f };
+    camera->up     = forward;
 }
 
 inline void CameraInit(Camera* camera, v3 position, v3 target, v3 up, f32 pitch, f32 yaw, f32 fov)

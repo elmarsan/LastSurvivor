@@ -556,6 +556,10 @@ internal void Win32ProcessPendingMessages(Win32State* state)
                 {
                     Win32UpdateGameButtonState(&debug->f5, isDown);
                 }
+                if (vkCode == VK_SPACE)
+                {
+                    Win32UpdateGameButtonState(&debug->space, isDown);
+                }
 #endif
             }
             break;

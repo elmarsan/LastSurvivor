@@ -100,7 +100,7 @@ b32 GridIsValidCellForEntity(GridCell* grid, cell_index cellIndex, Entity* entit
         Entity* entityPtr = cell->entities[entityPtrIndex];
         if (entityPtr)
         {
-            Assert(entityPtr->type == EntityType_Obstacle);
+            // Assert(entityPtr->type == EntityType_Obstacle);
             if (EntityIsVerticalOriented(entityPtr))
             {
                 verticalOrientedEntityCount++;

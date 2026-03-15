@@ -258,7 +258,7 @@ void ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate)
     }
 }
 
-void ObstaclePlace(GridCell* grid, Entity* entity)
+void ObstaclePlace(GridCell* grid, GridCellV2* gridV2, Entity* entity)
 {
     Assert(entity->type == EntityType_Obstacle);
 
@@ -268,6 +268,19 @@ void ObstaclePlace(GridCell* grid, Entity* entity)
     for (u32 cellIndex = 0; cellIndex < ArrayCount(entityCells.arr); cellIndex++)
     {
         GridAppendEntity(grid, entityCells.arr[cellIndex], entity);
+    }
+
+    u32 beginRow = CELL_ROW(entityCells.bottomRight);
+    u32 endRow   = CELL_ROW(entityCells.topRight);
+    u32 beginCol = CELL_COL(entityCells.bottomLeft);
+    u32 endCol   = CELL_COL(entityCells.bottomRight);
+
+    for (u32 row = beginRow; row <= endRow; row++)
+    {
+        for (u32 col = beginCol; col <= endCol; col++)
+        {
+            gridV2[CELL_INDEX(row, col)].entityCount++;
+        }
     }
 }
 

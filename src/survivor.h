@@ -93,6 +93,7 @@ struct GameState
     Graph*          graph;
     GameMode        mode;
     GridCell*       grid;
+    GridCellV2*     gridV2;
 
     // Round mode
     u32    roundEnemyCount;

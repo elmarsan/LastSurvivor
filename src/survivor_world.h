@@ -28,6 +28,11 @@ struct GridCell
     u32     entityCount;
 };
 
+struct GridCellV2
+{
+    u32 entityCount;
+};
+
 // TODO: Rename this to coordinate space picking. Picking can be done with gamepad.
 v3   WorldMousePicking(Camera* camera, mat4x4 projection, v2u windowDim, v2u mouse);
 b32  WorldIsPositionInBounds(v3 position);
