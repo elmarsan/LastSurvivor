@@ -9,14 +9,17 @@
 #include "survivor_camera.h"
 #include "survivor_debug.h"
 #include "survivor_obj.h"
-#include "survivor_world.h"
 #include "survivor_entity.h"
+#include "survivor_world.h"
 #include "survivor_build.h"
 #include "survivor_weapon.h"
 
 #define TTF_FIRST_GLYPH_OFFSET 32 // Space ascii code
 #define TTF_GLYPH_COUNT        95
 #define MAX_ENTITY_COUNT       128
+
+// TODO: Move to world
+#define GRAPH_EMPTY_NODE 0xFFFFFFFF
 
 struct Vertex
 {
@@ -93,7 +96,7 @@ struct GameState
     Graph*          graph;
     GameMode        mode;
     GridCell*       grid;
-    GridCellV2*     gridV2;
+    World*          world;
 
     // Round mode
     u32    roundEnemyCount;

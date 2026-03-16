@@ -4,8 +4,8 @@
 #include "survivor_debug_geometry.cpp"
 #include "survivor_debug.cpp"
 #include "survivor_obj.cpp"
-#include "survivor_world.cpp"
 #include "survivor_entity.cpp"
+#include "survivor_world.cpp"
 #include "survivor_build.cpp"
 
 #define STB_RECT_PACK_IMPLEMENTATION
@@ -213,18 +213,21 @@ inline Entity* EntityNew(GameState* state, EntityType type)
 inline void EntityRemove(GameState* state, Entity* entity)
 {
     {
-        EntityCellCorners cells = EntityGetCellCorners(entity);
-
-        u32 beginRow = CELL_ROW(cells.bottomRight);
-        u32 endRow   = CELL_ROW(cells.topRight);
-        u32 beginCol = CELL_COL(cells.bottomLeft);
-        u32 endCol   = CELL_COL(cells.bottomRight);
-
-        for (u32 row = beginRow; row <= endRow; row++)
+        if (entity->type == EntityType_Obstacle)
         {
-            for (u32 col = beginCol; col <= endCol; col++)
+            EntityCellCorners cells = EntityGetCellCorners(entity);
+
+            u32 beginRow = CELL_ROW(cells.bottomRight);
+            u32 endRow   = CELL_ROW(cells.topRight);
+            u32 beginCol = CELL_COL(cells.bottomLeft);
+            u32 endCol   = CELL_COL(cells.bottomRight);
+
+            for (u32 row = beginRow; row <= endRow; row++)
             {
-                state->gridV2[CELL_INDEX(row, col)].entityCount--;
+                for (u32 col = beginCol; col <= endCol; col++)
+                {
+                    state->world->gridV2[CELL_INDEX(row, col)].entityCount--;
+                }
             }
         }
     }
@@ -272,8 +275,6 @@ void DebugDrawGridCell(DebugState* debug, OpenGL* opengl, cell_index cell, v4 co
 }
 
 // Graph functions
-#define GRAPH_EMPTY_NODE 0xFFFFFFFF
-
 f32                     GraphGetMovementCost(cell_index from, cell_index to);
 std::vector<cell_index> GraphFindBestPath(Graph* graph, cell_index start, cell_index goal);
 void                    GraphComputeNodeEdges(GameState* state, u32 targetNodeIndex);
@@ -824,7 +825,7 @@ void EnemyUpdate(GameState* state, Entity* entity, f32 delta)
         v3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
         // entityDir         = Norm(targetPosition - entity->position);
         // entityDir.y       = 0.0f;
-        //  entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
+        // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
         availablePath = true;
     }
     else
@@ -976,9 +977,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->glyphAtlas             = PushStruct(arena, Texture);
         state->batchBuffer            = PushStruct(arena, BatchBuffer);
         state->grid                   = PushArray(arena, GRID_CELLS, GridCell);
-        state->gridV2                 = PushArray(arena, GRID_CELLS, GridCellV2);
         memset(state->grid, 0, sizeof(GridCell) * GRID_CELLS);
-        memset(state->gridV2, 0, sizeof(GridCellV2) * GRID_CELLS);
+
+        state->world         = PushStruct(arena, World);
+        state->world->gridV2 = PushArray(arena, GRID_CELLS, GridCellV2);
+        memset(state->world->gridV2, 0, sizeof(GridCellV2) * GRID_CELLS);
 
         state->mode                  = GameMode_Round;
         state->roundMaxEnemy         = 1;
@@ -1253,7 +1256,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         fence0->position = { 0.0f, 0.0f, -2.0f };
         fence0->size     = { 1.0f, 1.0f, 1.0f };
         fence0->aabb     = *state->fenceAABB;
-        ObstaclePlace(state->grid, state->gridV2, fence0);
+        // ObstaclePlace(state->grid, state->gridV2, fence0);
+        ObstaclePlace(state->grid, state->world->gridV2, fence0);
 
 #if 0
         for (u32 i = 0; i < 20; i++)
@@ -1302,12 +1306,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     GameInputController* controller = GetController(input, 0);
 
 #if 1
-    // v3 cameraOffset{ 0.0f, 16.0f, 5.0f };
-    v3 cameraOffset{ 0.0f, 40.0f, 0.0f };
+    v3 cameraOffset{ 0.0f, 16.0f, 5.0f };
     CameraSetPitch(camera, -68.0f);
 #else
     v3 cameraOffset{ 0.0f, 4.0f, 8.0f };
-    CameraSetPitch(camera, -26.0f);
+    // CameraSetPitch(camera, -26.0f);
 #endif
 
 #if BUILD_TYPE_DEBUG
@@ -1324,6 +1327,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             state->mode                 = GameMode_Round;
             state->buildModeDurationSec = 10;
         }
+    }
+
+    if (ButtonIsPressed(input->debug.f2))
+    {
+        CameraToggleTopDownMode(camera);
     }
 #endif
 
@@ -1345,8 +1353,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 #if BUILD_TYPE_DEBUG
         // Destroy entity
         {
-            // if (ButtonIsPressed(mouse->middle))
-            if (ButtonIsPressed(input->debug.space))
+            if (ButtonIsPressed(mouse->middle))
             {
                 v3         crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
                 cell_index crosshairCell  = WorldPositionToGridCell(crosshairPoint);
@@ -1427,7 +1434,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 if (ObstacleIsValidPosition(state->entities, state->entityCount, state->grid, state->buildObstacle))
                 {
-                    ObstaclePlace(state->grid, state->gridV2, state->buildObstacle);
+                    ObstaclePlace(state->grid, state->world->gridV2, state->buildObstacle);
                     // GraphAddEntity(state, state->buildObstacle);
                     state->buildObstacle->flags &= ~(EntityFlag_Positioning);
                     state->buildObstacle = 0;
@@ -1559,8 +1566,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
     }
 
-    // if (ButtonIsPressed(mouse->middle))
-    if (ButtonIsPressed(input->debug.f2))
+    if (ButtonIsPressed(mouse->middle))
     {
         v3 mousePoint          = WorldMousePicking(camera, projection, windowDim, mouse->pos);
         debugSelectedCellIndex = WorldPositionToGridCell(mousePoint);
@@ -1768,128 +1774,39 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
             // Debug graph V2
             {
-                std::vector<cell_index> edges{};
+                World* world = state->world;
 
-                for (u32 row = 0; row < GRID_ROWS; row++)
+                WorldComputeNodes(state->entities, state->entityCount, world);
+
+                // Occupied cells
+                for (cell_index cellIndex = 0; cellIndex < GRID_CELLS; cellIndex++)
                 {
-                    cell_index firstNotEmpty = GRAPH_EMPTY_NODE;
-                    cell_index lastNotEmpty  = GRAPH_EMPTY_NODE;
-
-                    for (u32 col = 0; col < GRID_COLS; col++)
+                    if (world->gridV2[cellIndex].entityCount > 0)
                     {
-                        cell_index  cellIndex = CELL_INDEX(row, col);
-                        GridCellV2* cell      = &state->gridV2[cellIndex];
-
-                        if (cell->entityCount)
-                        {
-                            DebugDrawGridCell(state->debug, opengl, cellIndex, blue);
-                        }
-
-                        if (cell->entityCount > 0 && firstNotEmpty == GRAPH_EMPTY_NODE)
-                        {
-                            firstNotEmpty = cellIndex;
-
-                            // Top-left corner
-                            if (CELL_COL(firstNotEmpty) > GRID_MIN_COL)
-                            {
-                                cell_index topLeft =
-                                    CELL_INDEX(CELL_ROW(firstNotEmpty) + 1, CELL_COL(firstNotEmpty) - 1);
-                                cell_index  top         = firstNotEmpty + GRID_ROWS;
-                                GridCellV2* topLeftCell = &state->gridV2[topLeft];
-                                GridCellV2* topCell     = &state->gridV2[top];
-
-                                if (topCell->entityCount == 0)
-                                {
-                                    DebugDrawGridCell(state->debug, opengl, topLeft, green);
-                                    edges.push_back(topLeft);
-                                }
-                            }
-
-                            // Bottom-left corner
-                            if (CELL_ROW(firstNotEmpty) > GRID_MIN_ROW && CELL_COL(firstNotEmpty) > GRID_MIN_COL)
-                            {
-                                cell_index bottomLeft =
-                                    CELL_INDEX(CELL_ROW(firstNotEmpty) - 1, CELL_COL(firstNotEmpty) - 1);
-                                cell_index  bottom         = firstNotEmpty - GRID_ROWS;
-                                GridCellV2* bottomLeftCell = &state->gridV2[bottomLeft];
-                                GridCellV2* bottomCell     = &state->gridV2[bottom];
-
-                                if (bottomCell->entityCount == 0)
-                                {
-                                    DebugDrawGridCell(state->debug, opengl, bottomLeft, green);
-                                    edges.push_back(bottomLeft);
-                                }
-                            }
-                        }
-                        else if (cell->entityCount == 0 && firstNotEmpty != GRAPH_EMPTY_NODE &&
-                                 lastNotEmpty == GRAPH_EMPTY_NODE)
-                        {
-                            lastNotEmpty = CELL_INDEX(row, col - 1);
-
-                            // Top-right corner
-                            if (CELL_COL(lastNotEmpty) < GRID_MAX_COL)
-                            {
-                                cell_index topRight =
-                                    CELL_INDEX(CELL_ROW(lastNotEmpty) + 1, CELL_COL(lastNotEmpty) + 1);
-                                cell_index  top          = lastNotEmpty + GRID_ROWS;
-                                GridCellV2* topRightCell = &state->gridV2[topRight];
-                                GridCellV2* topCell      = &state->gridV2[top];
-
-                                if (topCell->entityCount == 0)
-                                {
-                                    DebugDrawGridCell(state->debug, opengl, topRight, green);
-                                    edges.push_back(topRight);
-                                }
-                            }
-
-                            // Bottom-right corner
-                            if (CELL_ROW(lastNotEmpty) > GRID_MIN_ROW)
-                            {
-                                cell_index bottomRight =
-                                    CELL_INDEX(CELL_ROW(lastNotEmpty) - 1, CELL_COL(lastNotEmpty) + 1);
-                                cell_index  bottom          = lastNotEmpty - GRID_ROWS;
-                                GridCellV2* bottomRightCell = &state->gridV2[bottomRight];
-                                GridCellV2* bottomCell      = &state->gridV2[bottom];
-
-                                if (bottomCell->entityCount == 0)
-                                {
-                                    DebugDrawGridCell(state->debug, opengl, bottomRight, green);
-                                    edges.push_back(bottomRight);
-                                }
-                            }
-
-                            firstNotEmpty = GRAPH_EMPTY_NODE;
-                            lastNotEmpty  = GRAPH_EMPTY_NODE;
-                        }
+                        DebugDrawGridCell(state->debug, opengl, cellIndex, blue);
                     }
                 }
 
-                for (u32 edgeIndex = 0; edgeIndex < edges.size() - 1; edgeIndex++)
+                // Edges and nodes
+                for (u32 nodeIndex = 0; nodeIndex < world->nodes.size(); nodeIndex++)
                 {
-                    cell_index fromCell = edges[edgeIndex];
-                    cell_index toCell   = edges[edgeIndex + 1];
+                    cell_index nodeCell = world->nodes[nodeIndex];
 
-                    v3 from = WorldGridCellToPosition(fromCell);
-                    v3 to   = WorldGridCellToPosition(toCell);
+                    if (nodeCell != GRAPH_EMPTY_NODE)
+                    {
+                        v3 nodePos = WorldGridCellToPosition(nodeCell);
 
-                    from.y = 0.1f;
-                    to.y   = 0.1f;
+                        DebugDrawGridCell(state->debug, opengl, nodeCell, green);
 
-                    DebugDrawLine(state->debug, opengl, from, to, magenta);
+                        for (auto edgeIndex : world->edges[nodeIndex])
+                        {
+                            cell_index dstCell    = world->nodes[edgeIndex];
+                            v3         dstNodePos = WorldGridCellToPosition(dstCell);
+
+                            DebugDrawLine(state->debug, opengl, nodePos, dstNodePos, magenta);
+                        }
+                    }
                 }
-
-                //                  for (u32 i = 0; i < edges.size(); i++)
-                //                  {
-                //                      for (u32 j = 0; j < edges.size(); j++)
-                //                      {
-                //                          if (i != j)
-                //                          {
-                //                              v3 from = WorldGridCellToPosition(edges[i]);
-                //                              v3 to   = WorldGridCellToPosition(edges[j]);
-
-                //                          }
-                //                      }
-                //                  }
             }
         }
 
