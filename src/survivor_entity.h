@@ -1,5 +1,18 @@
 #pragma once
 
+#define MAX_ENTITY_COUNT 128
+
+// TODO: Tweak values
+global_variable f32 maxSpeed          = 8.3f;
+global_variable f32 frictionForce     = 20.0f;
+global_variable f32 moveAcceleration  = 40.0f;
+global_variable f32 knockbackForce    = 17.0f;
+global_variable f32 rotationSpeed     = 0.05f;
+global_variable f32 enemyHitRadius    = 0.75f;
+global_variable f32 enemyMaxSpeed     = 1.0f;
+global_variable f32 enemyAcceleration = 10.0f;
+global_variable s32 maxHealth         = 100;
+
 enum EntityType
 {
     EntityType_Player,
@@ -27,6 +40,12 @@ struct Entity
     AABB       aabb;
     u32        flags;
     s32        health;
+};
+
+struct EntityManager
+{
+    Entity entities[MAX_ENTITY_COUNT];
+    u32    entityCount;
 };
 
 union EntityWorldCorners
@@ -70,3 +89,95 @@ inline b32 EntityIsHorizontalOriented(Entity* entity)
 }
 
 void EntityUpdate(Entity* entity);
+
+inline Entity* EntityGet(EntityManager* manager, u32 index) { return &manager->entities[index]; }
+
+inline Entity* EntityNew(EntityManager* manager, EntityType type)
+{
+    Assert(manager->entityCount < ArrayCount(manager->entities));
+
+    Entity* entity = &manager->entities[manager->entityCount++];
+    entity->type   = type;
+    entity->health = maxHealth;
+
+    return entity;
+}
+
+inline void WorldRemoveEntity(World* world, Entity* entity)
+{
+    if (entity->type == EntityType_Obstacle)
+    {
+        EntityCellCorners cells = EntityGetCellCorners(entity);
+
+        // Corners
+        {
+            for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.arr); cellIndex++)
+            {
+                cell_index cornerCellIndex = cells.arr[cellIndex];
+                GridCell*  cell            = &world->grid[cornerCellIndex];
+
+                for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cell->entities); entityPtrIndex++)
+                {
+                    if (cell->entities[entityPtrIndex] == entity)
+                    {
+                        cell->entities[entityPtrIndex] = 0;
+                        cell->entityCount--;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Occupied cells
+        {
+            u32 beginRow = CELL_ROW(cells.bottomRight);
+            u32 endRow   = CELL_ROW(cells.topRight);
+            u32 beginCol = CELL_COL(cells.bottomLeft);
+            u32 endCol   = CELL_COL(cells.bottomRight);
+
+            for (u32 row = beginRow; row <= endRow; row++)
+            {
+                for (u32 col = beginCol; col <= endCol; col++)
+                {
+                    world->grid[CELL_INDEX(row, col)].entityCount--;
+                }
+            }
+        }
+    }
+}
+
+inline void EntityRemove(EntityManager* manager, Entity* entity)
+{
+    u32 index = 0;
+    for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
+    {
+        if (entity == &manager->entities[entityIndex])
+        {
+            index = entityIndex;
+            break;
+        }
+    }
+
+    while (index < manager->entityCount)
+    {
+        manager->entities[index] = manager->entities[index + 1];
+        index++;
+    }
+
+    manager->entityCount--;
+}
+
+inline void EntityDestroy(EntityManager* manager, Entity* entity, World* world)
+{
+    WorldRemoveEntity(world, entity);
+    EntityRemove(manager, entity);
+}
+
+inline void EntitiesRemoveFlag(EntityManager* manager, u32 flag)
+{
+    for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
+    {
+        Entity* entity = EntityGet(manager, entityIndex);
+        entity->flags &= ~flag;
+    }
+}

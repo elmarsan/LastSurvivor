@@ -9,17 +9,13 @@
 #include "survivor_camera.h"
 #include "survivor_debug.h"
 #include "survivor_obj.h"
-#include "survivor_entity.h"
 #include "survivor_world.h"
+#include "survivor_entity.h"
 #include "survivor_build.h"
 #include "survivor_weapon.h"
 
 #define TTF_FIRST_GLYPH_OFFSET 32 // Space ascii code
 #define TTF_GLYPH_COUNT        95
-#define MAX_ENTITY_COUNT       128
-
-// TODO: Move to world
-#define GRAPH_EMPTY_NODE 0xFFFFFFFF
 
 struct Vertex
 {
@@ -57,12 +53,6 @@ struct TTFGlyph
     f32 s0, t0, s1, t1; // Texture coordinates, relative to bounding-box.
 };
 
-struct Graph
-{
-    std::vector<cell_index>       nodes;
-    std::vector<std::vector<u32>> edges;
-};
-
 enum GameMode
 {
     GameMode_Pause,
@@ -91,11 +81,8 @@ struct GameState
     Texture*        fenceDiffuseMapTexture;
     BatchBuffer*    batchBuffer;
     TTFGlyph        ttfChars[TTF_GLYPH_COUNT];
-    Entity          entities[MAX_ENTITY_COUNT];
-    u32             entityCount;
-    Graph*          graph;
+    EntityManager*  entityManager;
     GameMode        mode;
-    GridCell*       grid;
     World*          world;
 
     // Round mode

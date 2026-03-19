@@ -17,10 +17,12 @@
 #define CELL_ROW(index)      (index / GRID_ROWS)
 #define CELL_COL(index)      (index % GRID_COLS)
 #define CELL_INDEX(row, col) (col + ((row) * GRID_ROWS))
+#define CELL_EMPTY           0xFFFFFFFF
 
 typedef u32 cell_index;
 
 struct Entity;
+struct EntityManager;
 
 struct GridCell
 {
@@ -28,24 +30,23 @@ struct GridCell
     u32     entityCount;
 };
 
-struct GridCellV2
-{
-    u32 entityCount;
-};
-
 struct World
 {
-    GridCellV2*                   gridV2;
+    GridCell*                     grid;
     std::vector<cell_index>       nodes;
     std::vector<std::vector<u32>> edges;
+    u32                           tempNodeCount;
 };
 
 // TODO: Rename this to coordinate space picking. Picking can be done with gamepad.
-v3 WorldMousePicking(Camera* camera, mat4x4 projection, v2u windowDim, v2u mouse);
-// b32  WorldIsPositionInBounds(v3 position);
-void GridAppendEntity(GridCell* grid, cell_index cellIndex, Entity* entity);
-b32  GridIsValidCellForEntity(GridCell* grid, cell_index cellIndex, Entity* entity);
-void WorldComputeNodes(Entity* entities, u32 entityCount, World* world);
+v3                      WorldMousePicking(Camera* camera, mat4x4 projection, v2u windowDim, v2u mouse);
+b32                     WorldIsPositionInBounds(v3 position);
+void                    WorldAddEntity(World* world, EntityManager* entityManager, Entity* entity);
+b32                     WorldIsValidEntityPosition(World* world, Entity* entity);
+void                    WorldUpdate(World* world, EntityManager* entityManager);
+void                    WorldComputeStaticNodes(World* world, EntityManager* entityManager);
+std::vector<cell_index> WorldFindBestPath(World* world, EntityManager* entityManager, cell_index start,
+                                          cell_index goal);
 
 inline cell_index WorldPositionToGridCell(v3 position)
 {

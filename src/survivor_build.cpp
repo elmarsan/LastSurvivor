@@ -1,4 +1,4 @@
-void ObstacleDrag(Entity* obstacle, Camera* camera, mat4x4 projection, v2u windowDim, v2u screenCoordPos)
+void BuildDragObstacle(Entity* obstacle, Camera* camera, mat4x4 projection, v2u windowDim, v2u screenCoordPos)
 {
     v3 newPosition = WorldMousePicking(camera, projection, windowDim, screenCoordPos);
 
@@ -35,7 +35,7 @@ void ObstacleDrag(Entity* obstacle, Camera* camera, mat4x4 projection, v2u windo
     obstacle->position = newPosition;
 }
 
-void ObstacleRotate(Entity* obstacle, b32 counterclockwise)
+void BuildRotateObstacle(Entity* obstacle, b32 counterclockwise)
 {
     Assert(obstacle->type == EntityType_Obstacle);
 
@@ -59,8 +59,10 @@ void ObstacleRotate(Entity* obstacle, b32 counterclockwise)
     }
 }
 
-SnapCandidate ObstacleFindNearestSnap(GridCell* grid, Entity* obstacle)
+SnapCandidate BuildFindSnapCandidate(World* world, Entity* obstacle)
 {
+    Assert(obstacle->type == EntityType_Obstacle);
+
     SnapCandidate result = { 0 };
 
     EntityWorldCorners worldCorners    = EntityGetWorldCorners(obstacle);
@@ -87,7 +89,7 @@ SnapCandidate ObstacleFindNearestSnap(GridCell* grid, Entity* obstacle)
         {
             for (s32 c = startCol; c <= endCol; c++)
             {
-                GridCell* cell = &grid[CELL_INDEX(r, c)];
+                GridCell* cell = &world->grid[CELL_INDEX(r, c)];
 
                 for (u32 entityIndex = 0; entityIndex < 4; entityIndex++)
                 {
@@ -120,7 +122,7 @@ SnapCandidate ObstacleFindNearestSnap(GridCell* grid, Entity* obstacle)
     return result;
 }
 
-void ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate)
+void BuildSnapObstacles(World* world, Entity* a, SnapCandidate* snapCandidate)
 {
     Entity* b = snapCandidate->entity;
 
@@ -188,7 +190,7 @@ void ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate)
 
         b32        snappingToTwoObstacles = false;
         cell_index fromCell               = WorldPositionToGridCell(snapCandidate->to);
-        GridCell*  cellInfo               = &grid[fromCell];
+        GridCell*  cellInfo               = &world->grid[fromCell];
         if (cellInfo->entityCount > 1)
         {
             snappingToTwoObstacles = true;
@@ -258,53 +260,27 @@ void ObstaclesSnap(GridCell* grid, Entity* a, SnapCandidate* snapCandidate)
     }
 }
 
-void ObstaclePlace(GridCell* grid, GridCellV2* gridV2, Entity* entity)
+void BuildPlaceObstacle(World* world, EntityManager* entityManager, Entity* entity)
 {
     Assert(entity->type == EntityType_Obstacle);
-
     entity->flags &= ~EntityFlag_Positioning;
-    EntityCellCorners entityCells = EntityGetCellCorners(entity);
-
-    for (u32 cellIndex = 0; cellIndex < ArrayCount(entityCells.arr); cellIndex++)
-    {
-        GridAppendEntity(grid, entityCells.arr[cellIndex], entity);
-    }
-
-    u32 beginRow = CELL_ROW(entityCells.bottomRight);
-    u32 endRow   = CELL_ROW(entityCells.topRight);
-    u32 beginCol = CELL_COL(entityCells.bottomLeft);
-    u32 endCol   = CELL_COL(entityCells.bottomRight);
-
-    for (u32 row = beginRow; row <= endRow; row++)
-    {
-        for (u32 col = beginCol; col <= endCol; col++)
-        {
-            gridV2[CELL_INDEX(row, col)].entityCount++;
-        }
-    }
+    WorldAddEntity(world, entityManager, entity);
 }
 
-b32 ObstacleIsValidPosition(Entity* entities, u32 entityCount, GridCell* grid, Entity* entity)
+b32 BuildIsObstacleValidPosition(World* world, EntityManager* entityManager, Entity* entity)
 {
     Assert(entity->type == EntityType_Obstacle);
 
-    EntityCellCorners cells = EntityGetCellCorners(entity);
-    for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.arr); cellIndex++)
+    if (!WorldIsValidEntityPosition(world, entity))
     {
-        cell_index cell     = cells.arr[cellIndex];
-        GridCell*  cellInfo = &grid[cell];
-
-        if (!WorldIsValidCellIndex(cell) || !GridIsValidCellForEntity(grid, cell, entity))
-        {
-            return false;
-        }
+        return false;
     }
 
     // Check for overlapping with other obstacles
     EntityCellCorners entityCorners = EntityGetCellCorners(entity);
-    for (u32 entityIndex = 0; entityIndex < entityCount; entityIndex++)
+    for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
     {
-        Entity* placedEntity = &entities[entityIndex];
+        Entity* placedEntity = EntityGet(entityManager, entityIndex);
         if (placedEntity != entity && placedEntity->type == EntityType_Obstacle)
         {
             AABB intersection;
