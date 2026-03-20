@@ -1525,7 +1525,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             else if (entity->type == EntityType_Enemy)
             {
                 // Enemy hitbox
-                DebugDrawPlane(state->debug, opengl, entity->position, { enemyHitRadius, 0, enemyHitRadius }, yellow);
+                DebugDrawCircle(state->debug, opengl, entity->position, enemyHitRadius, red);
 
 #if 1
                 // Path finding

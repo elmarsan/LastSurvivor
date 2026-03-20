@@ -180,6 +180,40 @@ void DebugDrawAABB(DebugState* state, OpenGL* opengl, v3 worldPosition, f32 yRot
     state->vertexCount += vertexCount;
 }
 
+void DebugDrawCircle(DebugState* state, OpenGL* opengl, v3 position, f32 radius, v4 color, u32 pointCount)
+{
+    u32 vertexCount = pointCount;
+    u32 indexCount  = pointCount * 2;
+
+    if (state->vertexCount + vertexCount > MAX_DEBUG_VERTICES || state->indexCount + indexCount > MAX_DEBUG_INDICES)
+    {
+        DebugFlush(state, opengl);
+    }
+
+    u32 baseVertex = state->vertexCount;
+    f32 angle      = 360.0f / pointCount;
+
+    for (u32 i = 0; i < pointCount; i++)
+    {
+        f32 currentAngle = angle * i;
+        f32 x            = radius * cos(Radians(currentAngle));
+        f32 z            = radius * sin(Radians(currentAngle));
+
+        state->vertexBufferPtr->position = position + v3{ x, 0.0f, z };
+        state->vertexBufferPtr->color    = color;
+        state->vertexBufferPtr++;
+    }
+
+    for (u32 i = 0; i < pointCount; i++)
+    {
+        *state->indexBufferPtr++ = baseVertex + i;
+        *state->indexBufferPtr++ = baseVertex + (i + 1) % pointCount;
+    }
+
+    state->vertexCount += vertexCount;
+    state->indexCount += indexCount;
+}
+
 internal void DebugFlush(DebugState* state, OpenGL* opengl)
 {
     Program* debugProgram = &state->program;
