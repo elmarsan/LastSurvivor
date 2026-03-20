@@ -845,9 +845,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                                       platform.FileFree, platform.Logf, arena);
                 platform.FileFree(fenceFile.content);
 
-                // TODO: Fix Y-axis
-                state->fenceAABB  = PushStruct(arena, AABB);
-                *state->fenceAABB = obj.aabb;
+                state->fenceAABB = PushStruct(arena, AABB);
+                // TODO: Remove simetric hack
+                //*state->fenceAABB = obj.aabb;
+                state->fenceAABB->max   = obj.aabb.max;
+                state->fenceAABB->min   = -obj.aabb.max;
+                state->fenceAABB->min.y = obj.aabb.min.y;
 
                 char fenceDiffuseMapFilepath[256];
                 sprintf(fenceDiffuseMapFilepath, "%s", "../data/");
@@ -943,7 +946,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     v4 playerColor = white;
 
-    local_persist cell_index debugSelectedCellIndex = 0xFFFFFFFF;
+    local_persist cell_index debugSelectedCellIndex = CELL_EMPTY;
 
     // TODO: Assign controller to player
     // for (u32 controllerIndex = 0; controllerIndex < ArrayCount(input->controllers); controllerIndex++)
@@ -1266,7 +1269,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // Debug grid
         {
-            if (debugSelectedCellIndex != -1)
+            if (debugSelectedCellIndex != CELL_EMPTY)
             {
                 char debugSelectedCellBuffer[64];
                 sprintf(debugSelectedCellBuffer, "%d (%d %d)", debugSelectedCellIndex, CELL_ROW(debugSelectedCellIndex),
@@ -1407,22 +1410,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
 
             // Debug selected cell
-            if (debugSelectedCellIndex != -1)
+            if (debugSelectedCellIndex != CELL_EMPTY)
             {
                 DebugDrawGridCell(state->debug, opengl, debugSelectedCellIndex, magenta);
             }
 
             // Debug graph
             {
-                // Occupied cells
-                for (cell_index cellIndex = 0; cellIndex < GRID_CELLS; cellIndex++)
-                {
-                    if (world->grid[cellIndex].entityCount > 0)
-                    {
-                        DebugDrawGridCell(state->debug, opengl, cellIndex, blue);
-                    }
-                }
-
                 // Nodes and edges
                 for (u32 nodeIndex = 0; nodeIndex < world->nodes.size(); nodeIndex++)
                 {
@@ -1432,6 +1426,25 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     {
                         v3 nodePos = WorldGridCellToPosition(nodeCell);
                         DebugDrawGridCell(state->debug, opengl, nodeCell, green);
+
+// Select cell edges
+#if 1
+                        if (debugSelectedCellIndex != CELL_EMPTY)
+                        {
+                            if (debugSelectedCellIndex == nodeCell)
+                            {
+                                for (auto edgeIndex : world->edges[nodeIndex])
+                                {
+                                    cell_index dstCell    = world->nodes[edgeIndex];
+                                    v3         dstNodePos = WorldGridCellToPosition(dstCell);
+                                    nodePos.y             = 0.1f;
+                                    dstNodePos.y          = 0.1f;
+                                    DebugDrawLine(state->debug, opengl, nodePos, dstNodePos, magenta);
+                                }
+                            }
+                        }
+#endif
+// All edges
 #if 0
                         for (auto edgeIndex : world->edges[nodeIndex])
                         {
@@ -1444,6 +1457,23 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 #endif
                     }
                 }
+
+                // Occupied cells
+                for (cell_index cellIndex = 0; cellIndex < GRID_CELLS; cellIndex++)
+                {
+                    if (world->grid[cellIndex].entityCount > 0)
+                    {
+                        DebugDrawGridCell(state->debug, opengl, cellIndex, blue);
+                    }
+                }
+
+                cell_index playerCellIndex = WorldPositionToGridCell(player->position);
+                cell_index nodeIndex       = 468;
+
+                v3 playerCellCenter = WorldGridCellToPosition(playerCellIndex);
+                v3 nodeCenter       = WorldGridCellToPosition(nodeIndex);
+
+                DebugDrawLine(state->debug, opengl, playerCellCenter, nodeCenter, red);
             }
         }
 

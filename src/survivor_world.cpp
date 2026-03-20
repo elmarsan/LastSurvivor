@@ -1,7 +1,7 @@
-internal void WorldComputeNodeEdges(World* world, EntityManager* manager, u32 targetNodeIndex);
+internal void WorldComputeNodeEdges(World* world, EntityManager* manager, EntityType nodeType, u32 targetNodeIndex);
 internal f32  WorldGetMovementCost(cell_index from, cell_index to);
 internal f32  WorldHeuristicLength(cell_index from, cell_index to);
-internal void WorldAddTempNode(World* world, EntityManager* entityManager, cell_index cellIndex);
+internal void WorldAddTempNode(World* world, EntityManager* entityManager, EntityType nodeType, cell_index cellIndex);
 internal void WorldPopTempNodes(World* world);
 internal b32  WorldIsCellValidForEntity(World* world, cell_index cellIndex, Entity* entity);
 
@@ -223,7 +223,7 @@ void WorldComputeStaticNodes(World* world, EntityManager* manager)
     world->edges.resize(world->nodes.size());
     for (u32 nodeIndex = 0; nodeIndex < world->nodes.size(); nodeIndex++)
     {
-        WorldComputeNodeEdges(world, manager, nodeIndex);
+        WorldComputeNodeEdges(world, manager, EntityType_Obstacle, nodeIndex);
     }
 }
 
@@ -236,7 +236,7 @@ void WorldUpdate(World* world, EntityManager* entityManager)
         Entity* entity = EntityGet(entityManager, entityIndex);
         if (entity->health > 0 && (entity->type == EntityType_Enemy || entity->type == EntityType_Player))
         {
-            WorldAddTempNode(world, entityManager, WorldPositionToGridCell(entity->position));
+            WorldAddTempNode(world, entityManager, entity->type, WorldPositionToGridCell(entity->position));
         }
     }
 }
@@ -312,7 +312,7 @@ std::vector<cell_index> WorldFindBestPath(World* world, EntityManager* entityMan
     return path;
 }
 
-internal void WorldComputeNodeEdges(World* world, EntityManager* manager, u32 targetNodeIndex)
+internal void WorldComputeNodeEdges(World* world, EntityManager* manager, EntityType nodeType, u32 targetNodeIndex)
 {
     v3 nodeAPos = WorldGridCellToPosition(world->nodes[targetNodeIndex]);
 
@@ -329,7 +329,10 @@ internal void WorldComputeNodeEdges(World* world, EntityManager* manager, u32 ta
                 if (entity->type == EntityType_Obstacle)
                 {
                     AABB entityWorldAABB = EntityWorldAABB(entity);
-                    entityWorldAABB      = AABBExpandXZ(entityWorldAABB, CELL_SIZE);
+                    if (nodeType == EntityType_Enemy)
+                    {
+                        entityWorldAABB = AABBExpandXZ(entityWorldAABB, CELL_SIZE);
+                    }
 
                     if (AABBSegmentIntersection(entityWorldAABB, nodeAPos, nodeBPos))
                     {
@@ -347,14 +350,14 @@ internal void WorldComputeNodeEdges(World* world, EntityManager* manager, u32 ta
     }
 }
 
-internal void WorldAddTempNode(World* world, EntityManager* entityManager, cell_index cellIndex)
+internal void WorldAddTempNode(World* world, EntityManager* entityManager, EntityType nodeType, cell_index cellIndex)
 {
     u32 newNodeIndex = (u32)world->nodes.size();
 
     world->nodes.push_back(cellIndex);
     world->edges.push_back({});
 
-    WorldComputeNodeEdges(world, entityManager, newNodeIndex);
+    WorldComputeNodeEdges(world, entityManager, nodeType, newNodeIndex);
 
     // Bidirectional edges
     std::vector<u32>& edges = world->edges[newNodeIndex];
