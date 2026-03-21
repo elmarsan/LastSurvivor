@@ -14,7 +14,7 @@
 
 #include "survivor_types.h"
 #include "survivor_math.h"
-#include "survivor_renderer_opengl.h"
+#include "survivor_opengl.h"
 #include "survivor_platform.h"
 #elif defined(BUILD_TYPE_RELEASE)
 #include "survivor.cpp"
@@ -832,58 +832,58 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, 0, GL_TRUE);
         }
 
-        gameMemory.opengl.glEnable            = glEnable;
-        gameMemory.opengl.glDisable           = glDisable;
-        gameMemory.opengl.glClear             = glClear;
-        gameMemory.opengl.glClearColor        = glClearColor;
-        gameMemory.opengl.glDrawArrays        = glDrawArrays;
-        gameMemory.opengl.glDrawElements      = glDrawElements;
-        gameMemory.opengl.glLineWidth         = glLineWidth;
-        gameMemory.opengl.glPolygonMode       = glPolygonMode;
-        gameMemory.opengl.glGenTextures       = glGenTextures;
-        gameMemory.opengl.glBindTexture       = glBindTexture;
-        gameMemory.opengl.glTexImage2D        = glTexImage2D;
-        gameMemory.opengl.glTexParameteri     = glTexParameteri;
-        gameMemory.opengl.glTexParameteriv    = glTexParameteriv;
-        gameMemory.opengl.glBlendFunc         = glBlendFunc;
-        gameMemory.opengl.glActiveTexture     = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
-        gameMemory.opengl.glCreateProgram     = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
-        gameMemory.opengl.glCreateShader      = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
-        gameMemory.opengl.glAttachShader      = (PFNGLATTACHSHADERPROC)wglGetProcAddress("glAttachShader");
-        gameMemory.opengl.glDeleteShader      = (PFNGLDELETESHADERPROC)wglGetProcAddress("glDeleteShader");
-        gameMemory.opengl.glLinkProgram       = (PFNGLLINKPROGRAMPROC)wglGetProcAddress("glLinkProgram");
-        gameMemory.opengl.glDeleteProgram     = (PFNGLDELETEPROGRAMPROC)wglGetProcAddress("glDeleteProgram");
-        gameMemory.opengl.glShaderSource      = (PFNGLSHADERSOURCEPROC)wglGetProcAddress("glShaderSource");
-        gameMemory.opengl.glUseProgram        = (PFNGLUSEPROGRAMPROC)wglGetProcAddress("glUseProgram");
-        gameMemory.opengl.glGetShaderiv       = (PFNGLGETSHADERIVPROC)wglGetProcAddress("glGetShaderiv");
-        gameMemory.opengl.glGetShaderInfoLog  = (PFNGLGETSHADERINFOLOGPROC)wglGetProcAddress("glGetShaderInfoLog");
-        gameMemory.opengl.glCompileShader     = (PFNGLCOMPILESHADERPROC)wglGetProcAddress("glCompileShader");
-        gameMemory.opengl.glGetProgramiv      = (PFNGLGETPROGRAMIVPROC)wglGetProcAddress("glGetProgramiv");
-        gameMemory.opengl.glGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)wglGetProcAddress("glGetProgramInfoLog");
-        gameMemory.opengl.glGenBuffers        = (PFNGLGENBUFFERSPROC)wglGetProcAddress("glGenBuffers");
-        gameMemory.opengl.glGenVertexArrays   = (PFNGLGENVERTEXARRAYSPROC)wglGetProcAddress("glGenVertexArrays");
-        gameMemory.opengl.glBindBuffer        = (PFNGLBINDBUFFERPROC)wglGetProcAddress("glBindBuffer");
-        gameMemory.opengl.glBindVertexArray   = (PFNGLBINDVERTEXARRAYPROC)wglGetProcAddress("glBindVertexArray");
-        gameMemory.opengl.glBufferData        = (PFNGLBUFFERDATAPROC)wglGetProcAddress("glBufferData");
-        gameMemory.opengl.glBufferSubData     = (PFNGLBUFFERSUBDATAPROC)wglGetProcAddress("glBufferSubData");
-        gameMemory.opengl.glDeleteBuffers     = (PFNGLDELETEBUFFERSPROC)wglGetProcAddress("glDeleteBuffers");
-        gameMemory.opengl.glEnableVertexAttribArray =
+        gameMemory.opengl.Enable            = glEnable;
+        gameMemory.opengl.Disable           = glDisable;
+        gameMemory.opengl.Clear             = glClear;
+        gameMemory.opengl.ClearColor        = glClearColor;
+        gameMemory.opengl.DrawArrays        = glDrawArrays;
+        gameMemory.opengl.DrawElements      = glDrawElements;
+        gameMemory.opengl.LineWidth         = glLineWidth;
+        gameMemory.opengl.PolygonMode       = glPolygonMode;
+        gameMemory.opengl.GenTextures       = glGenTextures;
+        gameMemory.opengl.BindTexture       = glBindTexture;
+        gameMemory.opengl.TexImage2D        = glTexImage2D;
+        gameMemory.opengl.TexParameteri     = glTexParameteri;
+        gameMemory.opengl.TexParameteriv    = glTexParameteriv;
+        gameMemory.opengl.BlendFunc         = glBlendFunc;
+        gameMemory.opengl.ActiveTexture     = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
+        gameMemory.opengl.CreateProgram     = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
+        gameMemory.opengl.CreateShader      = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
+        gameMemory.opengl.AttachShader      = (PFNGLATTACHSHADERPROC)wglGetProcAddress("glAttachShader");
+        gameMemory.opengl.DeleteShader      = (PFNGLDELETESHADERPROC)wglGetProcAddress("glDeleteShader");
+        gameMemory.opengl.LinkProgram       = (PFNGLLINKPROGRAMPROC)wglGetProcAddress("glLinkProgram");
+        gameMemory.opengl.DeleteProgram     = (PFNGLDELETEPROGRAMPROC)wglGetProcAddress("glDeleteProgram");
+        gameMemory.opengl.ShaderSource      = (PFNGLSHADERSOURCEPROC)wglGetProcAddress("glShaderSource");
+        gameMemory.opengl.UseProgram        = (PFNGLUSEPROGRAMPROC)wglGetProcAddress("glUseProgram");
+        gameMemory.opengl.GetShaderiv       = (PFNGLGETSHADERIVPROC)wglGetProcAddress("glGetShaderiv");
+        gameMemory.opengl.GetShaderInfoLog  = (PFNGLGETSHADERINFOLOGPROC)wglGetProcAddress("glGetShaderInfoLog");
+        gameMemory.opengl.CompileShader     = (PFNGLCOMPILESHADERPROC)wglGetProcAddress("glCompileShader");
+        gameMemory.opengl.GetProgramiv      = (PFNGLGETPROGRAMIVPROC)wglGetProcAddress("glGetProgramiv");
+        gameMemory.opengl.GetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)wglGetProcAddress("glGetProgramInfoLog");
+        gameMemory.opengl.GenBuffers        = (PFNGLGENBUFFERSPROC)wglGetProcAddress("glGenBuffers");
+        gameMemory.opengl.GenVertexArrays   = (PFNGLGENVERTEXARRAYSPROC)wglGetProcAddress("glGenVertexArrays");
+        gameMemory.opengl.BindBuffer        = (PFNGLBINDBUFFERPROC)wglGetProcAddress("glBindBuffer");
+        gameMemory.opengl.BindVertexArray   = (PFNGLBINDVERTEXARRAYPROC)wglGetProcAddress("glBindVertexArray");
+        gameMemory.opengl.BufferData        = (PFNGLBUFFERDATAPROC)wglGetProcAddress("glBufferData");
+        gameMemory.opengl.BufferSubData     = (PFNGLBUFFERSUBDATAPROC)wglGetProcAddress("glBufferSubData");
+        gameMemory.opengl.DeleteBuffers     = (PFNGLDELETEBUFFERSPROC)wglGetProcAddress("glDeleteBuffers");
+        gameMemory.opengl.EnableVertexAttribArray =
             (PFNGLENABLEVERTEXATTRIBARRAYPROC)wglGetProcAddress("glEnableVertexAttribArray");
-        gameMemory.opengl.glVertexAttribPointer =
+        gameMemory.opengl.VertexAttribPointer =
             (PFNGLVERTEXATTRIBPOINTERPROC)wglGetProcAddress("glVertexAttribPointer");
-        gameMemory.opengl.glVertexAttribIPointer =
+        gameMemory.opengl.VertexAttribIPointer =
             (PFNGLVERTEXATTRIBIPOINTERPROC)wglGetProcAddress("glVertexAttribIPointer");
-        gameMemory.opengl.glDeleteVertexArrays = (PFNGLDELETEVERTEXARRAYSPROC)wglGetProcAddress("glDeleteVertexArrays");
-        gameMemory.opengl.glActiveTexture      = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
-        gameMemory.opengl.glGenerateMipmap     = (PFNGLGENERATEMIPMAPPROC)wglGetProcAddress("glGenerateMipmap");
-        gameMemory.opengl.glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)wglGetProcAddress("glGetUniformLocation");
-        gameMemory.opengl.glUniformMatrix4fv   = (PFNGLUNIFORMMATRIX4FVPROC)wglGetProcAddress("glUniformMatrix4fv");
-        gameMemory.opengl.glUniform1i          = (PFNGLUNIFORM1IPROC)wglGetProcAddress("glUniform1i");
-        gameMemory.opengl.glUniform1ui         = (PFNGLUNIFORM1UIPROC)wglGetProcAddress("glUniform1ui");
-        gameMemory.opengl.glUniform1fv         = (PFNGLUNIFORM1FVPROC)wglGetProcAddress("glUniform1fv");
-        gameMemory.opengl.glUniform3fv         = (PFNGLUNIFORM3FVPROC)wglGetProcAddress("glUniform3fv");
-        gameMemory.opengl.glUniform4fv         = (PFNGLUNIFORM4FVPROC)wglGetProcAddress("glUniform4fv");
-        gameMemory.opengl.glUniform1iv         = (PFNGLUNIFORM1IVPROC)wglGetProcAddress("glUniform1iv");
+        gameMemory.opengl.DeleteVertexArrays = (PFNGLDELETEVERTEXARRAYSPROC)wglGetProcAddress("glDeleteVertexArrays");
+        gameMemory.opengl.ActiveTexture      = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
+        gameMemory.opengl.GenerateMipmap     = (PFNGLGENERATEMIPMAPPROC)wglGetProcAddress("glGenerateMipmap");
+        gameMemory.opengl.GetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)wglGetProcAddress("glGetUniformLocation");
+        gameMemory.opengl.UniformMatrix4fv   = (PFNGLUNIFORMMATRIX4FVPROC)wglGetProcAddress("glUniformMatrix4fv");
+        gameMemory.opengl.Uniform1i          = (PFNGLUNIFORM1IPROC)wglGetProcAddress("glUniform1i");
+        gameMemory.opengl.Uniform1ui         = (PFNGLUNIFORM1UIPROC)wglGetProcAddress("glUniform1ui");
+        gameMemory.opengl.Uniform1fv         = (PFNGLUNIFORM1FVPROC)wglGetProcAddress("glUniform1fv");
+        gameMemory.opengl.Uniform3fv         = (PFNGLUNIFORM3FVPROC)wglGetProcAddress("glUniform3fv");
+        gameMemory.opengl.Uniform4fv         = (PFNGLUNIFORM4FVPROC)wglGetProcAddress("glUniform4fv");
+        gameMemory.opengl.Uniform1iv         = (PFNGLUNIFORM1IVPROC)wglGetProcAddress("glUniform1iv");
     }
 
 #if BUILD_TYPE_DEBUG

@@ -1,56 +1,34 @@
 #pragma once
 
 #include "survivor_types.h"
+#include "survivor_memory.h"
 #include "survivor_math.h"
 #include "survivor_physics.h"
-#include "survivor_renderer_opengl.h"
+#include "survivor_opengl.h"
 #include "survivor_platform.h"
-#include "survivor_memory.h"
+#include "survivor_renderer_opengl.h"
 #include "survivor_camera.h"
-#include "survivor_debug.h"
 #include "survivor_obj.h"
 #include "survivor_world.h"
 #include "survivor_entity.h"
 #include "survivor_build.h"
 #include "survivor_weapon.h"
+#include "survivor_debug.h"
 
-#define TTF_FIRST_GLYPH_OFFSET 32 // Space ascii code
-#define TTF_GLYPH_COUNT        95
+global_variable v4 green{ 0.2f, 1.0f, 0.0f, 1.0f };
+global_variable v4 red{ 1.0f, 0.0f, 0.0f, 1.0f };
+global_variable v4 blue{ 0.2f, 0.4f, 1.0f, 1.0f };
+global_variable v4 white{ 1.0f, 1.0f, 1.0f, 1.0f };
+global_variable v4 black{ 0.0f, 0.0f, 0.0f, 1.0f };
+global_variable v4 magenta{ 1.0f, 0.0f, 1.0f, 1.0f };
+global_variable v4 yellow{ 1.0f, 1.0f, 0.0f, 1.0f };
+global_variable v4 orange{ 0.87f, 0.39f, 0.04f, 1.0f };
 
 struct Vertex
 {
     v3 position;
     v3 normal;
     v2 uv;
-};
-
-struct BatchVertex
-{
-    v3  position;
-    v2  uv;
-    v4  color;
-    u32 textureIndex;
-};
-
-struct BatchBuffer
-{
-    GeometryBuffer buffer;
-    Program        program;
-    BatchVertex*   vertexBufferBase;
-    BatchVertex*   vertexBufferPtr;
-    u32*           indexBufferBase;
-    u32*           indexBufferPtr;
-    u32            maxVertexCount;
-    u32            maxIndexCount;
-    u32            vertexCount;
-    u32            indexCount;
-};
-
-struct TTFGlyph
-{
-    u16 x0, y0, x1, y1; // Bounding-box
-    f32 xoff, yoff, xadvance;
-    f32 s0, t0, s1, t1; // Texture coordinates, relative to bounding-box.
 };
 
 enum GameMode
@@ -66,24 +44,21 @@ struct GameState
     b32   initialized;
     Arena arena;
 
-    GeometryBuffer* planeBuffer;
-    GeometryBuffer* characterBuffer;
-    GeometryBuffer* fenceBuffer;
-    AABB*           fenceAABB;
-    AABB*           characterAABB;
-    Program*        program;
-    Camera*         camera;
-    AudioClip*      pistolShot;
-    AudioClip*      backgroundMusic;
-    Texture*        whiteTexture;
-    Texture*        crosshairAtlas;
-    Texture*        glyphAtlas;
-    Texture*        fenceDiffuseMapTexture;
-    BatchBuffer*    batchBuffer;
-    TTFGlyph        ttfChars[TTF_GLYPH_COUNT];
-    EntityManager*  entityManager;
-    GameMode        mode;
-    World*          world;
+    GPUBuffer*     planeBuffer;
+    GPUBuffer*     characterBuffer;
+    GPUBuffer*     fenceBuffer;
+    AABB*          fenceAABB;
+    AABB*          characterAABB;
+    Program*       program;
+    Camera*        camera;
+    AudioClip*     pistolShot;
+    AudioClip*     backgroundMusic;
+    Texture*       crosshairAtlas;
+    Texture*       fenceDiffuseMapTexture;
+    EntityManager* entityManager;
+    GameMode       mode;
+    World*         world;
+    Renderer*      renderer;
 
     // Round mode
     u32    roundEnemyCount;
@@ -98,6 +73,6 @@ struct GameState
     time_t  buildModeBeginTime;
 
 #ifdef BUILD_TYPE_DEBUG
-    DebugState* debug;
+    Debug* debug;
 #endif
 };

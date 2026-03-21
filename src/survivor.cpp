@@ -8,197 +8,12 @@
 #include "survivor_world.cpp"
 #include "survivor_build.cpp"
 
-#define STB_RECT_PACK_IMPLEMENTATION
-#include "stb_rect_pack.h"
-#define STB_TRUETYPE_IMPLEMENTATION
-#include "stb_truetype.h"
-
-global_variable u32 rectIndices[]   = { 0, 1, 2, 0, 2, 3 };
-global_variable u32 rectVertexCount = 4;
-global_variable u32 rectIndexCount  = 6;
-global_variable v4  green{ 0.2f, 1.0f, 0.0f, 1.0f };
-global_variable v4  red{ 1.0f, 0.0f, 0.0f, 1.0f };
-global_variable v4  blue{ 0.2f, 0.4f, 1.0f, 1.0f };
-global_variable v4  white{ 1.0f, 1.0f, 1.0f, 1.0f };
-global_variable v4  black{ 0.0f, 0.0f, 0.0f, 1.0f };
-global_variable v4  magenta{ 1.0f, 0.0f, 1.0f, 1.0f };
-global_variable v4  yellow{ 1.0f, 1.0f, 0.0f, 1.0f };
-global_variable v4  orange{ 0.87f, 0.39f, 0.04f, 1.0f };
-
 // TODO
 /*
-- (Batch) Review batch buffer size: Ideally, should be large enough to handle a single render call per
-  frame. Otherwise, I'm not sure how to send multiple draw calls in the same frame using batching approach.
-- (Batch) Texture index assignation (remove index parameter in batch function and hardcoded values)
-- (Renderer) Rethink TextureAlloc. See how to alloc simple textures as the white one. Check for different parameters
-  (swizzle, min/mag filters, etc)
-- (Renderer) Rethink DrawBuffer render command. (Is not enough flexible for batching and is not easy to change the
-primitive type)
 - (Audio) Make easy to tweak volumes (ignore db conversion)
 - (Misc): Temporal arenas
 - (Game): gamepad controller
 */
-
-inline void BatchRect(BatchBuffer* batch, v2 topLeft, v2 bottomRight, v4 color)
-{
-    if ((batch->vertexCount + rectVertexCount > batch->maxVertexCount) ||
-        (batch->indexCount + rectIndexCount > batch->maxIndexCount))
-    {
-        Assert(0);
-    }
-
-    for (u32 index = 0; index < rectIndexCount; index++)
-    {
-        *batch->indexBufferPtr = rectIndices[index] + batch->vertexCount;
-        batch->indexBufferPtr++;
-
-        batch->indexCount++;
-    }
-
-    // Top-right
-    batch->vertexBufferPtr->position     = { topLeft.x + bottomRight.x, topLeft.y };
-    batch->vertexBufferPtr->color        = color;
-    batch->vertexBufferPtr->textureIndex = 0;
-    batch->vertexBufferPtr++;
-    // Bottom-right
-    batch->vertexBufferPtr->position     = { topLeft.x + bottomRight.x, topLeft.y + bottomRight.y };
-    batch->vertexBufferPtr->color        = color;
-    batch->vertexBufferPtr->textureIndex = 0;
-    batch->vertexBufferPtr++;
-    // Bottom-left
-    batch->vertexBufferPtr->position     = { topLeft.x, topLeft.y + bottomRight.y };
-    batch->vertexBufferPtr->color        = color;
-    batch->vertexBufferPtr->textureIndex = 0;
-    batch->vertexBufferPtr++;
-    // Top-left
-    batch->vertexBufferPtr->position     = { topLeft.x, topLeft.y };
-    batch->vertexBufferPtr->color        = color;
-    batch->vertexBufferPtr->textureIndex = 0;
-    batch->vertexBufferPtr++;
-
-    batch->vertexCount += 4;
-}
-
-inline void BatchTextureRect(BatchBuffer* batch, v2 topLeft, v2 bottomRight, Texture* texture, u32 textureIndex = 1)
-{
-    if ((batch->vertexCount + rectVertexCount > batch->maxVertexCount) ||
-        (batch->indexCount + rectIndexCount > batch->maxIndexCount))
-    {
-        Assert(0);
-    }
-
-    BatchVertex* vertexBufferPtr = batch->vertexBufferPtr;
-    BatchRect(batch, topLeft, bottomRight, { 1.0f, 1.0f, 1.0f, 1.0f });
-
-    // Top-right
-    vertexBufferPtr->uv           = { 1.0f, 1.0f };
-    vertexBufferPtr->textureIndex = textureIndex;
-    vertexBufferPtr++;
-    // Bottom-right
-    vertexBufferPtr->uv           = { 1.0f, 0.0f };
-    vertexBufferPtr->textureIndex = textureIndex;
-    vertexBufferPtr++;
-    // Bottom-left
-    vertexBufferPtr->uv           = { 0.0f, 0.0f };
-    vertexBufferPtr->textureIndex = textureIndex;
-    vertexBufferPtr++;
-    // Top-left
-    vertexBufferPtr->uv           = { 0.0f, 1.0f };
-    vertexBufferPtr->textureIndex = textureIndex;
-}
-
-inline void BatchTextureSubRect(BatchBuffer* batch, v2 topLeft, v2 bottomRight, Texture* texture, v2 textureTopLeft,
-                                v2 textureBottomRight, u32 textureIndex = 1)
-{
-    if ((batch->vertexCount + rectVertexCount > batch->maxVertexCount) ||
-        (batch->indexCount + rectIndexCount > batch->maxIndexCount))
-    {
-        Assert(0);
-    }
-
-    f32 textureW = (1.0f / texture->width) * textureBottomRight.x;
-    f32 textureH = (1.0f / texture->height) * textureBottomRight.y;
-    f32 textureX = (1.0f / texture->width) * textureTopLeft.x;
-    f32 textureY = (1.0f / texture->height) * textureTopLeft.y;
-
-    BatchVertex* vertexBufferPtr = batch->vertexBufferPtr;
-    BatchRect(batch, topLeft, bottomRight, { 1.0f, 1.0f, 1.0f, 1.0f });
-
-    // Top-right
-    vertexBufferPtr->uv           = { textureX + textureW, textureY };
-    vertexBufferPtr->textureIndex = textureIndex;
-    vertexBufferPtr++;
-    // Bottom-right
-    vertexBufferPtr->uv           = { textureX + textureW, textureY + textureH };
-    vertexBufferPtr->textureIndex = textureIndex;
-    vertexBufferPtr++;
-    // Bottom-left
-    vertexBufferPtr->uv           = { textureX, textureY + textureH };
-    vertexBufferPtr->textureIndex = textureIndex;
-    vertexBufferPtr++;
-    // Top-left
-    vertexBufferPtr->uv           = { textureX, textureY };
-    vertexBufferPtr->textureIndex = textureIndex;
-}
-
-inline void BatchText(GameState* state, BatchBuffer* batch, char* text, v2 position, v4 color, f32 scale = 1.0f)
-{
-    size_t textLength      = strlen(text);
-    u32    textVertexCount = (u32)textLength * rectVertexCount;
-    u32    textIndexCount  = (u32)textLength * rectIndexCount;
-
-    if ((batch->vertexCount + textVertexCount > batch->maxVertexCount) ||
-        (batch->indexCount + textIndexCount > batch->maxIndexCount))
-    {
-        Assert(0);
-    }
-
-    v2 rectTopLeft{ 0.0f, 0.0f };
-    rectTopLeft += position;
-
-    while (*text)
-    {
-        TTFGlyph* ttfChar = &state->ttfChars[*text++ - TTF_FIRST_GLYPH_OFFSET];
-
-        rectTopLeft.x += (ttfChar->xoff * scale);
-        rectTopLeft.y = position.y + (ttfChar->yoff * scale);
-        v2 rectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) * scale,
-                            ((f32)ttfChar->y1 - (f32)ttfChar->y0) * scale };
-
-        v2 subrectTopLeft{ (f32)ttfChar->x0 + ttfChar->s0, (f32)ttfChar->y0 + ttfChar->t0 };
-        v2 subrectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) - ttfChar->s1,
-                               ((f32)ttfChar->y1 - (f32)ttfChar->y0) - ttfChar->t1 };
-
-        BatchVertex* verterBufferPtr = batch->vertexBufferPtr;
-        BatchTextureSubRect(batch, rectTopLeft, rectBottomRight, state->glyphAtlas, subrectTopLeft, subrectBottomRight,
-                            2);
-
-        verterBufferPtr->color = color;
-        verterBufferPtr++;
-        verterBufferPtr->color = color;
-        verterBufferPtr++;
-        verterBufferPtr->color = color;
-        verterBufferPtr++;
-        verterBufferPtr->color = color;
-        verterBufferPtr++;
-
-        rectTopLeft.x += (ttfChar->xadvance * scale);
-    }
-}
-
-// TODO: Move to debug?
-void DebugDrawGridCell(DebugState* debug, OpenGL* opengl, cell_index cell, v4 color)
-{
-    s32 minCol = -(GRID_COLS / 2);
-    s32 minRow = -(GRID_ROWS / 2);
-    s32 row    = CELL_ROW(cell);
-    s32 col    = CELL_COL(cell);
-
-    v3 cellHalfExtent = { CELL_HALF, 0.0f, CELL_HALF };
-    v3 worldPosition{ (col + minRow) + cellHalfExtent.x, 0.02f, (f32) - (row + minCol) - cellHalfExtent.z };
-
-    DebugDrawPlane(debug, opengl, worldPosition, cellHalfExtent, color);
-}
 
 void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* weapon, v3 dir)
 {
@@ -611,16 +426,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     Assert(sizeof(GameState) <= memory->permanentStorageSize);
 
-    GameState*  state    = (GameState*)memory->permanentStorage;
-    PlatformAPI platform = memory->platform;
-    OpenGL*     opengl   = &memory->opengl;
-    Arena*      arena    = &state->arena;
+    GameState*   state    = (GameState*)memory->permanentStorage;
+    PlatformAPI* platform = &memory->platform;
+    OpenGL*      gl       = &memory->opengl;
+    Arena*       arena    = &state->arena;
 
     // ----------------------------------------------------------------------------
     // Init
     if (!state->initialized)
     {
-        platform.Logf("Initializing game state...");
+        platform->Logf("Initializing game state...");
         state->initialized = true;
 
         ArenaInit(arena, (size_t)memory->permanentStorageSize - sizeof(GameState),
@@ -628,14 +443,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         state->program                = PushStruct(arena, Program);
         state->camera                 = PushStruct(arena, Camera);
-        state->planeBuffer            = PushStruct(arena, GeometryBuffer);
-        state->characterBuffer        = PushStruct(arena, GeometryBuffer);
-        state->fenceBuffer            = PushStruct(arena, GeometryBuffer);
+        state->planeBuffer            = PushStruct(arena, GPUBuffer);
+        state->characterBuffer        = PushStruct(arena, GPUBuffer);
+        state->fenceBuffer            = PushStruct(arena, GPUBuffer);
         state->fenceDiffuseMapTexture = PushStruct(arena, Texture);
-        state->whiteTexture           = PushStruct(arena, Texture);
         state->crosshairAtlas         = PushStruct(arena, Texture);
-        state->glyphAtlas             = PushStruct(arena, Texture);
-        state->batchBuffer            = PushStruct(arena, BatchBuffer);
         state->world                  = PushStruct(arena, World);
         state->world->grid            = PushArray(arena, GRID_CELLS, GridCell);
         state->mode                   = GameMode_Round;
@@ -651,101 +463,51 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         memset(state->world->grid, 0, sizeof(GridCell) * GRID_CELLS);
 
+        // Renderer setup
+        size_t rendererArenaSize = Megabytes(10);
+        state->renderer          = PushStruct(arena, Renderer);
+        void* rendererPermMem    = PushBlock(arena, rendererArenaSize);
+        ArenaInit(&state->renderer->arena, rendererArenaSize, rendererPermMem);
+        RendererInit(state->renderer, gl, platform);
+        Renderer* renderer = state->renderer;
+
 #ifdef BUILD_TYPE_DEBUG
-        state->debug   = PushStruct(arena, DebugState);
-        void* permMem  = PushBlock(arena, Kilobytes(64));
-        void* frameMem = PushBlock(arena, Kilobytes(128));
-
-        ArenaInit(&state->debug->arena, Kilobytes(64), permMem);
-        ArenaInit(&state->debug->frameArena, Kilobytes(128), frameMem);
-
-        DebugInit(state->debug, opengl, &platform);
+        state->debug                    = PushStruct(arena, Debug);
+        state->debug->state             = state;
+        state->debug->selectedCellIndex = CELL_EMPTY;
 #endif
-        FileReadResult vertexSourceFile   = platform.FileReadEntire("../src/shaders/basic.vert");
-        FileReadResult fragmentSourceFile = platform.FileReadEntire("../src/shaders/basic.frag");
+        FileReadResult vertexSourceFile   = platform->FileReadEntire("../src/shaders/basic.vert");
+        FileReadResult fragmentSourceFile = platform->FileReadEntire("../src/shaders/basic.frag");
 
-        ProgramInit(opengl, state->program);
-        ProgramAttachShader(opengl, state->program, (char*)vertexSourceFile.content, vertexSourceFile.contentSize,
+        ProgramInit(renderer, state->program);
+        ProgramAttachShader(renderer, state->program, (char*)vertexSourceFile.content, vertexSourceFile.contentSize,
                             GL_VERTEX_SHADER);
-        ProgramAttachShader(opengl, state->program, (char*)fragmentSourceFile.content, fragmentSourceFile.contentSize,
+        ProgramAttachShader(renderer, state->program, (char*)fragmentSourceFile.content, fragmentSourceFile.contentSize,
                             GL_FRAGMENT_SHADER);
-        ProgramBuild(opengl, state->program);
+        ProgramBuild(renderer, state->program);
 
-        platform.FileFree(vertexSourceFile.content);
-        platform.FileFree(fragmentSourceFile.content);
+        platform->FileFree(vertexSourceFile.content);
+        platform->FileFree(fragmentSourceFile.content);
 
         // Plane
         {
-            GeometryBufferInit(opengl, state->planeBuffer, GL_TRIANGLES);
-            GeometryBufferVBOAlloc(opengl, state->planeBuffer, planeVertexs, sizeof(planeVertexs), sizeof(Vertex),
-                                   GL_STATIC_DRAW);
-            GeometryBufferEBOAlloc(opengl, state->planeBuffer, planeIndices, ArrayCount(planeIndices) * sizeof(u32),
-                                   sizeof(u32), GL_STATIC_DRAW);
-            GeometryBufferVertexAttrib(opengl, state->planeBuffer, 0, 3, GL_FLOAT, sizeof(Vertex),
-                                       offsetof(Vertex, position));
-            GeometryBufferVertexAttrib(opengl, state->planeBuffer, 1, 3, GL_FLOAT, sizeof(Vertex),
-                                       offsetof(Vertex, normal));
-            GeometryBufferVertexAttrib(opengl, state->planeBuffer, 2, 2, GL_FLOAT, sizeof(Vertex),
-                                       offsetof(Vertex, uv));
+            GPUBufferInit(renderer, state->planeBuffer);
+            GPUBufferVBOAlloc(renderer, state->planeBuffer, planeVertexs, sizeof(planeVertexs), sizeof(Vertex),
+                              GL_STATIC_DRAW);
+            GPUBufferEBOAlloc(renderer, state->planeBuffer, planeIndices, ArrayCount(planeIndices) * sizeof(u32),
+                              sizeof(u32), GL_STATIC_DRAW);
+            GPUBufferVertexAttrib(renderer, state->planeBuffer, 0, 3, GL_FLOAT, sizeof(Vertex),
+                                  offsetof(Vertex, position));
+            GPUBufferVertexAttrib(renderer, state->planeBuffer, 1, 3, GL_FLOAT, sizeof(Vertex),
+                                  offsetof(Vertex, normal));
+            GPUBufferVertexAttrib(renderer, state->planeBuffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
         }
+
+        // Font loading
+        RendererTTFLoad(state->renderer, "c:\\windows\\fonts\\calibri.ttf");
 
         // Texture loading
-        {
-            FileReadResult imageReadResult = platform.FileReadEntire("../data/crosshairs.png");
-            if (imageReadResult.contentSize > 0)
-            {
-                TextureAlloc(opengl, state->crosshairAtlas, imageReadResult.content, imageReadResult.contentSize);
-                platform.FileFree(imageReadResult.content);
-            }
-            else
-            {
-                Assert(0);
-            }
-
-            u32 pixels = 0xFFFFFFFF;
-            opengl->glGenTextures(1, &state->whiteTexture->id);
-            opengl->glBindTexture(GL_TEXTURE_2D, state->whiteTexture->id);
-            opengl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &pixels);
-        }
-
-        // 2D batching
-        {
-            BatchBuffer* batch = state->batchBuffer;
-
-            batch->maxVertexCount   = 1000;
-            batch->maxIndexCount    = batch->maxVertexCount * 6;
-            batch->vertexCount      = 0;
-            batch->indexCount       = 0;
-            batch->vertexBufferBase = PushArray(&state->arena, batch->maxVertexCount, BatchVertex);
-            batch->indexBufferBase  = PushArray(&state->arena, batch->maxIndexCount, u32);
-            batch->vertexBufferPtr  = batch->vertexBufferBase;
-            batch->indexBufferPtr   = batch->indexBufferBase;
-
-            Program* program = &state->batchBuffer->program;
-
-            FileReadResult vsFile = platform.FileReadEntire("../src/shaders/batch.vert");
-            FileReadResult fsFile = platform.FileReadEntire("../src/shaders/batch.frag");
-
-            ProgramInit(opengl, program);
-            ProgramAttachShader(opengl, program, (char*)vsFile.content, vsFile.contentSize, GL_VERTEX_SHADER);
-            ProgramAttachShader(opengl, program, (char*)fsFile.content, fsFile.contentSize, GL_FRAGMENT_SHADER);
-            ProgramBuild(opengl, program);
-
-            platform.FileFree(vsFile.content);
-            platform.FileFree(fsFile.content);
-
-            size_t vertexSize = sizeof(BatchVertex);
-
-            GeometryBuffer* buffer = &batch->buffer;
-
-            GeometryBufferInit(opengl, buffer, GL_TRIANGLES);
-            GeometryBufferVBOAlloc(opengl, buffer, 0, vertexSize * batch->maxVertexCount, vertexSize, GL_DYNAMIC_DRAW);
-            GeometryBufferEBOAlloc(opengl, buffer, 0, sizeof(u32) * batch->maxIndexCount, sizeof(u32), GL_DYNAMIC_DRAW);
-            GeometryBufferVertexAttrib(opengl, buffer, 0, 3, GL_FLOAT, vertexSize, offsetof(BatchVertex, position));
-            GeometryBufferVertexAttrib(opengl, buffer, 1, 2, GL_FLOAT, vertexSize, offsetof(BatchVertex, uv));
-            GeometryBufferVertexAttrib(opengl, buffer, 2, 4, GL_FLOAT, vertexSize, offsetof(BatchVertex, color));
-            GeometryBufferVertexAttrib(opengl, buffer, 3, 1, GL_INT, vertexSize, offsetof(BatchVertex, textureIndex));
-        }
+        TextureInit(renderer, state->crosshairAtlas, "../data/crosshairs.png");
 
         CameraInit(state->camera,          //
                    { 0.0f, 16.0f, 5.0f },  // Position
@@ -756,98 +518,24 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                    45.0f                   // Fov
         );
 
-        state->pistolShot      = platform.AudioClipLoad("../data/pistol.wav", AudioClipType_Sfx);
-        state->backgroundMusic = platform.AudioClipLoad("../data/background.wav", AudioClipType_Music);
+        state->pistolShot      = platform->AudioClipLoad("../data/pistol.wav", AudioClipType_Sfx);
+        state->backgroundMusic = platform->AudioClipLoad("../data/background.wav", AudioClipType_Music);
 
-        platform.AudioSetVolume(-35.0f, AudioClipType_Music);
-        platform.AudioSetVolume(-3.0f, AudioClipType_Sfx);
-        // platform.AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
-
-        // Font loading
-        {
-            FileReadResult fontFile = platform.FileReadEntire("c:\\windows\\fonts\\calibri.ttf");
-            if (fontFile.contentSize > 0)
-            {
-                stbtt_fontinfo fontInfo   = { 0 };
-                u8*            fontBuffer = (u8*)fontFile.content;
-
-                if (stbtt_InitFont(&fontInfo, fontBuffer, 0))
-                {
-                    int fontAtlasWidth  = 1024;
-                    int fontAtlasHeight = 1024;
-                    f32 fontSize        = 64.0f;
-                    // TODO: (Temporal arenas) Free bitmap after allocating texture
-                    u8* bitmapFontBuffer = PushArray(arena, fontAtlasWidth * fontAtlasHeight, u8);
-
-                    stbtt_pack_context packCtx;
-                    stbtt_packedchar   packedChars[TTF_GLYPH_COUNT];
-
-                    stbtt_PackBegin(&packCtx, bitmapFontBuffer, fontAtlasWidth, fontAtlasHeight, 0, 1, 0);
-                    stbtt_PackFontRange(&packCtx, fontBuffer, 0, fontSize, TTF_FIRST_GLYPH_OFFSET, TTF_GLYPH_COUNT,
-                                        packedChars);
-                    stbtt_PackEnd(&packCtx);
-
-                    for (u32 charIndex = 0; charIndex < TTF_GLYPH_COUNT; charIndex++)
-                    {
-                        float x, y;
-
-                        stbtt_aligned_quad alignedQuad;
-                        stbtt_GetPackedQuad(packedChars, fontAtlasWidth, fontAtlasHeight, (int)charIndex, &x, &y,
-                                            &alignedQuad, 0);
-
-                        TTFGlyph* ttfChar = &state->ttfChars[charIndex];
-                        ttfChar->x0       = packedChars[charIndex].x0;
-                        ttfChar->y0       = packedChars[charIndex].y0;
-                        ttfChar->x1       = packedChars[charIndex].x1;
-                        ttfChar->y1       = packedChars[charIndex].y1;
-                        ttfChar->xoff     = packedChars[charIndex].xoff;
-                        ttfChar->yoff     = packedChars[charIndex].yoff;
-                        ttfChar->xadvance = packedChars[charIndex].xadvance;
-                        ttfChar->s0       = alignedQuad.s0;
-                        ttfChar->t0       = alignedQuad.t0;
-                        ttfChar->s1       = alignedQuad.s1;
-                        ttfChar->t1       = alignedQuad.t1;
-                    }
-
-                    platform.FileFree(fontFile.content);
-
-                    opengl->glGenTextures(1, &state->glyphAtlas->id);
-                    opengl->glBindTexture(GL_TEXTURE_2D, state->glyphAtlas->id);
-                    opengl->glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, (GLsizei)fontAtlasWidth, (GLsizei)fontAtlasHeight, 0,
-                                         GL_RED, GL_UNSIGNED_BYTE, (void*)bitmapFontBuffer);
-                    GLint swizzleMask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
-                    opengl->glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
-                    opengl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                    opengl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                    state->glyphAtlas->width  = (u32)fontAtlasWidth;
-                    state->glyphAtlas->height = (u32)fontAtlasHeight;
-                }
-                else
-                {
-                    platform.Logf("Unable to init .ttf font");
-                    Assert(0);
-                }
-            }
-            else
-            {
-                platform.Logf("Unable to load font");
-                Assert(0);
-            }
-        }
+        platform->AudioSetVolume(-35.0f, AudioClipType_Music);
+        platform->AudioSetVolume(-3.0f, AudioClipType_Sfx);
+        // platform->AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
         // Obj test
         {
             // Fence
-            FileReadResult fenceFile = platform.FileReadEntire("../data/fence_2.obj");
+            FileReadResult fenceFile = platform->FileReadEntire("../data/fence_2.obj");
             if (fenceFile.contentSize > 0)
             {
-                Obj obj = ObjReadData(fenceFile.content, fenceFile.contentSize, platform.FileReadEntire,
-                                      platform.FileFree, platform.Logf, arena);
-                platform.FileFree(fenceFile.content);
+                Obj obj = ObjReadData(fenceFile.content, fenceFile.contentSize, platform, arena);
+                platform->FileFree(fenceFile.content);
 
                 state->fenceAABB = PushStruct(arena, AABB);
                 // TODO: Remove simetric hack
-                //*state->fenceAABB = obj.aabb;
                 state->fenceAABB->max   = obj.aabb.max;
                 state->fenceAABB->min   = -obj.aabb.max;
                 state->fenceAABB->min.y = obj.aabb.min.y;
@@ -856,14 +544,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 sprintf(fenceDiffuseMapFilepath, "%s", "../data/");
                 strcat(fenceDiffuseMapFilepath, obj.materials[0].diffuseMap);
 
-                ObjInitGeometryBuffer(&obj, arena, opengl, state->fenceBuffer);
+                ObjInitGeometryBuffer(&obj, arena, renderer, state->fenceBuffer);
 
-                FileReadResult fenceDiffuseMapReadResult = platform.FileReadEntire(fenceDiffuseMapFilepath);
+                FileReadResult fenceDiffuseMapReadResult = platform->FileReadEntire(fenceDiffuseMapFilepath);
                 if (fenceDiffuseMapReadResult.contentSize > 0)
                 {
-                    TextureAlloc(opengl, state->fenceDiffuseMapTexture, fenceDiffuseMapReadResult.content,
-                                 fenceDiffuseMapReadResult.contentSize);
-                    platform.FileFree(fenceDiffuseMapReadResult.content);
+                    TextureInit(renderer, state->fenceDiffuseMapTexture, fenceDiffuseMapFilepath);
+                    platform->FileFree(fenceDiffuseMapReadResult.content);
                 }
                 else
                 {
@@ -876,16 +563,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
 
             // Stickman
-            FileReadResult characterFile = platform.FileReadEntire("../data/character.obj");
+            FileReadResult characterFile = platform->FileReadEntire("../data/character.obj");
             if (characterFile.contentSize > 0)
             {
-                Obj characterObj = ObjReadData(characterFile.content, characterFile.contentSize,
-                                               platform.FileReadEntire, platform.FileFree, platform.Logf, arena);
-                platform.FileFree(characterFile.content);
+                Obj characterObj = ObjReadData(characterFile.content, characterFile.contentSize, platform, arena);
+                platform->FileFree(characterFile.content);
                 state->characterAABB  = PushStruct(arena, AABB);
                 *state->characterAABB = characterObj.aabb;
 
-                ObjInitGeometryBuffer(&characterObj, arena, opengl, state->characterBuffer);
+                ObjInitGeometryBuffer(&characterObj, arena, renderer, state->characterBuffer);
             }
             else
             {
@@ -936,7 +622,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // ----------------------------------------------------------------------------
     // Update
-    v2u            windowDim     = platform.WindowGetDimension();
+    v2u            windowDim     = platform->WindowGetDimension();
     EntityManager* entityManager = state->entityManager;
     Entity*        player        = EntityGet(entityManager, 0);
     Camera*        camera        = state->camera;
@@ -1029,7 +715,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                         {
                             if (crosshairCell == CELL_INDEX(row, col))
                             {
-                                platform.Logf("Entity at cell %d removed", CELL_INDEX(row, col));
+                                platform->Logf("Entity at cell %d removed", CELL_INDEX(row, col));
                                 EntityDestroy(entityManager, entity, world);
                             }
                         }
@@ -1093,7 +779,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 }
                 else
                 {
-                    platform.Logf("Invalid obstacle position");
+                    platform->Logf("Invalid obstacle position");
                 }
             }
             // Cancel placing
@@ -1195,7 +881,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
 
         WorldUpdate(world, entityManager);
-        PlayerUpdate(state, player, delta, &platform, controller, mouse, cameraOffset);
+        PlayerUpdate(state, player, delta, platform, controller, mouse, cameraOffset);
 
         for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
         {
@@ -1209,55 +895,30 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         break;
     }
     }
-
-    if (ButtonIsPressed(mouse->middle))
-    {
-        v3 mousePoint          = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-        debugSelectedCellIndex = WorldPositionToGridCell(mousePoint);
-    }
-    // ----------------------------------------------------------------------------
+    //  ----------------------------------------------------------------------------
 
     // ----------------------------------------------------------------------------
     // Draw
-    RenderCommandQueue* commandQueue = RendererFrameBegin(opengl);
+    Renderer* renderer = state->renderer;
 
-    FramebufferClear* framebufferClear = PushRenderCommand(commandQueue, FramebufferClear);
-    // framebufferClear->color.r          = 0.18f;
-    // framebufferClear->color.g          = 0.31f;
-    // framebufferClear->color.b          = 0.52f;
-    framebufferClear->color.r = 0.0f;
-    framebufferClear->color.g = 0.0f;
-    framebufferClear->color.b = 0.0f;
+    RendererFrameBegin(renderer, projection * view);
 
-    BatchBuffer* batch     = state->batchBuffer;
-    batch->vertexBufferPtr = batch->vertexBufferBase;
-    batch->indexBufferPtr  = batch->indexBufferBase;
-    batch->vertexCount     = 0;
-    batch->indexCount      = 0;
+    PushRenderCommand(&renderer->commandQueue, FramebufferClear);
 
-    // TODO: Find a better way to handle textures
-    int textureArray[] = { 0, 1, 2 };
-    opengl->glActiveTexture(GL_TEXTURE0);
-    opengl->glBindTexture(GL_TEXTURE_2D, state->whiteTexture->id);
-    opengl->glActiveTexture(GL_TEXTURE1);
-    opengl->glBindTexture(GL_TEXTURE_2D, state->crosshairAtlas->id);
-    opengl->glActiveTexture(GL_TEXTURE2);
-    opengl->glBindTexture(GL_TEXTURE_2D, state->glyphAtlas->id);
-    opengl->glActiveTexture(GL_TEXTURE3);
-    opengl->glBindTexture(GL_TEXTURE_2D, state->fenceDiffuseMapTexture->id);
+    // TODO: Use obj materials
+    gl->ActiveTexture(GL_TEXTURE3);
+    gl->BindTexture(GL_TEXTURE_2D, state->fenceDiffuseMapTexture->id);
 
-    // TODO: Do this kind of operations with render commands
-    opengl->glDisable(GL_DEPTH_TEST);
-    opengl->glEnable(GL_BLEND);
-    opengl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    // Batch
+    // 2D
     {
-        mat4x4 view2D = Orthographic(0, (f32)windowDim.w, (f32)windowDim.h, 0);
+        v2 crosshairSpriteSize{ 128.0f, 128.0f };
+        v2 cursorSize{ 32.0f, 32.0f };
 
-        // Cursors: 828, 965
-        BatchTextureSubRect(batch, { (f32)mouse->pos.x, (f32)mouse->pos.y }, { 32.0f, 32.0f }, state->crosshairAtlas,
-                            { 965.0f, 0.0f }, { 128.0f, 128.0f });
+        DrawRect(renderer, { (f32)mouse->pos.x, (f32)mouse->pos.y }, cursorSize, state->crosshairAtlas,
+                 { 965.0f, 0.0f }, crosshairSpriteSize);
+
+        DrawRect(renderer, { 50.0f, 50.0f }, cursorSize, state->crosshairAtlas, { 2074.0f, 142.0f },
+                 crosshairSpriteSize);
 
         char coordBuffer[64];
 #if 1
@@ -1265,7 +926,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 #else
         sprintf(coordBuffer, "%d %d", (int)player->position.x, (int)player->position.z);
 #endif
-        BatchText(state, batch, coordBuffer, { 0.0f, 50.0f }, white);
+        DrawText(renderer, coordBuffer, { 0.0f, 50.0f }, white);
 
         // Debug grid
         {
@@ -1274,53 +935,29 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 char debugSelectedCellBuffer[64];
                 sprintf(debugSelectedCellBuffer, "%d (%d %d)", debugSelectedCellIndex, CELL_ROW(debugSelectedCellIndex),
                         CELL_COL(debugSelectedCellIndex));
-                BatchText(state, batch, debugSelectedCellBuffer, { 0.0f, 100.0f }, magenta);
+                DrawText(renderer, debugSelectedCellBuffer, { 0.0f, 100.0f }, magenta);
             }
         }
 
         if (state->mode == GameMode_Build)
         {
-            BatchText(state, batch, "Build", { 0.0f, 150.0f }, green);
+            DrawText(renderer, "Build", { 0.0f, 150.0f }, green);
 
             char timerBuf[100];
             int  elapsedSeconds   = (int)difftime(time(0), state->buildModeBeginTime);
             int  remainingSeconds = (int)state->buildModeDurationSec - elapsedSeconds;
             sprintf(timerBuf, "%d", remainingSeconds);
-            BatchText(state, batch, timerBuf, { windowDim.w - 150.0f, 50.0f }, red);
+            DrawText(renderer, timerBuf, { windowDim.w - 150.0f, 50.0f }, red);
         }
         else if (state->mode == GameMode_GameOver)
         {
-            BatchText(state, batch, "GameOver", { 0.0f, 150.0f }, green);
+            DrawText(renderer, "GameOver", { 0.0f, 150.0f }, green);
         }
         else if (state->mode == GameMode_Round)
         {
             char buff[100];
             sprintf(buff, "Round %d", state->roundCount);
-            BatchText(state, batch, buff, { 0.0f, 150.0f }, green);
-        }
-
-        // Batch
-        if (batch->vertexCount > 0)
-        {
-            // TODO: This is ugly, rethink DrawBuffer render command. (It might take index/primitive count)
-            batch->buffer.indexCount  = batch->indexCount;
-            batch->buffer.vertexCount = batch->vertexCount;
-
-            GeometryBufferVBOSubdata(opengl, &batch->buffer, batch->vertexBufferBase,
-                                     sizeof(BatchVertex) * batch->vertexCount);
-            GeometryBufferEBOSubdata(opengl, &batch->buffer, batch->indexBufferBase, sizeof(u32) * batch->indexCount);
-
-            PushRenderProgramUse(commandQueue, batch->program.id);
-            PushRenderUploadUniformMat4x4(commandQueue, batch->program.id, "viewProj", view2D);
-            PushRenderUploadUniformIntArray(commandQueue, batch->program.id, "textureArray", textureArray,
-                                            ArrayCount(textureArray));
-
-            PushRenderDrawBuffer(commandQueue, &batch->buffer);
-
-            batch->vertexBufferPtr = batch->vertexBufferBase;
-            batch->indexBufferPtr  = batch->indexBufferBase;
-            batch->vertexCount     = 0;
-            batch->indexCount      = 0;
+            DrawText(renderer, buff, { 0.0f, 150.0f }, green);
         }
     }
 
@@ -1328,8 +965,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         mat4x4 viewProj = projection * view;
 
-        PushRenderProgramUse(commandQueue, state->program->id);
-        PushRenderUploadUniformInt(commandQueue, state->program->id, "hasDiffuse", 0);
+        PushRenderProgramUse(renderer, state->program->id);
+        PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
 
         // Floor
         {
@@ -1337,9 +974,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             mat4x4 scale     = Scale(Identity(), 20.0f);
             mat4x4 model     = translate * scale;
 
-            PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
-            PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 0.5f });
-            PushRenderDrawBuffer(commandQueue, state->planeBuffer);
+            PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+            PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 0.5f });
+            PushRenderDrawBuffer(renderer, state->planeBuffer);
         }
 
         // Entities
@@ -1356,10 +993,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
                 if (entity->type != EntityType_Obstacle)
                 {
-                    PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
-                    PushRenderUploadUniformVec4(commandQueue, state->program->id, "color",
+                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                    PushRenderUploadUniformVec4(renderer, state->program->id, "color",
                                                 entityIndex == 0 ? playerColor : green);
-                    PushRenderDrawBuffer(commandQueue, state->characterBuffer);
+                    PushRenderDrawBuffer(renderer, state->characterBuffer);
                 }
                 else
                 {
@@ -1374,187 +1011,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                         tintColor = green;
                     }
 
-                    PushRenderUploadUniformInt(commandQueue, state->program->id, "hasDiffuse", 1);
-                    PushRenderUploadUniformInt(commandQueue, state->program->id, "diffuseMap", 3);
-                    PushRenderUploadUniformMat4x4(commandQueue, state->program->id, "mvp", viewProj * model);
-                    PushRenderUploadUniformVec4(commandQueue, state->program->id, "color", tintColor);
-                    PushRenderDrawBuffer(commandQueue, state->fenceBuffer);
+                    PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
+                    PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 3);
+                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                    PushRenderUploadUniformVec4(renderer, state->program->id, "color", tintColor);
+                    PushRenderDrawBuffer(renderer, state->fenceBuffer);
                 }
             }
         }
     }
-
-    RendererFrameEnd(opengl);
 
 #ifdef BUILD_TYPE_DEBUG
-    DebugFrameBegin(state->debug, opengl, projection * view);
-    {
-        // Debug grid
-        {
-            f32 y = 0.01f;
-
-            s32 minCol = -(GRID_COLS / 2);
-            s32 maxCol = minCol + GRID_COLS;
-            s32 minRow = -(GRID_ROWS / 2);
-            s32 maxRow = minRow + GRID_ROWS;
-
-            // Vertical lines
-            for (s32 col = minCol; col <= maxCol; col++)
-            {
-                DebugDrawLine(state->debug, opengl, { (f32)col, y, (f32)minRow }, { (f32)col, y, (f32)maxRow }, black);
-            }
-            // Horizontal lines
-            for (s32 row = minRow; row <= maxRow; row++)
-            {
-                DebugDrawLine(state->debug, opengl, { (f32)minCol, y, (f32)row }, { (f32)maxCol, y, (f32)row }, black);
-            }
-
-            // Debug selected cell
-            if (debugSelectedCellIndex != CELL_EMPTY)
-            {
-                DebugDrawGridCell(state->debug, opengl, debugSelectedCellIndex, magenta);
-            }
-
-            // Debug graph
-            {
-                // Nodes and edges
-                for (u32 nodeIndex = 0; nodeIndex < world->nodes.size(); nodeIndex++)
-                {
-                    cell_index nodeCell = world->nodes[nodeIndex];
-
-                    if (nodeCell != CELL_EMPTY)
-                    {
-                        v3 nodePos = WorldGridCellToPosition(nodeCell);
-                        DebugDrawGridCell(state->debug, opengl, nodeCell, green);
-
-// Select cell edges
-#if 1
-                        if (debugSelectedCellIndex != CELL_EMPTY)
-                        {
-                            if (debugSelectedCellIndex == nodeCell)
-                            {
-                                for (auto edgeIndex : world->edges[nodeIndex])
-                                {
-                                    cell_index dstCell    = world->nodes[edgeIndex];
-                                    v3         dstNodePos = WorldGridCellToPosition(dstCell);
-                                    nodePos.y             = 0.1f;
-                                    dstNodePos.y          = 0.1f;
-                                    DebugDrawLine(state->debug, opengl, nodePos, dstNodePos, magenta);
-                                }
-                            }
-                        }
+    DebugDraw(state->debug, input, platform);
 #endif
-// All edges
-#if 0
-                        for (auto edgeIndex : world->edges[nodeIndex])
-                        {
-                            cell_index dstCell    = world->nodes[edgeIndex];
-                            v3         dstNodePos = WorldGridCellToPosition(dstCell);
-                            nodePos.y             = 0.1f;
-                            dstNodePos.y          = 0.1f;
-                            DebugDrawLine(state->debug, opengl, nodePos, dstNodePos, magenta);
-                        }
-#endif
-                    }
-                }
 
-                // Occupied cells
-                for (cell_index cellIndex = 0; cellIndex < GRID_CELLS; cellIndex++)
-                {
-                    if (world->grid[cellIndex].entityCount > 0)
-                    {
-                        DebugDrawGridCell(state->debug, opengl, cellIndex, blue);
-                    }
-                }
-
-                cell_index playerCellIndex = WorldPositionToGridCell(player->position);
-                cell_index nodeIndex       = 468;
-
-                v3 playerCellCenter = WorldGridCellToPosition(playerCellIndex);
-                v3 nodeCenter       = WorldGridCellToPosition(nodeIndex);
-
-                DebugDrawLine(state->debug, opengl, playerCellCenter, nodeCenter, red);
-            }
-        }
-
-        // Shooting
-        {
-            if (ButtonIsDown(mouse->left))
-            {
-                v3 end = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-
-                DebugDrawLine(state->debug, opengl, player->position, end, green);
-            }
-        }
-
-        // Debug entities
-        for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
-        {
-            Entity* entity = EntityGet(entityManager, entityIndex);
-
-            // Entity rotation
-            {
-                v3 lookAt{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
-                v3 p0{ entity->position.x, entity->aabb.max.y, entity->position.z };
-                v3 p1 = p0 + (lookAt * 1.5f);
-
-                DebugDrawLine(state->debug, opengl, p0, p1, blue);
-            }
-
-            // Entity AABB
-            DebugDrawAABB(state->debug, opengl, entity->position, entity->yaw, entity->aabb, red);
-
-            // Entity Y orientation
-            if (entity->type == EntityType_Obstacle)
-            {
-                // Snap points
-#if 1
-                if (state->mode == GameMode_Build)
-                {
-                    EntityWorldCorners worldCorners = EntityGetWorldCorners(entity);
-                    for (u32 cornerIndex = 0; cornerIndex < ArrayCount(worldCorners.arr); cornerIndex++)
-                    {
-                        v3 snapPoint = worldCorners.arr[cornerIndex];
-                        snapPoint.y  = 0.0f;
-
-                        DebugDrawPlane(state->debug, opengl, snapPoint, { CELL_HALF, 0.0f, CELL_HALF }, yellow);
-                    }
-                }
-#endif
-            }
-            else if (entity->type == EntityType_Enemy)
-            {
-                // Enemy hitbox
-                DebugDrawCircle(state->debug, opengl, entity->position, enemyHitRadius, red);
-
-#if 1
-                // Path finding
-                {
-
-                    WorldUpdate(world, entityManager);
-
-                    cell_index              startCell = WorldPositionToGridCell(entity->position);
-                    cell_index              dstCell   = WorldPositionToGridCell(entity->targetEntity->position);
-                    std::vector<cell_index> path = WorldFindBestPath(world, state->entityManager, startCell, dstCell);
-                    if (!path.empty())
-                    {
-                        for (u32 i = 0; i < path.size() - 1; i++)
-                        {
-                            v3 start = WorldGridCellToPosition(path[i]);
-                            v3 end   = WorldGridCellToPosition(path[i + 1]);
-
-                            start.y = 0.01f;
-                            end.y   = 0.01f;
-
-                            DebugDrawLine(state->debug, opengl, start, end, yellow);
-                        }
-                    }
-                }
-#endif
-            }
-        }
-    }
-    DebugFrameEnd(state->debug, opengl);
-#endif
+    RendererFrameEnd(state->renderer);
     return 0;
 }

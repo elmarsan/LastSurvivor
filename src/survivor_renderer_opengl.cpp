@@ -3,25 +3,125 @@
 #define STBI_ONLY_JPEG
 #include <stb_image.h>
 
-RenderCommandQueue* RendererFrameBegin(OpenGL* opengl)
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "stb_rect_pack.h"
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
+
+#define RECT_VERTEX_COUNT 4
+#define RECT_INDEX_COUNT  6
+
+internal void TextureQueueClear(Renderer* renderer);
+internal u32  TextureQueueAppend(Renderer* renderer, Texture* texture);
+internal void TextureQueueBind(Renderer* renderer, GLint arrayUniformLoc);
+internal void TextureAlloc(Renderer* renderer, Texture* texture, void* imageBuffer, size_t size);
+internal void Batch3DFlush(Renderer* renderer);
+internal void Batch2DFlush(Renderer* renderer);
+internal void Batch2DRect(Renderer* renderer, v2 topLeft, v2 bottomRight, Texture* texture, v2 textureTopLeft,
+                          v2 textureBottomRight, v4 tintColor = white);
+
+void RendererInit(Renderer* renderer, OpenGL* gl, PlatformAPI* platform)
 {
-    RenderCommandQueue* queue = &opengl->commandQueue;
+    renderer->gl       = gl;
+    renderer->platform = platform;
+    Arena* arena       = &renderer->arena;
 
-    queue->pushBufferBase = opengl->commandQueueBufferMemory;
-    queue->pushBufferPtr  = queue->pushBufferBase;
-    queue->pushBufferSize = sizeof(opengl->commandQueueBufferMemory);
+    TextureQueueClear(renderer);
 
-    return queue;
+    // Batch3D
+    {
+        renderer->batch3D       = PushStruct(arena, Batch3D);
+        Batch3D* batch          = renderer->batch3D;
+        batch->maxVertexCount   = 32768;
+        batch->vertexCount      = 0;
+        batch->vertexBufferBase = PushArray(arena, batch->maxVertexCount, ColorVertex);
+        batch->vertexBufferPtr  = batch->vertexBufferBase;
+
+        size_t vertexSize = sizeof(ColorVertex);
+        GPUBufferInit(renderer, &batch->buffer);
+        GPUBufferVBOAlloc(renderer, &batch->buffer, 0, vertexSize * batch->maxVertexCount, vertexSize, GL_DYNAMIC_DRAW);
+        GPUBufferVertexAttrib(renderer, &batch->buffer, 0, 3, GL_FLOAT, vertexSize, offsetof(ColorVertex, position));
+        GPUBufferVertexAttrib(renderer, &batch->buffer, 1, 4, GL_FLOAT, vertexSize, offsetof(ColorVertex, color));
+
+        FileReadResult debugVs = platform->FileReadEntire("../src/shaders/debug.vert");
+        FileReadResult debugFs = platform->FileReadEntire("../src/shaders/debug.frag");
+
+        ProgramInit(renderer, &batch->program);
+        ProgramAttachShader(renderer, &batch->program, (char*)debugVs.content, debugVs.contentSize, GL_VERTEX_SHADER);
+        ProgramAttachShader(renderer, &batch->program, (char*)debugFs.content, debugFs.contentSize, GL_FRAGMENT_SHADER);
+        ProgramBuild(renderer, &batch->program);
+
+        platform->FileFree(debugVs.content);
+        platform->FileFree(debugFs.content);
+    }
+
+    // Batch2D
+    {
+        renderer->batch2D = PushStruct(arena, Batch2D);
+        Batch2D* batch    = renderer->batch2D;
+
+        batch->maxVertexCount   = 2048;
+        batch->maxIndexCount    = batch->maxVertexCount * 6;
+        batch->vertexCount      = 0;
+        batch->indexCount       = 0;
+        batch->vertexBufferBase = PushArray(arena, batch->maxVertexCount, BatchVertex);
+        batch->indexBufferBase  = PushArray(arena, batch->maxIndexCount, u32);
+        batch->vertexBufferPtr  = batch->vertexBufferBase;
+        batch->indexBufferPtr   = batch->indexBufferBase;
+
+        Program* program = &batch->program;
+
+        FileReadResult vsFile = platform->FileReadEntire("../src/shaders/batch.vert");
+        FileReadResult fsFile = platform->FileReadEntire("../src/shaders/batch.frag");
+
+        ProgramInit(renderer, program);
+        ProgramAttachShader(renderer, program, (char*)vsFile.content, vsFile.contentSize, GL_VERTEX_SHADER);
+        ProgramAttachShader(renderer, program, (char*)fsFile.content, fsFile.contentSize, GL_FRAGMENT_SHADER);
+        ProgramBuild(renderer, program);
+
+        platform->FileFree(vsFile.content);
+        platform->FileFree(fsFile.content);
+
+        size_t vertexSize = sizeof(BatchVertex);
+
+        GPUBuffer* buffer = &batch->buffer;
+
+        GPUBufferInit(renderer, buffer);
+        GPUBufferVBOAlloc(renderer, buffer, 0, vertexSize * batch->maxVertexCount, vertexSize, GL_DYNAMIC_DRAW);
+        GPUBufferEBOAlloc(renderer, buffer, 0, sizeof(u32) * batch->maxIndexCount, sizeof(u32), GL_DYNAMIC_DRAW);
+        GPUBufferVertexAttrib(renderer, buffer, 0, 3, GL_FLOAT, vertexSize, offsetof(BatchVertex, position));
+        GPUBufferVertexAttrib(renderer, buffer, 1, 2, GL_FLOAT, vertexSize, offsetof(BatchVertex, uv));
+        GPUBufferVertexAttrib(renderer, buffer, 2, 4, GL_FLOAT, vertexSize, offsetof(BatchVertex, color));
+        GPUBufferVertexAttrib(renderer, buffer, 3, 1, GL_INT, vertexSize, offsetof(BatchVertex, textureIndex));
+
+        u32 pixels = 0xFFFFFFFF;
+        gl->GenTextures(1, &renderer->whiteTexture.id);
+        gl->BindTexture(GL_TEXTURE_2D, renderer->whiteTexture.id);
+        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &pixels);
+    }
 }
 
-void RendererFrameEnd(OpenGL* opengl)
+void RendererFrameBegin(Renderer* renderer, mat4x4 viewProj)
 {
-    RenderCommandQueue* queue = &opengl->commandQueue;
+    RenderCommandQueue* queue = &renderer->commandQueue;
 
-    opengl->glEnable(GL_DEPTH_TEST);
+    queue->pushBufferBase = renderer->commandQueueMemory;
+    queue->pushBufferPtr  = queue->pushBufferBase;
+    queue->pushBufferSize = sizeof(renderer->commandQueueMemory);
 
-    // opengl->glPolygonMode(GL_FRONT_AND_BACK , GL_LINE);
-    opengl->glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    renderer->viewProj = viewProj;
+}
+
+void RendererFrameEnd(Renderer* renderer)
+{
+    RenderCommandQueue* queue    = &renderer->commandQueue;
+    OpenGL*             gl       = renderer->gl;
+    PlatformAPI*        platform = renderer->platform;
+
+    gl->Enable(GL_DEPTH_TEST);
+
+    // gl->PolygonMode(GL_FRONT_AND_BACK , GL_LINE);
+    // gl->PolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 #pragma warning(push)
 #pragma warning(disable : 4456)
@@ -38,26 +138,26 @@ void RendererFrameEnd(OpenGL* opengl)
             command += sizeof(FramebufferClear);
             FramebufferClear* command = (FramebufferClear*)payload;
 
-            opengl->glClearColor(command->color.r, command->color.g, command->color.b, 1.0f);
-            opengl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            gl->ClearColor(command->color.r, command->color.g, command->color.b, 1.0f);
+            gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             break;
         }
         case RenderCommandType_GeometryBufferDraw:
         {
             command += sizeof(GeometryBufferDraw);
             GeometryBufferDraw* command = (GeometryBufferDraw*)payload;
-            GeometryBuffer*     buffer  = &command->buffer;
+            GPUBuffer*          buffer  = &command->buffer;
 
-            opengl->glBindVertexArray(buffer->VAO);
+            gl->BindVertexArray(buffer->VAO);
 
             // Indexed
             if (buffer->indexCount > 0)
             {
-                opengl->glDrawElements(buffer->primitive, buffer->indexCount, GL_UNSIGNED_INT, 0);
+                gl->DrawElements(command->primitive, buffer->indexCount, GL_UNSIGNED_INT, 0);
             }
             else
             {
-                opengl->glDrawArrays(buffer->primitive, 0, buffer->vertexCount);
+                gl->DrawArrays(command->primitive, 0, buffer->vertexCount);
             }
             break;
         }
@@ -66,7 +166,7 @@ void RendererFrameEnd(OpenGL* opengl)
             command += sizeof(ProgramUse);
             ProgramUse* command = (ProgramUse*)payload;
 
-            opengl->glUseProgram(command->program.id);
+            gl->UseProgram(command->program.id);
             break;
         }
         case RenderCommandType_ProgramUploadUniform:
@@ -74,34 +174,34 @@ void RendererFrameEnd(OpenGL* opengl)
             command += sizeof(ProgramUploadUniform);
             ProgramUploadUniform* command = (ProgramUploadUniform*)payload;
 
-            GLint loc = opengl->glGetUniformLocation(command->programId, command->name);
+            GLint loc = gl->GetUniformLocation(command->programId, command->name);
             if (loc != -1)
             {
                 switch (command->type)
                 {
                 case UniformType_Mat4x4:
                 {
-                    opengl->glUniformMatrix4fv(loc, 1, GL_FALSE, &command->mat4x4.ptr[0]);
+                    gl->UniformMatrix4fv(loc, 1, GL_FALSE, &command->mat4x4.ptr[0]);
                     break;
                 }
                 case UniformType_Int:
                 {
-                    opengl->glUniform1i(loc, command->integer);
+                    gl->Uniform1i(loc, command->integer);
                     break;
                 }
                 case UniformType_IntArray:
                 {
-                    opengl->glUniform1iv(loc, command->count, command->integerArray);
+                    gl->Uniform1iv(loc, command->count, command->integerArray);
                     break;
                 }
                 case UniformType_Vec3:
                 {
-                    opengl->glUniform3fv(loc, 1, &command->vec3.x);
+                    gl->Uniform3fv(loc, 1, &command->vec3.x);
                     break;
                 }
                 case UniformType_Vec4:
                 {
-                    opengl->glUniform4fv(loc, 1, &command->vec4.x);
+                    gl->Uniform4fv(loc, 1, &command->vec4.x);
                     break;
                 }
                     InvalidDefaultCase;
@@ -109,7 +209,7 @@ void RendererFrameEnd(OpenGL* opengl)
             }
             else
             {
-                Log("Uniform '%s' not found in program '%d'", command->name, command->programId);
+                platform->Logf("Uniform '%s' not found in program '%d'", command->name, command->programId);
             }
 
             break;
@@ -118,6 +218,18 @@ void RendererFrameEnd(OpenGL* opengl)
         }
     }
 #pragma warning(pop)
+
+    // Batch3D
+    if (renderer->batch3D->vertexCount > 0)
+    {
+        Batch3DFlush(renderer);
+    }
+
+    // Batch2D
+    if (renderer->batch2D->vertexCount > 0 || renderer->batch2D->indexCount > 0)
+    {
+        Batch2DFlush(renderer);
+    }
 }
 
 #define PushRenderCommand(queue, type) (type*)PushRenderCommand_(queue, sizeof(type), RenderCommandType_##type)
@@ -144,34 +256,34 @@ inline void* PushRenderCommand_(RenderCommandQueue* queue, size_t size, RenderCo
     return result;
 }
 
-inline void PushRenderProgramUse(RenderCommandQueue* queue, GLuint programId)
+inline void PushRenderProgramUse(Renderer* renderer, GLuint programId)
 {
-    ProgramUse* command = PushRenderCommand(queue, ProgramUse);
+    ProgramUse* command = PushRenderCommand(&renderer->commandQueue, ProgramUse);
     command->program.id = programId;
 }
 
-inline void PushRenderUploadUniformMat4x4(RenderCommandQueue* queue, GLuint programId, const char* name, mat4x4 mat4)
+inline void PushRenderUploadUniformMat4x4(Renderer* renderer, GLuint programId, const char* name, mat4x4 mat4)
 {
-    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
     command->programId = programId;
     command->mat4x4    = mat4;
     command->type      = UniformType_Mat4x4;
 }
 
-inline void PushRenderUploadUniformInt(RenderCommandQueue* queue, GLuint programId, const char* name, int integer)
+inline void PushRenderUploadUniformInt(Renderer* renderer, GLuint programId, const char* name, int integer)
 {
-    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
     command->programId = programId;
     command->integer   = integer;
     command->type      = UniformType_Int;
 }
 
-inline void PushRenderUploadUniformIntArray(RenderCommandQueue* queue, GLuint programId, const char* name, int* array,
+inline void PushRenderUploadUniformIntArray(Renderer* renderer, GLuint programId, const char* name, int* array,
                                             int count)
 {
-    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
     command->programId    = programId;
     command->integerArray = array;
@@ -179,133 +291,402 @@ inline void PushRenderUploadUniformIntArray(RenderCommandQueue* queue, GLuint pr
     command->type         = UniformType_IntArray;
 }
 
-inline void PushRenderUploadUniformVec3(RenderCommandQueue* queue, GLuint programId, const char* name, v3 vec3)
+inline void PushRenderUploadUniformVec3(Renderer* renderer, GLuint programId, const char* name, v3 vec3)
 {
-    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
     command->programId = programId;
     command->vec3      = vec3;
     command->type      = UniformType_Vec3;
 }
 
-inline void PushRenderUploadUniformVec4(RenderCommandQueue* queue, GLuint programId, const char* name, v4 vec4)
+inline void PushRenderUploadUniformVec4(Renderer* renderer, GLuint programId, const char* name, v4 vec4)
 {
-    ProgramUploadUniform* command = PushRenderCommand(queue, ProgramUploadUniform);
+    ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
     command->programId = programId;
     command->vec4      = vec4;
     command->type      = UniformType_Vec4;
 }
 
-inline void PushRenderDrawBuffer(RenderCommandQueue* queue, GeometryBuffer* buffer)
+inline void PushRenderDrawBuffer(Renderer* renderer, GPUBuffer* buffer, GLenum primitive = GL_TRIANGLES)
 {
-    GeometryBufferDraw* command = PushRenderCommand(queue, GeometryBufferDraw);
+    GeometryBufferDraw* command = PushRenderCommand(&renderer->commandQueue, GeometryBufferDraw);
     command->buffer             = *buffer;
+    command->primitive          = primitive;
 }
 
-void GeometryBufferInit(OpenGL* opengl, GeometryBuffer* buffer, GLenum primitive)
+internal void Batch3DFlush(Renderer* renderer)
 {
-    opengl->glGenVertexArrays(1, &buffer->VAO);
+    Batch3D* batch       = renderer->batch3D;
+    OpenGL*  gl          = renderer->gl;
+    GLint    viewProjLoc = gl->GetUniformLocation(batch->program.id, "viewProj");
+
+    GPUBufferVBOSubdata(renderer, &batch->buffer, batch->vertexBufferBase, sizeof(ColorVertex) * batch->vertexCount);
+
+    gl->LineWidth(2.0f);
+    gl->Enable(GL_DEPTH_TEST);
+    gl->UseProgram(batch->program.id);
+    gl->UniformMatrix4fv(viewProjLoc, 1, GL_FALSE, &renderer->viewProj.e[0][0]);
+    gl->BindVertexArray(batch->buffer.VAO);
+    gl->DrawArrays(GL_LINES, 0, batch->vertexCount);
+
+    batch->vertexBufferPtr = batch->vertexBufferBase;
+    batch->vertexCount     = 0;
+}
+
+void DrawLine(Renderer* renderer, v3 p0, v3 p1, v4 color)
+{
+    u32 lineVertices = 2;
+
+    Batch3D* batch3D = renderer->batch3D;
+    if (batch3D->vertexCount + lineVertices > batch3D->maxVertexCount)
+    {
+        Batch3DFlush(renderer);
+    }
+
+    // Start
+    batch3D->vertexBufferPtr->position = p0;
+    batch3D->vertexBufferPtr->color    = color;
+    batch3D->vertexBufferPtr++;
+    // End
+    batch3D->vertexBufferPtr->position = p1;
+    batch3D->vertexBufferPtr->color    = color;
+    batch3D->vertexBufferPtr++;
+
+    batch3D->vertexCount += lineVertices;
+}
+
+internal void Batch2DFlush(Renderer* renderer)
+{
+    Batch2D* batch     = renderer->batch2D;
+    OpenGL*  gl        = renderer->gl;
+    v2u      windowDim = renderer->platform->WindowGetDimension();
+    mat4x4   view2D    = Orthographic(0, (f32)windowDim.w, (f32)windowDim.h, 0);
+
+    GPUBufferVBOSubdata(renderer, &batch->buffer, batch->vertexBufferBase, sizeof(BatchVertex) * batch->vertexCount);
+    GPUBufferEBOSubdata(renderer, &batch->buffer, batch->indexBufferBase, sizeof(u32) * batch->indexCount);
+
+    GLint viewProjLoc     = gl->GetUniformLocation(batch->program.id, "viewProj");
+    GLint textureArrayLoc = gl->GetUniformLocation(batch->program.id, "textureArray");
+
+    gl->UseProgram(batch->program.id);
+    gl->Disable(GL_DEPTH_TEST);
+    gl->Enable(GL_BLEND);
+    gl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    TextureQueueBind(renderer, textureArrayLoc);
+    gl->UniformMatrix4fv(viewProjLoc, 1, GL_FALSE, &view2D.e[0][0]);
+    gl->BindVertexArray(batch->buffer.VAO);
+    gl->DrawElements(GL_TRIANGLES, batch->indexCount, GL_UNSIGNED_INT, 0);
+
+    batch->vertexBufferPtr = batch->vertexBufferBase;
+    batch->indexBufferPtr  = batch->indexBufferBase;
+    batch->vertexCount     = 0;
+    batch->indexCount      = 0;
+    TextureQueueClear(renderer);
+}
+
+internal void Batch2DRect(Renderer* renderer, v2 position, v2 size, Texture* texture, v2 texturePosition,
+                          v2 textureSize, v4 tintColor)
+{
+    Batch2D* batch = renderer->batch2D;
+
+    if ((batch->vertexCount + RECT_VERTEX_COUNT > batch->maxVertexCount) ||
+        (batch->indexCount + RECT_INDEX_COUNT > batch->maxIndexCount) ||
+        renderer->textureQueue.count == MAX_TEXTURE_COUNT)
+    {
+        Batch2DFlush(renderer);
+    }
+
+    u32 textureIndex = TextureQueueAppend(renderer, texture);
+
+    u32 rectIndices[] = { 0, 1, 2, 0, 2, 3 };
+    for (u32 index = 0; index < RECT_INDEX_COUNT; index++)
+    {
+        *batch->indexBufferPtr = rectIndices[index] + batch->vertexCount;
+        batch->indexBufferPtr++;
+
+        batch->indexCount++;
+    }
+
+    f32 textureW = (1.0f / texture->width) * textureSize.x;
+    f32 textureH = (1.0f / texture->height) * textureSize.y;
+    f32 textureX = (1.0f / texture->width) * texturePosition.x;
+    f32 textureY = (1.0f / texture->height) * texturePosition.y;
+
+    // Top-right
+    batch->vertexBufferPtr->position     = { position.x + size.x, position.y };
+    batch->vertexBufferPtr->uv           = { textureX + textureW, textureY };
+    batch->vertexBufferPtr->color        = tintColor;
+    batch->vertexBufferPtr->textureIndex = textureIndex;
+    batch->vertexBufferPtr++;
+    // Bottom-right
+    batch->vertexBufferPtr->position     = { position.x + size.x, position.y + size.y };
+    batch->vertexBufferPtr->uv           = { textureX + textureW, textureY + textureH };
+    batch->vertexBufferPtr->color        = tintColor;
+    batch->vertexBufferPtr->textureIndex = textureIndex;
+    batch->vertexBufferPtr++;
+    // Bottom-left
+    batch->vertexBufferPtr->position     = { position.x, position.y + size.y };
+    batch->vertexBufferPtr->uv           = { textureX, textureY + textureH };
+    batch->vertexBufferPtr->color        = tintColor;
+    batch->vertexBufferPtr->textureIndex = textureIndex;
+    batch->vertexBufferPtr++;
+    // Top-left
+    batch->vertexBufferPtr->position     = { position.x, position.y };
+    batch->vertexBufferPtr->uv           = { textureX, textureY };
+    batch->vertexBufferPtr->color        = tintColor;
+    batch->vertexBufferPtr->textureIndex = textureIndex;
+    batch->vertexBufferPtr++;
+
+    batch->vertexCount += 4;
+}
+
+void DrawRect(Renderer* renderer, v2 position, v2 size, Texture* texture, v2 texturePosition, v2 textureSize)
+{
+    Batch2DRect(renderer, position, size, texture, texturePosition, textureSize);
+}
+
+void DrawText(Renderer* renderer, char* text, v2 position, v4 color, f32 scale)
+{
+    Batch2D* batch = renderer->batch2D;
+
+    size_t textLength      = strlen(text);
+    u32    textVertexCount = (u32)textLength * RECT_VERTEX_COUNT;
+    u32    textIndexCount  = (u32)textLength * RECT_INDEX_COUNT;
+
+    if ((batch->vertexCount + textVertexCount > batch->maxVertexCount) ||
+        (batch->indexCount + textIndexCount > batch->maxIndexCount))
+    {
+        Assert(0);
+    }
+
+    v2 rectTopLeft{ 0.0f, 0.0f };
+    rectTopLeft += position;
+
+    while (*text)
+    {
+        TTFGlyph* ttfChar = &renderer->ttfChars[*text++ - TTF_FIRST_GLYPH_OFFSET];
+
+        rectTopLeft.x += (ttfChar->xoff * scale);
+        rectTopLeft.y = position.y + (ttfChar->yoff * scale);
+        v2 rectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) * scale,
+                            ((f32)ttfChar->y1 - (f32)ttfChar->y0) * scale };
+
+        v2 subrectTopLeft{ (f32)ttfChar->x0 + ttfChar->s0, (f32)ttfChar->y0 + ttfChar->t0 };
+        v2 subrectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) - ttfChar->s1,
+                               ((f32)ttfChar->y1 - (f32)ttfChar->y0) - ttfChar->t1 };
+
+        Batch2DRect(renderer, rectTopLeft, rectBottomRight, &renderer->glyphAtlas, subrectTopLeft, subrectBottomRight,
+                    color);
+        rectTopLeft.x += (ttfChar->xadvance * scale);
+    }
+}
+
+void RendererTTFLoad(Renderer* renderer, char* filename)
+{
+    PlatformAPI* platform = renderer->platform;
+    Arena*       arena    = &renderer->arena;
+    OpenGL*      gl       = renderer->gl;
+
+    FileReadResult fontFile = platform->FileReadEntire(filename);
+    if (fontFile.contentSize > 0)
+    {
+        stbtt_fontinfo fontInfo   = { 0 };
+        u8*            fontBuffer = (u8*)fontFile.content;
+
+        if (stbtt_InitFont(&fontInfo, fontBuffer, 0))
+        {
+            int fontAtlasWidth  = 1024;
+            int fontAtlasHeight = 1024;
+            f32 fontSize        = 64.0f;
+            // TODO: (Temporal arenas) Free bitmap after allocating texture
+            u8* bitmapFontBuffer = PushArray(arena, fontAtlasWidth * fontAtlasHeight, u8);
+
+            stbtt_pack_context packCtx;
+            stbtt_packedchar   packedChars[TTF_GLYPH_COUNT];
+
+            stbtt_PackBegin(&packCtx, bitmapFontBuffer, fontAtlasWidth, fontAtlasHeight, 0, 1, 0);
+            stbtt_PackFontRange(&packCtx, fontBuffer, 0, fontSize, TTF_FIRST_GLYPH_OFFSET, TTF_GLYPH_COUNT,
+                                packedChars);
+            stbtt_PackEnd(&packCtx);
+
+            for (u32 charIndex = 0; charIndex < TTF_GLYPH_COUNT; charIndex++)
+            {
+                f32 x, y;
+
+                stbtt_aligned_quad alignedQuad;
+                stbtt_GetPackedQuad(packedChars, fontAtlasWidth, fontAtlasHeight, (int)charIndex, &x, &y, &alignedQuad,
+                                    0);
+
+                TTFGlyph* ttfChar = &renderer->ttfChars[charIndex];
+                ttfChar->x0       = packedChars[charIndex].x0;
+                ttfChar->y0       = packedChars[charIndex].y0;
+                ttfChar->x1       = packedChars[charIndex].x1;
+                ttfChar->y1       = packedChars[charIndex].y1;
+                ttfChar->xoff     = packedChars[charIndex].xoff;
+                ttfChar->yoff     = packedChars[charIndex].yoff;
+                ttfChar->xadvance = packedChars[charIndex].xadvance;
+                ttfChar->s0       = alignedQuad.s0;
+                ttfChar->t0       = alignedQuad.t0;
+                ttfChar->s1       = alignedQuad.s1;
+                ttfChar->t1       = alignedQuad.t1;
+            }
+
+            platform->FileFree(fontFile.content);
+
+            gl->GenTextures(1, &renderer->glyphAtlas.id);
+            gl->BindTexture(GL_TEXTURE_2D, renderer->glyphAtlas.id);
+            gl->TexImage2D(GL_TEXTURE_2D, 0, GL_R8, (GLsizei)fontAtlasWidth, (GLsizei)fontAtlasHeight, 0, GL_RED,
+                           GL_UNSIGNED_BYTE, (void*)bitmapFontBuffer);
+            GLint swizzleMask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
+            gl->TexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            renderer->glyphAtlas.width  = (u32)fontAtlasWidth;
+            renderer->glyphAtlas.height = (u32)fontAtlasHeight;
+        }
+        else
+        {
+            platform->Logf("Unable to init .ttf font");
+            Assert(0);
+        }
+    }
+    else
+    {
+        platform->Logf("Unable to load font: '%s'", filename);
+        Assert(0);
+    }
+}
+
+void GPUBufferInit(Renderer* renderer, GPUBuffer* buffer)
+{
+    renderer->gl->GenVertexArrays(1, &buffer->VAO);
 
     buffer->VBO         = 0;
     buffer->EBO         = 0;
     buffer->vertexCount = 0;
     buffer->indexCount  = 0;
-    buffer->primitive   = primitive;
 }
 
-void GeometryBufferVBOAlloc(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size, size_t vertexSize,
-                            GLenum usage)
+void GPUBufferVBOAlloc(Renderer* renderer, GPUBuffer* buffer, void* data, size_t size, size_t vertexSize, GLenum usage)
 {
+    OpenGL* gl          = renderer->gl;
     buffer->vertexCount = (u32)(size / vertexSize);
-
-    opengl->glGenBuffers(1, &buffer->VBO);
-    opengl->glBindVertexArray(buffer->VAO);
-    opengl->glBindBuffer(GL_ARRAY_BUFFER, buffer->VBO);
-    opengl->glBufferData(GL_ARRAY_BUFFER, (GLsizei)size, data, usage);
+    gl->GenBuffers(1, &buffer->VBO);
+    gl->BindVertexArray(buffer->VAO);
+    gl->BindBuffer(GL_ARRAY_BUFFER, buffer->VBO);
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizei)size, data, usage);
 }
 
-void GeometryBufferVBOSubdata(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size)
+void GPUBufferVBOSubdata(Renderer* renderer, GPUBuffer* buffer, void* data, size_t size)
 {
-    opengl->glBindVertexArray(buffer->VAO);
-    opengl->glBindBuffer(GL_ARRAY_BUFFER, buffer->VBO);
-    opengl->glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
+    OpenGL* gl = renderer->gl;
+    gl->BindVertexArray(buffer->VAO);
+    gl->BindBuffer(GL_ARRAY_BUFFER, buffer->VBO);
+    gl->BufferSubData(GL_ARRAY_BUFFER, 0, size, data);
 }
 
-void GeometryBufferEBOAlloc(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size, size_t indexSize,
-                            GLenum usage)
+void GPUBufferEBOAlloc(Renderer* renderer, GPUBuffer* buffer, void* data, size_t size, size_t indexSize, GLenum usage)
 {
+    OpenGL* gl         = renderer->gl;
     buffer->indexCount = (u32)(size / indexSize);
-
-    opengl->glGenBuffers(1, &buffer->EBO);
-    opengl->glBindVertexArray(buffer->VAO);
-    opengl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer->EBO);
-    opengl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizei)size, data, usage);
+    gl->GenBuffers(1, &buffer->EBO);
+    gl->BindVertexArray(buffer->VAO);
+    gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer->EBO);
+    gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizei)size, data, usage);
 }
 
-void GeometryBufferEBOSubdata(OpenGL* opengl, GeometryBuffer* buffer, void* data, size_t size)
+void GPUBufferEBOSubdata(Renderer* renderer, GPUBuffer* buffer, void* data, size_t size)
 {
-    opengl->glBindVertexArray(buffer->VAO);
-    opengl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer->EBO);
-    opengl->glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, size, data);
+    OpenGL* gl = renderer->gl;
+    gl->BindVertexArray(buffer->VAO);
+    gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer->EBO);
+    gl->BufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, size, data);
 }
 
-void GeometryBufferVertexAttrib(OpenGL* opengl, GeometryBuffer* buffer, u32 index, u32 componentCount, GLenum type,
-                                size_t stride, size_t offset)
+void GPUBufferVertexAttrib(Renderer* renderer, GPUBuffer* buffer, u32 index, u32 componentCount, GLenum type,
+                           size_t stride, size_t offset)
 {
-    opengl->glBindVertexArray(buffer->VAO);
+    OpenGL* gl = renderer->gl;
+    gl->BindVertexArray(buffer->VAO);
     if (type == GL_BYTE || type == GL_UNSIGNED_BYTE || type == GL_SHORT || type == GL_UNSIGNED_SHORT ||
         type == GL_INT || type == GL_UNSIGNED_INT)
     {
-        opengl->glVertexAttribIPointer((GLuint)index, (GLint)componentCount, type, (GLsizei)stride, (void*)offset);
+        gl->VertexAttribIPointer((GLuint)index, (GLint)componentCount, type, (GLsizei)stride, (void*)offset);
     }
     else
     {
-        opengl->glVertexAttribPointer((GLuint)index, (GLint)componentCount, type, false, (GLsizei)stride,
-                                      (void*)offset);
+        gl->VertexAttribPointer((GLuint)index, (GLint)componentCount, type, false, (GLsizei)stride, (void*)offset);
     }
-    opengl->glEnableVertexAttribArray((GLuint)index);
+    gl->EnableVertexAttribArray((GLuint)index);
 }
 
-void ProgramInit(OpenGL* opengl, Program* program) { program->id = opengl->glCreateProgram(); }
+void ProgramInit(Renderer* renderer, Program* program) { program->id = renderer->gl->CreateProgram(); }
 
-void ProgramAttachShader(OpenGL* opengl, Program* program, char* source, size_t length, GLenum type)
+void ProgramAttachShader(Renderer* renderer, Program* program, char* source, size_t length, GLenum type)
 {
-    GLuint shader     = opengl->glCreateShader(type);
+    OpenGL*      gl       = renderer->gl;
+    PlatformAPI* platform = renderer->platform;
+
+    GLuint shader     = gl->CreateShader(type);
     GLint  sourceSize = (GLint)length;
-    opengl->glShaderSource(shader, 1, &source, &sourceSize);
-    opengl->glCompileShader(shader);
+    gl->ShaderSource(shader, 1, &source, &sourceSize);
+    gl->CompileShader(shader);
 
     GLint ok;
-    opengl->glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    gl->GetShaderiv(shader, GL_COMPILE_STATUS, &ok);
     if (!ok)
     {
         char infoBuffer[512];
-        opengl->glGetShaderInfoLog(shader, sizeof(infoBuffer), NULL, infoBuffer);
-        Log("OpenGL compiling shader: '%s'", infoBuffer);
+        gl->GetShaderInfoLog(shader, sizeof(infoBuffer), NULL, infoBuffer);
+        platform->Logf("OpenGL compiling shader: '%s'", infoBuffer);
         Assert(0);
     }
 
-    opengl->glAttachShader(program->id, shader);
+    gl->AttachShader(program->id, shader);
 }
 
-void ProgramBuild(OpenGL* opengl, Program* program)
+void ProgramBuild(Renderer* renderer, Program* program)
 {
-    opengl->glLinkProgram(program->id);
+    OpenGL*      gl       = renderer->gl;
+    PlatformAPI* platform = renderer->platform;
+
+    gl->LinkProgram(program->id);
 
     GLint ok;
-    opengl->glGetProgramiv(program->id, GL_LINK_STATUS, &ok);
+    gl->GetProgramiv(program->id, GL_LINK_STATUS, &ok);
     if (!ok)
     {
         char infoBuffer[512];
-        opengl->glGetProgramInfoLog(program->id, sizeof(infoBuffer), NULL, infoBuffer);
-        Log("OpenGL linking program: '%s'", infoBuffer);
+        gl->GetProgramInfoLog(program->id, sizeof(infoBuffer), NULL, infoBuffer);
+        platform->Logf("OpenGL linking program: '%s'", infoBuffer);
         Assert(0);
     }
 }
 
-void TextureAlloc(OpenGL* opengl, Texture* texture, void* imageBuffer, size_t size)
+void TextureInit(Renderer* renderer, Texture* texture, char* filename)
 {
+    PlatformAPI* platform = renderer->platform;
+
+    FileReadResult file = platform->FileReadEntire(filename);
+    if (file.content)
+    {
+        TextureAlloc(renderer, texture, file.content, file.contentSize);
+        platform->FileFree(file.content);
+    }
+    else
+    {
+        platform->Logf("Unable to load texture: '%s'", filename);
+        Assert(0);
+    }
+}
+
+internal void TextureAlloc(Renderer* renderer, Texture* texture, void* imageBuffer, size_t size)
+{
+    OpenGL*      gl       = renderer->gl;
+    PlatformAPI* platform = renderer->platform;
+
     int width;
     int height;
     int numChannels;
@@ -341,15 +722,66 @@ void TextureAlloc(OpenGL* opengl, Texture* texture, void* imageBuffer, size_t si
             InvalidDefaultCase;
         }
 
-        opengl->glGenTextures(1, &texture->id);
-        opengl->glBindTexture(GL_TEXTURE_2D, texture->id);
-        opengl->glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, (GLsizei)width, (GLsizei)height, 0, format, type,
-                             pixels);
-        opengl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        opengl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        gl->GenTextures(1, &texture->id);
+        gl->BindTexture(GL_TEXTURE_2D, texture->id);
+        gl->TexImage2D(GL_TEXTURE_2D, 0, internalFormat, (GLsizei)width, (GLsizei)height, 0, format, type, pixels);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     }
     else
     {
         Assert(0);
+    }
+}
+
+internal void TextureQueueClear(Renderer* renderer)
+{
+    TextureQueue* queue = &renderer->textureQueue;
+
+    memset(queue->ids, INVALID_TEXTURE, sizeof(u32) * ArrayCount(queue->ids));
+    queue->count  = 1;
+    queue->ids[0] = renderer->whiteTexture.id;
+}
+
+internal u32 TextureQueueAppend(Renderer* renderer, Texture* texture)
+{
+    TextureQueue* queue = &renderer->textureQueue;
+
+    // Queue texture
+    u32 textureIndex = 0;
+    for (u32 queueTextureIndex = 0; queueTextureIndex < ArrayCount(queue->ids); queueTextureIndex++)
+    {
+        // Already queued
+        if (queue->ids[queueTextureIndex] == texture->id)
+        {
+            textureIndex = queueTextureIndex;
+            break;
+        }
+        // Empty slot
+        else if (queue->ids[queueTextureIndex] == INVALID_TEXTURE)
+        {
+            textureIndex = queueTextureIndex;
+            queue->count++;
+            break;
+        }
+    }
+    queue->ids[textureIndex] = texture->id;
+
+    return textureIndex;
+}
+
+internal void TextureQueueBind(Renderer* renderer, GLint arrayUniformLoc)
+{
+    Assert(arrayUniformLoc != -1);
+
+    OpenGL*       gl                              = renderer->gl;
+    TextureQueue* queue                           = &renderer->textureQueue;
+    int           textureArray[MAX_TEXTURE_COUNT] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+
+    gl->Uniform1iv(arrayUniformLoc, MAX_TEXTURE_COUNT, textureArray);
+    for (u32 textureIndex = 0; textureIndex < queue->count; textureIndex++)
+    {
+        gl->ActiveTexture(GL_TEXTURE0 + textureIndex);
+        gl->BindTexture(GL_TEXTURE_2D, queue->ids[textureIndex]);
     }
 }

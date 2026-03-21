@@ -209,10 +209,9 @@ internal MaterialLineType MaterialGetLineType(char* lineBuf)
     }
 }
 
-internal void ObjParseMaterialFile(ObjMaterial* material, char* filename, PlatformFileReadEntire* fileRead,
-                                   PlatformFileFree* fileFree)
+internal void ObjParseMaterialFile(ObjMaterial* material, char* filename, PlatformAPI* platform)
 {
-    FileReadResult materialFile = fileRead(filename);
+    FileReadResult materialFile = platform->FileReadEntire(filename);
     if (materialFile.contentSize > 0)
     {
         u8* beginCursor = (u8*)materialFile.content;
@@ -287,7 +286,7 @@ internal void ObjParseMaterialFile(ObjMaterial* material, char* filename, Platfo
             beginCursor = cursor;
         }
 
-        fileFree(materialFile.content);
+        platform->FileFree(materialFile.content);
     }
     else
     {
@@ -295,11 +294,10 @@ internal void ObjParseMaterialFile(ObjMaterial* material, char* filename, Platfo
     }
 }
 
-Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRead, PlatformFileFree* fileFree,
-                PlatformLog* logf, Arena* arena)
+Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformAPI* platform, Arena* arena)
 {
-    logf("------------------------------------------------------------");
-    logf("Reading obj file");
+    platform->Logf("------------------------------------------------------------");
+    platform->Logf("Reading obj file");
 
     Obj result = { 0 };
 
@@ -310,11 +308,11 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRea
     result.faces     = PushArray(arena, result.faceCount, ObjFace);
     result.materials = PushArray(arena, result.materialCount, ObjMaterial);
 
-    logf("Vertex   count: %d", result.positionCount);
-    logf("Normal   count: %d", result.normalCount);
-    logf("UV       count: %d", result.uvCount);
-    logf("Face     count: %d", result.faceCount);
-    logf("Material count: %d", result.materialCount);
+    platform->Logf("Vertex   count: %d", result.positionCount);
+    platform->Logf("Normal   count: %d", result.normalCount);
+    platform->Logf("UV       count: %d", result.uvCount);
+    platform->Logf("Face     count: %d", result.faceCount);
+    platform->Logf("Material count: %d", result.materialCount);
 
     u8* beginCursor   = (u8*)objBuf;
     u8* cursor        = beginCursor;
@@ -430,7 +428,7 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRea
             strcat(materialFilepath, materialFileBuf);
 
             ObjMaterial* material = &result.materials[materialIndex++];
-            ObjParseMaterialFile(material, materialFilepath, fileRead, fileFree);
+            ObjParseMaterialFile(material, materialFilepath, platform);
             break;
         }
             DefaultCase;
@@ -442,7 +440,7 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformFileReadEntire* fileRea
         lineCount++;
         beginCursor = cursor;
     }
-    logf("------------------------------------------------------------");
+    platform->Logf("------------------------------------------------------------");
 
     return result;
 }
@@ -459,8 +457,10 @@ internal u32 FindVertexIndex(ObjIndex* index, ObjIndex* indices, u32 indexCount)
     return UNKNOWN_VERTEX_INDEX;
 }
 
-void ObjInitGeometryBuffer(Obj* obj, Arena* arena, OpenGL* opengl, GeometryBuffer* buffer)
+void ObjInitGeometryBuffer(Obj* obj, Arena* arena, Renderer* renderer, GPUBuffer* buffer)
 {
+    OpenGL* gl = renderer->gl;
+
     u32 maxVertices = obj->faceCount * 3;
     u32 maxIndices  = obj->faceCount * 3;
 
@@ -514,11 +514,11 @@ void ObjInitGeometryBuffer(Obj* obj, Arena* arena, OpenGL* opengl, GeometryBuffe
     size_t vertexSize = sizeof(Vertex);
     size_t indexSize  = sizeof(u32);
 
-    GeometryBufferInit(opengl, buffer, GL_TRIANGLES);
-    GeometryBufferVBOAlloc(opengl, buffer, vertexs, vertexSize * vertexCount, vertexSize, GL_STATIC_DRAW);
-    GeometryBufferEBOAlloc(opengl, buffer, indices, indexSize * indexCount, indexSize, GL_STATIC_DRAW);
+    GPUBufferInit(renderer, buffer);
+    GPUBufferVBOAlloc(renderer, buffer, vertexs, vertexSize * vertexCount, vertexSize, GL_STATIC_DRAW);
+    GPUBufferEBOAlloc(renderer, buffer, indices, indexSize * indexCount, indexSize, GL_STATIC_DRAW);
 
-    GeometryBufferVertexAttrib(opengl, buffer, 0, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, position));
-    GeometryBufferVertexAttrib(opengl, buffer, 1, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, normal));
-    GeometryBufferVertexAttrib(opengl, buffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
+    GPUBufferVertexAttrib(renderer, buffer, 0, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, position));
+    GPUBufferVertexAttrib(renderer, buffer, 1, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, normal));
+    GPUBufferVertexAttrib(renderer, buffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
 }

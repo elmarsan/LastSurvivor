@@ -1,0 +1,55 @@
+#pragma once
+
+#include <gl/glcorearb.h>
+
+struct OpenGL
+{
+    PFNGLENABLEPROC                  Enable;
+    PFNGLDISABLEPROC                 Disable;
+    PFNGLCLEARCOLORPROC              ClearColor;
+    PFNGLCLEARPROC                   Clear;
+    PFNGLDRAWARRAYSPROC              DrawArrays;
+    PFNGLDRAWELEMENTSPROC            DrawElements;
+    PFNGLLINEWIDTHPROC               LineWidth;
+    PFNGLPOLYGONMODEPROC             PolygonMode;
+    PFNGLGENTEXTURESPROC             GenTextures;
+    PFNGLBINDTEXTUREPROC             BindTexture;
+    PFNGLTEXIMAGE2DPROC              TexImage2D;
+    PFNGLTEXPARAMETERIPROC           TexParameteri;
+    PFNGLTEXPARAMETERIVPROC          TexParameteriv;
+    PFNGLBLENDFUNCPROC               BlendFunc;
+    PFNGLCREATEPROGRAMPROC           CreateProgram;
+    PFNGLCREATESHADERPROC            CreateShader;
+    PFNGLATTACHSHADERPROC            AttachShader;
+    PFNGLDELETESHADERPROC            DeleteShader;
+    PFNGLLINKPROGRAMPROC             LinkProgram;
+    PFNGLDELETEPROGRAMPROC           DeleteProgram;
+    PFNGLSHADERSOURCEPROC            ShaderSource;
+    PFNGLUSEPROGRAMPROC              UseProgram;
+    PFNGLGETSHADERIVPROC             GetShaderiv;
+    PFNGLGETSHADERINFOLOGPROC        GetShaderInfoLog;
+    PFNGLCOMPILESHADERPROC           CompileShader;
+    PFNGLGETPROGRAMIVPROC            GetProgramiv;
+    PFNGLGETPROGRAMINFOLOGPROC       GetProgramInfoLog;
+    PFNGLGENBUFFERSPROC              GenBuffers;
+    PFNGLGENVERTEXARRAYSPROC         GenVertexArrays;
+    PFNGLBINDBUFFERPROC              BindBuffer;
+    PFNGLBINDVERTEXARRAYPROC         BindVertexArray;
+    PFNGLBUFFERDATAPROC              BufferData;
+    PFNGLBUFFERSUBDATAPROC           BufferSubData;
+    PFNGLDELETEBUFFERSPROC           DeleteBuffers;
+    PFNGLENABLEVERTEXATTRIBARRAYPROC EnableVertexAttribArray;
+    PFNGLVERTEXATTRIBPOINTERPROC     VertexAttribPointer;
+    PFNGLVERTEXATTRIBIPOINTERPROC    VertexAttribIPointer;
+    PFNGLDELETEVERTEXARRAYSPROC      DeleteVertexArrays;
+    PFNGLACTIVETEXTUREPROC           ActiveTexture;
+    PFNGLGENERATEMIPMAPPROC          GenerateMipmap;
+    PFNGLGETUNIFORMLOCATIONPROC      GetUniformLocation;
+    PFNGLUNIFORMMATRIX4FVPROC        UniformMatrix4fv;
+    PFNGLUNIFORM1IPROC               Uniform1i;
+    PFNGLUNIFORM1UIPROC              Uniform1ui;
+    PFNGLUNIFORM1FVPROC              Uniform1fv;
+    PFNGLUNIFORM3FVPROC              Uniform3fv;
+    PFNGLUNIFORM4FVPROC              Uniform4fv;
+    PFNGLUNIFORM1IVPROC              Uniform1iv;
+};
