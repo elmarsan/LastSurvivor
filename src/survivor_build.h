@@ -2,12 +2,13 @@
 
 struct SnapCandidate
 {
-    Entity* entity;
-    v3      from;
-    v3      to;
+    Entity*   entity;
+    glm::vec3 from;
+    glm::vec3 to;
 };
 
-void          BuildDragObstacle(Entity* obstacle, Camera* camera, mat4x4 projection, v2u windowDim, v2u screenCoordPos);
+void          BuildDragObstacle(Entity* obstacle, Camera* camera, glm::mat4 projection, glm::uvec2 windowDim,
+                                glm::uvec2 screenCoordPos);
 void          BuildRotateObstacle(Entity* obstacle, b32 counterclockwise);
 void          BuildSnapObstacles(World* world, Entity* a, SnapCandidate* snapCandidate);
 SnapCandidate BuildFindSnapCandidate(World* world, Entity* obstacle);

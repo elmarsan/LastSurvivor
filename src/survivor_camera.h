@@ -2,13 +2,13 @@
 
 struct Camera
 {
-    v3  position;
-    v3  target;
-    v3  up;
-    f32 pitch;
-    f32 yaw;
-    f32 fov;
-    b32 topDownMode;
+    glm::vec3 position;
+    glm::vec3 target;
+    glm::vec3 up;
+    f32       pitch;
+    f32       yaw;
+    f32       fov;
+    b32       topDownMode;
 };
 
 internal void _CameraUpdateVectors(Camera* camera)
@@ -18,21 +18,22 @@ internal void _CameraUpdateVectors(Camera* camera)
         camera->target.x = cosf(Radians(camera->yaw)) * cosf(Radians(camera->pitch));
         camera->target.y = sinf(Radians(camera->pitch));
         camera->target.z = sinf(Radians(camera->yaw)) * cosf(Radians(camera->pitch));
-        camera->target   = Norm(camera->target);
+        camera->target   = SafeNorm(camera->target);
 
-        v3 worldUp = { 0.0f, 1.0f, 0.0f };
-        v3 right   = Norm(Cross(camera->target, worldUp));
-        v3 up      = Norm(Cross(right, camera->target));
+        glm::vec3 worldUp{ 0.0f, 1.0f, 0.0f };
+        glm::vec3 right = SafeNorm(glm::cross(camera->target, worldUp));
+        glm::vec3 up    = SafeNorm(glm::cross(right, camera->target));
 
         camera->up = up;
     }
 }
 
-inline void CameraInit(Camera* camera, v3 position, v3 target, v3 up, f32 pitch, f32 yaw, f32 fov)
+inline void CameraInit(Camera* camera, glm::vec3 position, glm::vec3 target, glm::vec3 up, f32 pitch, f32 yaw, f32 fov)
 {
     camera->position    = position;
     camera->target      = target;
     camera->pitch       = pitch;
+    camera->up          = up;
     camera->yaw         = yaw;
     camera->fov         = fov;
     camera->topDownMode = false;
@@ -58,15 +59,15 @@ inline void CameraMoveBackward(Camera* camera, f32 delta)
 
 inline void CameraMoveLeft(Camera* camera, f32 delta)
 {
-    f32 velocity = cameraSpeed * delta;
-    v3  right    = Norm(Cross(camera->target, camera->up));
+    f32       velocity = cameraSpeed * delta;
+    glm::vec3 right    = SafeNorm(glm::cross(camera->target, camera->up));
     camera->position += right * velocity;
 }
 
 inline void CameraMoveRight(Camera* camera, f32 delta)
 {
-    f32 velocity = cameraSpeed * delta;
-    v3  right    = Norm(Cross(camera->target, camera->up));
+    f32       velocity = cameraSpeed * delta;
+    glm::vec3 right    = SafeNorm(glm::cross(camera->target, camera->up));
     camera->position -= right * velocity;
 }
 
@@ -83,22 +84,25 @@ inline void CameraSetYaw(Camera* camera, f32 yaw)
 }
 
 // TODO: Make topDown position configurable
-inline v3 CameraPosition(Camera* camera) { return camera->topDownMode ? v3{ 0.0f, 40.0f, 0.0f } : camera->position; }
-
-inline mat4x4 CameraView(Camera* camera)
+inline glm::vec3 CameraPosition(Camera* camera)
 {
-    v3 target   = camera->target;
-    v3 up       = camera->up;
-    v3 position = CameraPosition(camera);
+    return camera->topDownMode ? glm::vec3{ 0.0f, 40.0f, 0.0f } : camera->position;
+}
+
+inline glm::mat4 CameraView(Camera* camera)
+{
+    glm::vec3 target   = camera->target;
+    glm::vec3 up       = camera->up;
+    glm::vec3 position = CameraPosition(camera);
     if (camera->topDownMode)
     {
-        v3 forward{ 0.0f, 0.0f, -1.0f };
+        glm::vec3 forward{ 0.0f, 0.0f, -1.0f };
 
         target = { 0.0f, -1.0f, 0.0f };
         up     = forward;
     }
 
-    return LookAt(position, position + target, up);
+    return glm::lookAt(position, position + target, up);
 }
 
 inline void CameraToggleTopDownMode(Camera* camera) { camera->topDownMode = !camera->topDownMode; }

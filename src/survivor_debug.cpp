@@ -1,14 +1,14 @@
-internal void DebugDrawPlane(Renderer* renderer, v3 position, v3 size, v4 color);
-internal void DebugDrawCircle(Renderer* renderer, v3 position, f32 radius, v4 color, u32 pointCount = 32);
-internal void DebugDrawAABB(Renderer* renderer, v3 worldPosition, f32 yRotation, AABB aabb, v4 color);
+internal void DebugDrawPlane(Renderer* renderer, glm::vec3 position, glm::vec3 size, glm::vec4 color);
+internal void DebugDrawCircle(Renderer* renderer, glm::vec3 position, f32 radius, glm::vec4 color, u32 pointCount = 32);
+internal void DebugDrawAABB(Renderer* renderer, glm::vec3 worldPosition, f32 yRotation, AABB aabb, glm::vec4 color);
 
-internal void DebugDrawPlane(Renderer* renderer, v3 position, v3 size, v4 color)
+internal void DebugDrawPlane(Renderer* renderer, glm::vec3 position, glm::vec3 size, glm::vec4 color)
 {
-    v3 halfSize = size * 0.5f;
-    v3 topRight{ position.x - halfSize.x, position.y, position.z - halfSize.z };
-    v3 topLeft{ position.x + halfSize.x, position.y, position.z - halfSize.z };
-    v3 bottomRight{ position.x - halfSize.x, position.y, position.z + halfSize.z };
-    v3 bottomLeft{ position.x + halfSize.x, position.y, position.z + halfSize.z };
+    glm::vec3 halfSize = size * 0.5f;
+    glm::vec3 topRight{ position.x - halfSize.x, position.y, position.z - halfSize.z };
+    glm::vec3 topLeft{ position.x + halfSize.x, position.y, position.z - halfSize.z };
+    glm::vec3 bottomRight{ position.x - halfSize.x, position.y, position.z + halfSize.z };
+    glm::vec3 bottomLeft{ position.x + halfSize.x, position.y, position.z + halfSize.z };
 
     DrawLine(renderer, topRight, topLeft, color);
     DrawLine(renderer, bottomRight, bottomLeft, color);
@@ -16,7 +16,7 @@ internal void DebugDrawPlane(Renderer* renderer, v3 position, v3 size, v4 color)
     DrawLine(renderer, topLeft, bottomLeft, color);
 }
 
-internal void DebugDrawCircle(Renderer* renderer, v3 position, f32 radius, v4 color, u32 pointCount)
+internal void DebugDrawCircle(Renderer* renderer, glm::vec3 position, f32 radius, glm::vec4 color, u32 pointCount)
 {
     f32 angleStep = 360.0f / pointCount;
 
@@ -30,30 +30,30 @@ internal void DebugDrawCircle(Renderer* renderer, v3 position, f32 radius, v4 co
         f32 x1 = radius * cos(Radians(angle1));
         f32 z1 = radius * sin(Radians(angle1));
 
-        v3 p0 = position + v3{ x0, 0.0f, z0 };
-        v3 p1 = position + v3{ x1, 0.0f, z1 };
+        glm::vec3 p0 = position + glm::vec3{ x0, 0.0f, z0 };
+        glm::vec3 p1 = position + glm::vec3{ x1, 0.0f, z1 };
 
         DrawLine(renderer, p0, p1, color);
     }
 }
 
-internal void DebugDrawGridCell(Renderer* renderer, cell_index cell, v4 color)
+internal void DebugDrawGridCell(Renderer* renderer, cell_index cell, glm::vec4 color)
 {
     s32 minCol = -(GRID_COLS / 2);
     s32 minRow = -(GRID_ROWS / 2);
     s32 row    = CELL_ROW(cell);
     s32 col    = CELL_COL(cell);
 
-    v3 cellHalfExtent = { CELL_HALF, 0.0f, CELL_HALF };
-    v3 worldPosition{ (col + minRow) + cellHalfExtent.x, 0.02f, (f32) - (row + minCol) - cellHalfExtent.z };
+    glm::vec3 cellHalfExtent = { CELL_HALF, 0.0f, CELL_HALF };
+    glm::vec3 worldPosition{ (col + minRow) + cellHalfExtent.x, 0.02f, (f32) - (row + minCol) - cellHalfExtent.z };
 
     DebugDrawPlane(renderer, worldPosition, cellHalfExtent * 2.0f, color);
 }
 
-internal void DebugDrawAABB(Renderer* renderer, v3 worldPosition, f32 yRotation, AABB aabb, v4 color)
+internal void DebugDrawAABB(Renderer* renderer, glm::vec3 worldPosition, f32 yRotation, AABB aabb, glm::vec4 color)
 {
     // clang-format off
-    v3 vertices[8] = {
+    glm::vec3 vertices[8] = {
         { aabb.min.x, aabb.min.y, aabb.min.z }, // 0
         { aabb.min.x, aabb.min.y, aabb.max.z }, // 1
         { aabb.min.x, aabb.max.y, aabb.min.z }, // 2
@@ -71,15 +71,15 @@ internal void DebugDrawAABB(Renderer* renderer, v3 worldPosition, f32 yRotation,
     };
     // clang-format on
 
-    mat4x4 translate = Translate(Identity(), worldPosition);
-    mat4x4 rotate    = Rotate(Identity(), yRotation, { 0.0f, 1.0f, 0.0f });
-    mat4x4 model     = translate * rotate;
+    glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, worldPosition);
+    glm::mat4 rotate    = glm::rotate(glm::mat4{ 1.0f }, yRotation, { 0.0f, 1.0f, 0.0f });
+    glm::mat4 model     = translate * rotate;
 
-    v3 worldVertices[8];
+    glm::vec3 worldVertices[8];
     for (u32 vertexIndex = 0; vertexIndex < 8; vertexIndex++)
     {
-        v4 p  = { vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z, 1.0f };
-        v4 wp = model * p;
+        glm::vec4 p  = { vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z, 1.0f };
+        glm::vec4 wp = model * p;
 
         worldVertices[vertexIndex] = { wp.x, wp.y, wp.z };
     }
@@ -87,8 +87,8 @@ internal void DebugDrawAABB(Renderer* renderer, v3 worldPosition, f32 yRotation,
     // Draw lines
     for (u32 index = 0; index < 24; index += 2)
     {
-        v3 p0 = worldVertices[indices[index]];
-        v3 p1 = worldVertices[indices[index + 1]];
+        glm::vec3 p0 = worldVertices[indices[index]];
+        glm::vec3 p1 = worldVertices[indices[index + 1]];
 
         DrawLine(renderer, p0, p1, color);
     }
@@ -99,17 +99,17 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
     GameState*     state         = debug->state;
     Renderer*      renderer      = state->renderer;
     World*         world         = state->world;
-    v2u            windowDim     = platform->WindowGetDimension();
+    glm::uvec2     windowDim     = platform->WindowGetDimension();
     Camera*        camera        = state->camera;
-    mat4x4         projection    = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
-    mat4x4         view          = CameraView(camera);
+    glm::mat4      projection    = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
+    glm::mat4      view          = CameraView(camera);
     EntityManager* entityManager = state->entityManager;
     Entity*        player        = &entityManager->entities[0];
     Mouse*         mouse         = &input->mouse;
 
     if (ButtonIsPressed(mouse->middle))
     {
-        v3 mousePoint            = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+        glm::vec3 mousePoint     = WorldMousePicking(camera, projection, windowDim, mouse->pos);
         debug->selectedCellIndex = WorldPositionToGridCell(mousePoint);
     }
 
@@ -148,7 +148,7 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
 
                 if (nodeCell != CELL_EMPTY)
                 {
-                    v3 nodePos = WorldGridCellToPosition(nodeCell);
+                    glm::vec3 nodePos = WorldGridCellToPosition(nodeCell);
                     DebugDrawGridCell(renderer, nodeCell, green);
 
 // Select cell edges
@@ -160,7 +160,7 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
                             for (auto edgeIndex : world->edges[nodeIndex])
                             {
                                 cell_index dstCell    = world->nodes[edgeIndex];
-                                v3         dstNodePos = WorldGridCellToPosition(dstCell);
+                                glm::vec3  dstNodePos = WorldGridCellToPosition(dstCell);
                                 nodePos.y             = 0.1f;
                                 dstNodePos.y          = 0.1f;
                                 DrawLine(renderer, nodePos, dstNodePos, magenta);
@@ -173,7 +173,7 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
                         for (auto edgeIndex : world->edges[nodeIndex])
                         {
                             cell_index dstCell    = world->nodes[edgeIndex];
-                            v3         dstNodePos = WorldGridCellToPosition(dstCell);
+                            glm::vec3         dstNodePos = WorldGridCellToPosition(dstCell);
                             nodePos.y             = 0.1f;
                             dstNodePos.y          = 0.1f;                            
 							DrawLine(renderer, nodePos, dstNodePos, magenta);
@@ -194,8 +194,8 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
             cell_index playerCellIndex = WorldPositionToGridCell(player->position);
             cell_index nodeIndex       = 468;
 
-            v3 playerCellCenter = WorldGridCellToPosition(playerCellIndex);
-            v3 nodeCenter       = WorldGridCellToPosition(nodeIndex);
+            glm::vec3 playerCellCenter = WorldGridCellToPosition(playerCellIndex);
+            glm::vec3 nodeCenter       = WorldGridCellToPosition(nodeIndex);
 
             DrawLine(renderer, playerCellCenter, nodeCenter, red);
         }
@@ -205,7 +205,7 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
     //  {
     //      if (ButtonIsDown(mouse->left))
     //      {
-    //          v3 end = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+    //          glm::vec3 end = WorldMousePicking(camera, projection, windowDim, mouse->pos);
 
     //          // DebugDrawLine(state->debug, opengl, player->position, end, green);
     //          DrawLine(renderer, player->position, end, green);
@@ -219,9 +219,9 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
 
         // Entity rotation
         {
-            v3 lookAt{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
-            v3 p0{ entity->position.x, entity->aabb.max.y, entity->position.z };
-            v3 p1 = p0 + (lookAt * 1.5f);
+            glm::vec3 lookAt{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
+            glm::vec3 p0{ entity->position.x, entity->aabb.max.y, entity->position.z };
+            glm::vec3 p1 = p0 + (lookAt * 1.5f);
 
             DrawLine(renderer, p0, p1, blue);
         }
@@ -239,8 +239,8 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
                 EntityWorldCorners worldCorners = EntityGetWorldCorners(entity);
                 for (u32 cornerIndex = 0; cornerIndex < ArrayCount(worldCorners.arr); cornerIndex++)
                 {
-                    v3 snapPoint = worldCorners.arr[cornerIndex];
-                    snapPoint.y  = 0.0f;
+                    glm::vec3 snapPoint = worldCorners.arr[cornerIndex];
+                    snapPoint.y         = 0.0f;
 
                     DebugDrawPlane(renderer, snapPoint, { CELL_SIZE, 0.0f, CELL_SIZE }, yellow);
                 }
@@ -264,8 +264,8 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
                 {
                     for (u32 i = 0; i < path.size() - 1; i++)
                     {
-                        v3 start = WorldGridCellToPosition(path[i]);
-                        v3 end   = WorldGridCellToPosition(path[i + 1]);
+                        glm::vec3 start = WorldGridCellToPosition(path[i]);
+                        glm::vec3 end   = WorldGridCellToPosition(path[i + 1]);
 
                         start.y = 0.01f;
                         end.y   = 0.01f;

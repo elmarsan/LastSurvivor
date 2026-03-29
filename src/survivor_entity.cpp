@@ -1,17 +1,18 @@
 EntityWorldCorners EntityGetWorldCorners(Entity* entity)
 {
-    v3 localCorners[4] = {
+    glm::vec3 localCorners[4] = {
         { entity->aabb.min.x, 0.0f, entity->aabb.min.z }, // Top-left
         { entity->aabb.max.x, 0.0f, entity->aabb.min.z }, // Top-right
         { entity->aabb.min.x, 0.0f, entity->aabb.max.z }, // Bottom-left
         { entity->aabb.max.x, 0.0f, entity->aabb.max.z }, // Bottom-right
     };
 
-    EntityWorldCorners worldCorners = { 0 };
+    // EntityWorldCorners worldCorners = { 0 };
+    EntityWorldCorners worldCorners{};
 
     for (u32 cornerIndex = 0; cornerIndex < ArrayCount(localCorners); cornerIndex++)
     {
-        v3 rotatedCorner = RotateVec3Y(localCorners[cornerIndex], entity->yaw);
+        glm::vec3 rotatedCorner = glm::rotateY(localCorners[cornerIndex], entity->yaw);
 
         worldCorners.arr[cornerIndex] = {
             entity->position.x + rotatedCorner.x, //
@@ -27,8 +28,8 @@ EntityCellCorners EntityGetCellCorners(Entity* entity)
 {
     EntityWorldCorners worldCorners = EntityGetWorldCorners(entity);
 
-    v3 min = worldCorners.arr[0];
-    v3 max = worldCorners.arr[0];
+    glm::vec3 min = worldCorners.arr[0];
+    glm::vec3 max = worldCorners.arr[0];
     for (u32 cornerIndex = 1; cornerIndex < 4; cornerIndex++)
     {
         min.x = Min(min.x, worldCorners.arr[cornerIndex].x);
@@ -73,7 +74,7 @@ EntityCellCorners EntityGetCellCorners(Entity* entity)
 
 internal AABB EntityWorldAABB(Entity* entity)
 {
-    AABB result = { 0 };
+    AABB result;
 
     if (entity->type == EntityType_Obstacle)
     {
@@ -111,7 +112,7 @@ internal AABB EntityWorldAABB(Entity* entity)
 
         for (u32 cornerIndex = 1; cornerIndex < ArrayCount(corners.arr); cornerIndex++)
         {
-            v3 p = corners.arr[cornerIndex];
+            glm::vec3 p = corners.arr[cornerIndex];
 
             result.min.x = Min(result.min.x, p.x);
             result.min.z = Min(result.min.z, p.z);

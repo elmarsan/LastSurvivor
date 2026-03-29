@@ -5,43 +5,43 @@ internal void WorldAddTempNode(World* world, EntityManager* entityManager, Entit
 internal void WorldPopTempNodes(World* world);
 internal b32  WorldIsCellValidForEntity(World* world, cell_index cellIndex, Entity* entity);
 
-v3 WorldMousePicking(Camera* camera, mat4x4 projection, v2u windowDim, v2u mouse)
+glm::vec3 WorldMousePicking(Camera* camera, glm::mat4 projection, glm::uvec2 windowDim, glm::uvec2 mouse)
 {
-    f32 screenWidth  = (f32)windowDim.w;
-    f32 screenHeight = (f32)windowDim.h;
+    f32 screenWidth  = (f32)windowDim.x;
+    f32 screenHeight = (f32)windowDim.y;
     f32 mouseX       = (f32)mouse.x;
     f32 mouseY       = (f32)mouse.y;
 
-    mat4x4 inverseProjection = Inverse(projection);
-    mat4x4 inverseView       = Inverse(CameraView(camera));
+    glm::mat4 inverseProjection = glm::inverse(projection);
+    glm::mat4 inverseView       = glm::inverse(CameraView(camera));
 
     // Viewport -> NDC
-    v3 rayNdc = { 0 };
-    rayNdc.x  = (2.0f * mouseX) / screenWidth - 1.0f;
-    rayNdc.y  = 1.0f - (2.0f * mouseY) / screenHeight;
+    glm::vec3 rayNdc;
+    rayNdc.x = (2.0f * mouseX) / screenWidth - 1.0f;
+    rayNdc.y = 1.0f - (2.0f * mouseY) / screenHeight;
 
     // NDC -> Clip
-    v4 rayClip{ rayNdc.x, rayNdc.y, -1.0f, 1.0f };
+    glm::vec4 rayClip{ rayNdc.x, rayNdc.y, -1.0f, 1.0f };
 
     // Clip -> View
-    v4 rayView = inverseProjection * rayClip;
-    rayView.z  = -1.0f;
-    rayView.w  = 0;
+    glm::vec4 rayView = inverseProjection * rayClip;
+    rayView.z         = -1.0f;
+    rayView.w         = 0;
 
     // View -> World
-    v4 rayWorld4 = inverseView * rayView;
-    v3 rayWorld{ rayWorld4.x, rayWorld4.y, rayWorld4.z };
-    rayWorld = Norm(rayWorld);
+    glm::vec4 rayWorld4 = inverseView * rayView;
+    glm::vec3 rayWorld{ rayWorld4.x, rayWorld4.y, rayWorld4.z };
+    rayWorld = SafeNorm(rayWorld);
 
     // Intersection with world plane
-    v3  camPos = CameraPosition(camera);
-    f32 t      = -(camPos.y / rayWorld.y);
-    v3  point  = camPos + rayWorld * t;
+    glm::vec3 camPos = CameraPosition(camera);
+    f32       t      = -(camPos.y / rayWorld.y);
+    glm::vec3 point  = camPos + rayWorld * t;
 
     return point;
 }
 
-b32 WorldIsPositionInBounds(v3 position)
+b32 WorldIsPositionInBounds(glm::vec3 position)
 {
     // Left limit
     if (position.x < GRID_LEFT_LIMIT)
@@ -314,13 +314,13 @@ std::vector<cell_index> WorldFindBestPath(World* world, EntityManager* entityMan
 
 internal void WorldComputeNodeEdges(World* world, EntityManager* manager, EntityType nodeType, u32 targetNodeIndex)
 {
-    v3 nodeAPos = WorldGridCellToPosition(world->nodes[targetNodeIndex]);
+    glm::vec3 nodeAPos = WorldGridCellToPosition(world->nodes[targetNodeIndex]);
 
     for (u32 nodeIndex = 0; nodeIndex < world->nodes.size(); nodeIndex++)
     {
         if (world->nodes[targetNodeIndex] != world->nodes[nodeIndex])
         {
-            v3 nodeBPos = WorldGridCellToPosition(world->nodes[nodeIndex]);
+            glm::vec3 nodeBPos = WorldGridCellToPosition(world->nodes[nodeIndex]);
 
             b32 intersectEntity = false;
             for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
@@ -436,10 +436,10 @@ internal f32 WorldGetMovementCost(cell_index from, cell_index to)
 
 internal f32 WorldHeuristicLength(cell_index from, cell_index to)
 {
-    v3 fromPos = WorldGridCellToPosition(from);
-    v3 toPos   = WorldGridCellToPosition(to);
+    glm::vec3 fromPos = WorldGridCellToPosition(from);
+    glm::vec3 toPos   = WorldGridCellToPosition(to);
 
-    return Length(toPos - fromPos);
+    return glm::length(toPos - fromPos);
 }
 
 internal b32 WorldIsCellValidForEntity(World* world, cell_index cellIndex, Entity* entity)

@@ -4,7 +4,7 @@ smooth in vec2  uv;
 smooth in vec4  color;
 flat   in int   textureIndex;
 
-uniform sampler2D textureArray[3];
+uniform sampler2D textureArray[16];
 
 out vec4 FragColor;
 

@@ -1,6 +1,7 @@
-void BuildDragObstacle(Entity* obstacle, Camera* camera, mat4x4 projection, v2u windowDim, v2u screenCoordPos)
+void BuildDragObstacle(Entity* obstacle, Camera* camera, glm::mat4 projection, glm::uvec2 windowDim,
+                       glm::uvec2 screenCoordPos)
 {
-    v3 newPosition = WorldMousePicking(camera, projection, windowDim, screenCoordPos);
+    glm::vec3 newPosition = WorldMousePicking(camera, projection, windowDim, screenCoordPos);
 
     f32 halfWidth = (obstacle->aabb.max.x - obstacle->aabb.min.x) * 0.5f;
     f32 halfDepth = (obstacle->aabb.max.z - obstacle->aabb.min.z) * 0.5f;
@@ -70,7 +71,7 @@ SnapCandidate BuildFindSnapCandidate(World* world, Entity* obstacle)
 
     for (u32 aCornerIndex = 0; aCornerIndex < ArrayCount(worldCorners.arr); aCornerIndex++)
     {
-        v3         aCornerPos = worldCorners.arr[aCornerIndex];
+        glm::vec3  aCornerPos = worldCorners.arr[aCornerIndex];
         cell_index cell       = WorldPositionToGridCell(aCornerPos);
         if (!WorldIsValidCellIndex(cell))
         {
@@ -103,9 +104,9 @@ SnapCandidate BuildFindSnapCandidate(World* world, Entity* obstacle)
 
                     for (u32 bCornerIndex = 0; bCornerIndex < ArrayCount(bWorldCorners.arr); bCornerIndex++)
                     {
-                        v3 bCornerPos = bWorldCorners.arr[bCornerIndex];
+                        glm::vec3 bCornerPos = bWorldCorners.arr[bCornerIndex];
 
-                        f32 dist = Length(aCornerPos - bCornerPos);
+                        f32 dist = glm::length(aCornerPos - bCornerPos);
                         if (dist <= CELL_SIZE && dist < minSnapDistance)
                         {
                             minSnapDistance = dist;
@@ -139,8 +140,8 @@ void BuildSnapObstacles(World* world, Entity* a, SnapCandidate* snapCandidate)
     f32 aHalfDepth  = aDepth * 0.5f;
     f32 bHalfDepth  = bDepth * 0.5f;
 
-    v3 oldPosition = a->position;
-    v3 newPosition = a->position;
+    glm::vec3 oldPosition = a->position;
+    glm::vec3 newPosition = a->position;
 
     // Vertical to vertical
     if (aIsVertical && bIsVertical)
@@ -248,7 +249,7 @@ void BuildSnapObstacles(World* world, Entity* a, SnapCandidate* snapCandidate)
 
         for (u32 cornerIndex = 0; cornerIndex < ArrayCount(corners.arr); cornerIndex++)
         {
-            v3 cornerPos = corners.arr[cornerIndex];
+            glm::vec3 cornerPos = corners.arr[cornerIndex];
 
             if (!(cornerPos.x >= GRID_LEFT_LIMIT && cornerPos.x <= GRID_RIGHT_LIMIT) ||
                 !(cornerPos.z <= GRID_BOTTOM_LIMIT && cornerPos.z >= GRID_TOP_LIMIT))

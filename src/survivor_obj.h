@@ -23,14 +23,14 @@ union ObjFace
 
 struct ObjMaterial
 {
-    char name[64];
-    char diffuseMap[256];
-    v3   ambient;
-    v3   diffuse;
-    v3   specular;
-    f32  specularExponent;
-    f32  disolve;
-    u32  illumModel;
+    char      name[64];
+    char      diffuseMap[256];
+    glm::vec3 ambient;
+    glm::vec3 diffuse;
+    glm::vec3 specular;
+    f32       specularExponent;
+    f32       disolve;
+    u32       illumModel;
 };
 
 struct Obj
@@ -40,9 +40,9 @@ struct Obj
     u32          uvCount;
     u32          faceCount;
     u32          materialCount;
-    v3*          positions;
-    v3*          normals;
-    v2*          uvs;
+    glm::vec3*   positions;
+    glm::vec3*   normals;
+    glm::vec2*   uvs;
     ObjFace*     faces;
     ObjMaterial* materials;
     AABB         aabb;

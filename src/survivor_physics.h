@@ -4,14 +4,14 @@
 // https://www.yosoygames.com.ar/wp/2013/07/good-bye-axisalignedbox-hello-aabb/
 struct AABB
 {
-    v3 min;
-    v3 max;
+    glm::vec3 min;
+    glm::vec3 max;
 };
 
 struct Ray
 {
-    v3 origin;
-    v3 dir;
+    glm::vec3 origin;
+    glm::vec3 dir;
 };
 
 struct Rect
@@ -29,20 +29,20 @@ inline b32 AABBRayIntersection(AABB aabb, Ray ray)
 
     for (int d = 0; d < 3; d++)
     {
-        if (ray.dir.e[d] == 0.0f)
+        if (ray.dir[d] == 0.0f)
         {
             // Ray is parallel to slab
-            if (ray.origin.e[d] < aabb.min.e[d] || ray.origin.e[d] > aabb.max.e[d])
+            if (ray.origin[d] < aabb.min[d] || ray.origin[d] > aabb.max[d])
             {
                 return false;
             }
         }
         else
         {
-            f64 invD = 1.0 / ray.dir.e[d];
+            f64 invD = 1.0 / ray.dir[d];
 
-            f64 t1 = (aabb.min.e[d] - ray.origin.e[d]) * invD;
-            f64 t2 = (aabb.max.e[d] - ray.origin.e[d]) * invD;
+            f64 t1 = (aabb.min[d] - ray.origin[d]) * invD;
+            f64 t2 = (aabb.max[d] - ray.origin[d]) * invD;
 
             tmin = Max(tmin, Min(t1, t2));
             tmax = Min(tmax, Max(t1, t2));
@@ -55,29 +55,29 @@ inline b32 AABBRayIntersection(AABB aabb, Ray ray)
     return true;
 }
 
-inline b32 AABBSegmentIntersection(AABB aabb, v3 p0, v3 p1)
+inline b32 AABBSegmentIntersection(AABB aabb, glm::vec3 p0, glm::vec3 p1)
 {
-    v3 dir = p1 - p0;
+    glm::vec3 dir = p1 - p0;
 
     f64 tmin = 0.0;
     f64 tmax = 1.0;
 
     for (int d = 0; d < 3; d++)
     {
-        if (dir.e[d] == 0.0)
+        if (dir[d] == 0.0)
         {
             // Segment parallel to slab
-            if (p0.e[d] < aabb.min.e[d] || p0.e[d] > aabb.max.e[d])
+            if (p0[d] < aabb.min[d] || p0[d] > aabb.max[d])
             {
                 return false;
             }
         }
         else
         {
-            f64 invD = 1.0 / dir.e[d];
+            f64 invD = 1.0 / dir[d];
 
-            f64 t1 = (aabb.min.e[d] - p0.e[d]) * invD;
-            f64 t2 = (aabb.max.e[d] - p0.e[d]) * invD;
+            f64 t1 = (aabb.min[d] - p0[d]) * invD;
+            f64 t2 = (aabb.max[d] - p0[d]) * invD;
 
             f64 tNear = Min(t1, t2);
             f64 tFar  = Max(t1, t2);
@@ -136,7 +136,7 @@ inline b32 AABBIntersectionXZ(AABB a, AABB b)
     return true;
 }
 
-inline AABB AABBToWorld(AABB local, v3 pos)
+inline AABB AABBToWorld(AABB local, glm::vec3 pos)
 {
     AABB world;
     world.min = local.min + pos;

@@ -39,16 +39,16 @@ struct GPUBuffer
 
 struct BatchVertex
 {
-    v3  position;
-    v2  uv;
-    v4  color;
-    u32 textureIndex;
+    glm::vec3 position;
+    glm::vec2 uv;
+    glm::vec4 color;
+    u32       textureIndex;
 };
 
 struct ColorVertex
 {
-    v3 position;
-    v4 color;
+    glm::vec3 position;
+    glm::vec4 color;
 };
 
 struct Batch2D
@@ -98,7 +98,7 @@ struct Renderer
     OpenGL*      gl;
     Batch3D*     batch3D;
     Batch2D*     batch2D;
-    mat4x4       viewProj;
+    glm::mat4    viewProj;
     TextureQueue textureQueue;
     // TODO: Rethink who owns the font atlas
     TTFGlyph ttfChars[TTF_GLYPH_COUNT];
@@ -123,7 +123,7 @@ struct RenderCommandHeader
 
 struct FramebufferClear
 {
-    v3 color;
+    glm::vec3 color;
 };
 
 struct GeometryBufferDraw
@@ -153,10 +153,10 @@ struct ProgramUploadUniform
     UniformType type;
     union
     {
-        mat4x4 mat4x4;
-        int    integer;
-        v3     vec3;
-        v4     vec4;
+        glm::mat4x4 mat4x4;
+        int         integer;
+        glm::vec3   vec3;
+        glm::vec4   vec4;
         struct
         {
             int* integerArray;
@@ -167,7 +167,7 @@ struct ProgramUploadUniform
 //  ----------------------------------------------------------------------------
 
 void RendererInit(Renderer* renderer, OpenGL* opengl, PlatformAPI* platform);
-void RendererFrameBegin(Renderer* renderer, mat4x4 viewProj);
+void RendererFrameBegin(Renderer* renderer, glm::mat4 viewProj);
 void RendererFrameEnd(Renderer* renderer);
 void RendererTTFLoad(Renderer* renderer, char* filename);
 
@@ -185,7 +185,8 @@ void ProgramBuild(Renderer* renderer, Program* program);
 
 void TextureInit(Renderer* renderer, Texture* texture, char* filename);
 
-void DrawLine(Renderer* renderer, v3 p0, v3 p1, v4 color);
-void DrawRect(Renderer* renderer, v2 position, v2 size, Texture* texture, v2 texturePosition, v2 textureSize);
+void DrawLine(Renderer* renderer, glm::vec3 p0, glm::vec3 p1, glm::vec4 color);
+void DrawRect(Renderer* renderer, glm::vec2 position, glm::vec2 size, Texture* texture, glm::vec2 texturePosition,
+              glm::vec2 textureSize);
 // TODO: Font scaling
-void DrawText(Renderer* renderer, char* text, v2 position, v4 color, f32 scale = 1.0f);
+void DrawText(Renderer* renderer, char* text, glm::vec2 position, glm::vec4 color, f32 scale = 1.0f);

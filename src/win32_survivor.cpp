@@ -136,12 +136,12 @@ internal PLATFORM_FILE_FREE(Win32FileFree)
 
 internal PLATFORM_WINDOW_GET_DIMENSION(Win32WindowGetDimension)
 {
-    v2u result;
+    glm::uvec2 result;
 
     RECT rect;
     GetClientRect(gWin32State.window, &rect);
-    result.w = (u32)(rect.right - rect.left);
-    result.h = (u32)(rect.bottom - rect.top);
+    result.x = (u32)(rect.right - rect.left);
+    result.y = (u32)(rect.bottom - rect.top);
 
     return result;
 }
@@ -603,8 +603,8 @@ LRESULT WndProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_SIZE:
     {
-        v2u dimension = Win32WindowGetDimension();
-        glViewport(0, 0, GLsizei(dimension.w), GLsizei(dimension.h));
+        glm::uvec2 dimension = Win32WindowGetDimension();
+        glViewport(0, 0, GLsizei(dimension.x), GLsizei(dimension.y));
         break;
     }
     case WM_CLOSE:

@@ -23,8 +23,8 @@ struct GameInputController
     b32 isWireless;
     b32 isAnalog;
 
-    v2 stickLeft;
-    v2 stickRight;
+    glm::vec2 stickLeft;
+    glm::vec2 stickRight;
 
     union
     {
@@ -53,8 +53,8 @@ struct GameInputController
 
 struct Mouse
 {
-    v2u pos;
-    v2s offset;
+    glm::uvec2 pos;
+    glm::uvec2 offset;
 
     union
     {
@@ -148,7 +148,7 @@ typedef PLATFORM_FILE_READ_ENTIRE(PlatformFileReadEntire);
 #define PLATFORM_FILE_FREE(name) void name(void* fileContent)
 typedef PLATFORM_FILE_FREE(PlatformFileFree);
 
-#define PLATFORM_WINDOW_GET_DIMENSION(name) v2u name()
+#define PLATFORM_WINDOW_GET_DIMENSION(name) glm::vec2 name()
 typedef PLATFORM_WINDOW_GET_DIMENSION(PlatformWindowGetDimension);
 
 #define PLATFORM_AUDIO_CLIP_LOAD(name) AudioClip* name(const char* filename, AudioClipType type)

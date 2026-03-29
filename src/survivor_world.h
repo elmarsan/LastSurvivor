@@ -39,8 +39,8 @@ struct World
 };
 
 // TODO: Rename this to coordinate space picking. Picking can be done with gamepad.
-v3                      WorldMousePicking(Camera* camera, mat4x4 projection, v2u windowDim, v2u mouse);
-b32                     WorldIsPositionInBounds(v3 position);
+glm::vec3               WorldMousePicking(Camera* camera, glm::mat4 projection, glm::uvec2 windowDim, glm::uvec2 mouse);
+b32                     WorldIsPositionInBounds(glm::vec3 position);
 void                    WorldAddEntity(World* world, EntityManager* entityManager, Entity* entity);
 b32                     WorldIsValidEntityPosition(World* world, Entity* entity);
 void                    WorldUpdate(World* world, EntityManager* entityManager);
@@ -48,7 +48,7 @@ void                    WorldComputeStaticNodes(World* world, EntityManager* ent
 std::vector<cell_index> WorldFindBestPath(World* world, EntityManager* entityManager, cell_index start,
                                           cell_index goal);
 
-inline cell_index WorldPositionToGridCell(v3 position)
+inline cell_index WorldPositionToGridCell(glm::vec3 position)
 {
     s32 halfRows = (GRID_ROWS / 2);
 
@@ -58,7 +58,7 @@ inline cell_index WorldPositionToGridCell(v3 position)
     return CELL_INDEX(row, col);
 }
 
-inline v3 WorldGridCellToPosition(cell_index cellIndex)
+inline glm::vec3 WorldGridCellToPosition(cell_index cellIndex)
 {
     u32 row = CELL_ROW(cellIndex);
     u32 col = CELL_COL(cellIndex);
@@ -69,7 +69,7 @@ inline v3 WorldGridCellToPosition(cell_index cellIndex)
     f32 x = (col * CELL_SIZE) + offsetX + CELL_HALF;
     f32 z = -((row * CELL_SIZE) - offsetZ + CELL_HALF);
 
-    return v3{ x, 0.0f, z };
+    return glm::vec3{ x, 0.0f, z };
 }
 
 inline b32 WorldIsValidCellIndex(cell_index cellIndex) { return cellIndex >= 0 && cellIndex < GRID_CELLS; }

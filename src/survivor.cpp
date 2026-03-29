@@ -15,7 +15,7 @@
 - (Game): gamepad controller
 */
 
-void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* weapon, v3 dir)
+void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* weapon, glm::vec3 dir)
 {
     if (weapon->type == WeaponType_Hand)
     {
@@ -33,7 +33,7 @@ void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* 
     }
     else
     {
-        Ray shot    = { 0 };
+        Ray shot;
         shot.origin = entity->position;
         shot.dir    = dir;
 
@@ -46,7 +46,7 @@ void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* 
 
                 if (AABBRayIntersection(entityWorldAABB, shot))
                 {
-                    v3 shotDir = Norm(targetEntity->position - entity->position);
+                    glm::vec3 shotDir = SafeNorm(targetEntity->position - entity->position);
 
                     targetEntity->flags |= EntityFlag_InKnockback;
                     targetEntity->velocity += shotDir * weapon->knockbackforce;
@@ -68,14 +68,14 @@ void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* 
 }
 
 void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* platform, GameInputController* controller,
-                  Mouse* mouse, v3 cameraOffset)
+                  Mouse* mouse, glm::vec3 cameraOffset)
 {
     Assert(player->type == EntityType_Player);
 
-    v2u     windowDim  = platform->WindowGetDimension();
-    Camera* camera     = state->camera;
-    mat4x4  projection = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
-    mat4x4  view       = CameraView(camera);
+    glm::uvec2 windowDim  = platform->WindowGetDimension();
+    Camera*    camera     = state->camera;
+    glm::mat4  projection = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
+    glm::mat4  view       = CameraView(camera);
 
     if (controller->isConnected)
     {
@@ -92,8 +92,8 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
         }
         else
         {
-            v3 playerDirection = { 0.0f, 0.0f, 0.0f };
-            v3 crosshairPoint  = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+            glm::vec3 playerDirection{ 0.0f, 0.0f, 0.0f };
+            glm::vec3 crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
 
             if (ButtonIsDown(controller->moveUp))
             {
@@ -111,32 +111,32 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
             {
                 playerDirection.x = 1.0f;
             }
-            playerDirection = Norm(playerDirection);
+            playerDirection = SafeNorm(playerDirection);
 
             if (ButtonIsPressed(mouse->left))
             {
-                v3 dir = Norm(crosshairPoint - player->position);
+                glm::vec3 dir = SafeNorm(crosshairPoint - player->position);
                 EntityAttack(state->entityManager, player, state->world, &gWeaponPistol, dir);
             }
 
             // Player rotation
             {
-                v3  dir       = Norm(crosshairPoint - player->position);
-                f32 targetYaw = -atan2f(dir.x, -dir.z);
-                f32 deltaYaw  = targetYaw - player->yaw;
-                deltaYaw      = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi; // Wrap to [-Pi, Pi]
+                glm::vec3 dir       = SafeNorm(crosshairPoint - player->position);
+                f32       targetYaw = -atan2f(dir.x, -dir.z);
+                f32       deltaYaw  = targetYaw - player->yaw;
+                deltaYaw            = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi; // Wrap to [-Pi, Pi]
                 player->yaw += deltaYaw * rotationSpeed;
             }
 
             // Deceleration
-            f32 playerSpeed = Length(player->velocity);
+            f32 playerSpeed = glm::length(player->velocity);
             if (playerSpeed > 0.0f)
             {
                 f32 decelerationStep = frictionForce * delta;
 
                 if (playerSpeed <= decelerationStep)
                 {
-                    player->velocity = { 0.0f, 0.0f, 0.0f };
+                    player->velocity = glm::vec3{ 0.0f, 0.0f, 0.0f };
                     player->flags &= ~EntityFlag_InKnockback;
                 }
                 else
@@ -153,17 +153,17 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
             // Acceleration
             if (!(player->flags & EntityFlag_InKnockback))
             {
-                v3 acceleration = playerDirection * moveAcceleration;
+                glm::vec3 acceleration = playerDirection * moveAcceleration;
                 player->velocity += acceleration * delta;
-                if (Length(player->velocity) > maxSpeed)
+                if (glm::length(player->velocity) > maxSpeed)
                 {
-                    player->velocity = Norm(player->velocity) * maxSpeed;
+                    player->velocity = SafeNorm(player->velocity) * maxSpeed;
                 }
             }
 
-            v3 newPlayerPosition = player->position + (player->velocity * delta);
-            v3 correction        = { 0.0f, 0.0f, 0.0f };
-            v3 totalCorrection   = { 0 };
+            glm::vec3 newPlayerPosition = player->position + (player->velocity * delta);
+            glm::vec3 correction{ 0.0f, 0.0f, 0.0f };
+            glm::vec3 totalCorrection{ 0 };
 
             AABB playerWorldAABB = AABBToWorld(player->aabb, player->position);
 
@@ -180,7 +180,7 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
                         player->flags &= ~EntityFlag_InKnockback;
                     }
 
-                    v3 penetration;
+                    glm::vec3 penetration;
                     penetration.x = intersection.max.x - intersection.min.x;
                     penetration.y = intersection.max.y - intersection.min.y;
                     penetration.z = intersection.max.z - intersection.min.z;
@@ -264,12 +264,12 @@ void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta
 
     // Attack
     {
-        v3 dir = Norm(entity->velocity);
-        v2 hitRectMinCorner{ entity->position.x - enemyHitRadius, entity->position.z - enemyHitRadius };
-        v2 hitRectMaxCorner{ entity->position.x + enemyHitRadius, entity->position.z + enemyHitRadius };
+        glm::vec3 dir = SafeNorm(entity->velocity);
+        glm::vec2 hitRectMinCorner{ entity->position.x - enemyHitRadius, entity->position.z - enemyHitRadius };
+        glm::vec2 hitRectMaxCorner{ entity->position.x + enemyHitRadius, entity->position.z + enemyHitRadius };
 
-        v2 targetMinCorner;
-        v2 targetMaxCorner;
+        glm::vec2 targetMinCorner;
+        glm::vec2 targetMaxCorner;
         targetMinCorner.x = entity->targetEntity->position.x - (entity->size.x * 0.5f);
         targetMinCorner.y = entity->targetEntity->position.z - (entity->size.z * 0.5f);
         targetMaxCorner.x = entity->targetEntity->position.x + (entity->size.x * 0.5f);
@@ -288,19 +288,19 @@ void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta
     cell_index              enemyCellIndex  = WorldPositionToGridCell(entity->position);
     cell_index              playerCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
     std::vector<cell_index> path            = WorldFindBestPath(world, manager, enemyCellIndex, playerCellIndex);
-    v3                      entityDir{ 0.0f, 0.0f, 0.0f };
+    glm::vec3               entityDir{ 0.0f, 0.0f, 0.0f };
 
     if (!path.empty())
     {
-        v3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
-        entityDir         = Norm(targetPosition - entity->position);
-        entityDir.y       = 0.0f;
+        glm::vec3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
+        entityDir                = SafeNorm(targetPosition - entity->position);
+        entityDir.y              = 0.0f;
         // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
     }
     // TODO: Break obstacles
     else
     {
-        // entityDir   = Norm(entity->targetEntity->position - entity->position);
+        // entityDir   = SafeNormalize(entity->targetEntity->position - entity->position);
         // entityDir.y = 0.0f;
     }
     //----------------------------------------------------------------------------
@@ -309,12 +309,12 @@ void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta
     // Entity acceleration
     if (!(entity->flags & EntityFlag_InKnockback))
     {
-        v3 acceleration = entityDir * enemyAcceleration;
+        glm::vec3 acceleration = entityDir * enemyAcceleration;
         entity->velocity += acceleration * delta;
         // TODO: Use constant speed for enemies???
-        if (Length(entity->velocity) > enemyMaxSpeed)
+        if (glm::length(entity->velocity) > enemyMaxSpeed)
         {
-            entity->velocity = Norm(entity->velocity) * enemyMaxSpeed;
+            entity->velocity = SafeNorm(entity->velocity) * enemyMaxSpeed;
         }
     }
     else
@@ -322,7 +322,7 @@ void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta
         // Friction force
         entity->velocity *= 0.70f;
 
-        f32 speed = Length(entity->velocity);
+        f32 speed = glm::length(entity->velocity);
         if (speed <= 0.01f)
         {
             entity->velocity = { 0, 0, 0 };
@@ -332,30 +332,30 @@ void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta
         entity->position += entity->velocity * delta;
     }
 
-    v3 newEntityPosition = entity->position + (entity->velocity * delta);
+    glm::vec3 newEntityPosition = entity->position + (entity->velocity * delta);
     //----------------------------------------------------------------------------
 
     // -----------------------------------------------------------
     // Collision detection
-    v3 correction      = { 0.0f, 0.0f, 0.0f };
-    v3 totalCorrection = { 0 };
+    glm::vec3 correction{ 0.0f, 0.0f, 0.0f };
+    glm::vec3 totalCorrection{ 0 };
 
     for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
     {
         Entity* entityPtr = EntityGet(manager, entityIndex);
         if (entityPtr != entity && entityPtr->type == EntityType_Obstacle)
         {
-            v3 lookAt{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
-            lookAt   = Norm(lookAt);
-            v3 start = entity->position;
-            v3 end   = start + (lookAt * 1.5f);
+            glm::vec3 lookAt{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
+            lookAt          = SafeNorm(lookAt);
+            glm::vec3 start = entity->position;
+            glm::vec3 end   = start + (lookAt * 1.5f);
 
             // TODO: Break obstacles
             // if (AABBSegmentIntersection(EntityWorldAABB(entityPtr), start, end))
             //{
             //     Entity* target       = entity->targetEntity;
             //     entity->targetEntity = entityPtr;
-            //     EntityAttack(manager, entity, world, &gWeaponHand, Norm(entity->velocity));
+            //     EntityAttack(manager, entity, world, &gWeaponHand, SafeNormalize(entity->velocity));
             //     entity->targetEntity = target;
             //     break;
             // }
@@ -364,7 +364,7 @@ void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta
                 AABB intersection;
                 if (EntitiesIntersect(entity, entityPtr, &intersection))
                 {
-                    v3 penetration;
+                    glm::vec3 penetration;
                     penetration.x = intersection.max.x - intersection.min.x;
                     penetration.y = intersection.max.y - intersection.min.y;
                     penetration.z = intersection.max.z - intersection.min.z;
@@ -580,8 +580,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
 
         Entity* player   = EntityNew(state->entityManager, EntityType_Player);
-        player->position = { 0.0f, 0.0f, 0.0f };
-        player->size     = { 1.0f, 1.0f, 1.0f };
+        player->position = glm::vec3{ 0.0f, 0.0f, 0.0f };
+        player->size     = glm::vec3{ 1.0f, 1.0f, 1.0f };
         player->aabb     = *state->characterAABB;
 
         // Entity* enemy0       = EntityNew(state->entityManager, EntityType_Enemy);
@@ -622,15 +622,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // ----------------------------------------------------------------------------
     // Update
-    v2u            windowDim     = platform->WindowGetDimension();
+    glm::uvec2     windowDim     = platform->WindowGetDimension();
     EntityManager* entityManager = state->entityManager;
     Entity*        player        = EntityGet(entityManager, 0);
     Camera*        camera        = state->camera;
-    mat4x4         projection    = Perspective(Radians(45.0f), (f32)windowDim.w / (f32)windowDim.h, 0.1f, 100.0f);
-    mat4x4         view          = CameraView(camera);
+    glm::mat4      projection    = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
+    glm::mat4      view          = CameraView(camera);
     World*         world         = state->world;
 
-    v4 playerColor = white;
+    // glm::mat4 view = glm::lookAt(
+    //	glm::vec3(0,2,5),
+    //	glm::vec3(0,0,0),
+    //	glm::vec3(0,1,0)
+    //);
+
+    glm::vec4 playerColor{ white };
 
     local_persist cell_index debugSelectedCellIndex = CELL_EMPTY;
 
@@ -643,10 +649,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     GameInputController* controller = GetController(input, 0);
 
 #if 1
-    v3 cameraOffset{ 0.0f, 16.0f, 5.0f };
-    CameraSetPitch(camera, -68.0f);
+    glm::vec3 cameraOffset{ 0.0f, 16.0f, 5.0f };
+    // CameraSetPitch(camera, -68.0f);
 #else
-    v3 cameraOffset{ 0.0f, 4.0f, 8.0f };
+    glm::vec3 cameraOffset{ 0.0f, 4.0f, 8.0f };
     // CameraSetPitch(camera, -26.0f);
 #endif
 
@@ -692,7 +698,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             if (ButtonIsPressed(mouse->middle))
             {
-                v3         crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+                glm::vec3  crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
                 cell_index crosshairCell  = WorldPositionToGridCell(crosshairPoint);
 
                 for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
@@ -756,7 +762,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         if (!state->buildObstacle && ButtonIsPressed(mouse->left))
         {
             // TODO: Move this logic to `ObstacleSpawn` function
-            v3 position = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+            glm::vec3 position = WorldMousePicking(camera, projection, windowDim, mouse->pos);
 
             state->buildObstacle           = EntityNew(entityManager, EntityType_Obstacle);
             state->buildObstacle->position = position;
@@ -911,8 +917,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // 2D
     {
-        v2 crosshairSpriteSize{ 128.0f, 128.0f };
-        v2 cursorSize{ 32.0f, 32.0f };
+        glm::vec2 crosshairSpriteSize{ 128.0f, 128.0f };
+        glm::vec2 cursorSize{ 32.0f, 32.0f };
 
         DrawRect(renderer, { (f32)mouse->pos.x, (f32)mouse->pos.y }, cursorSize, state->crosshairAtlas,
                  { 965.0f, 0.0f }, crosshairSpriteSize);
@@ -947,7 +953,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             int  elapsedSeconds   = (int)difftime(time(0), state->buildModeBeginTime);
             int  remainingSeconds = (int)state->buildModeDurationSec - elapsedSeconds;
             sprintf(timerBuf, "%d", remainingSeconds);
-            DrawText(renderer, timerBuf, { windowDim.w - 150.0f, 50.0f }, red);
+            DrawText(renderer, timerBuf, { windowDim.x - 150.0f, 50.0f }, red);
         }
         else if (state->mode == GameMode_GameOver)
         {
@@ -963,16 +969,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // 3D
     {
-        mat4x4 viewProj = projection * view;
+        glm::mat4 viewProj = projection * view;
 
         PushRenderProgramUse(renderer, state->program->id);
         PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
 
         // Floor
         {
-            mat4x4 translate = Translate(Identity(), { 0.0f, 0.0f, 0.0f });
-            mat4x4 scale     = Scale(Identity(), 20.0f);
-            mat4x4 model     = translate * scale;
+            glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 0.0f, 0.0f, 0.0f });
+            glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 20.0f });
+            glm::mat4 model     = translate * scale;
 
             PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
             PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 0.5f });
@@ -985,11 +991,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 Entity* entity = &entityManager->entities[entityIndex];
 
-                mat4x4 translate = Translate(Identity(), entity->position);
-                mat4x4 rotate    = Rotate(Identity(), entity->yaw, { 0.0f, 1.0f, 0.0f });
-                mat4x4 scale     = Scale(Identity(), entity->size);
-
-                mat4x4 model = translate * rotate * scale;
+                glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, entity->position);
+                glm::mat4 rotate    = glm::rotate(glm::mat4{ 1.0f }, entity->yaw, { 0.0f, 1.0f, 0.0f });
+                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ entity->size });
+                glm::mat4 model     = translate * rotate * scale;
 
                 if (entity->type != EntityType_Obstacle)
                 {
@@ -1000,7 +1005,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 }
                 else
                 {
-                    v4 tintColor = white;
+                    glm::vec4 tintColor{ white };
 
                     if (entity->flags & (EntityFlag_InvalidPosition))
                     {

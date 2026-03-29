@@ -10,6 +10,18 @@
 #include <unordered_map>
 #include <queue>
 
+#define GLM_FORCE_INTRINSICS
+#define GLM_FORCE_INLINE
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/gtx/rotate_vector.hpp>
+
 typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;

@@ -302,9 +302,9 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformAPI* platform, Arena* a
     Obj result = { 0 };
 
     ObjPrepass(&result, objBuf, objBufSize);
-    result.positions = PushArray(arena, result.positionCount, v3);
-    result.normals   = PushArray(arena, result.normalCount, v3);
-    result.uvs       = PushArray(arena, result.uvCount, v2);
+    result.positions = PushArray(arena, result.positionCount, glm::vec3);
+    result.normals   = PushArray(arena, result.normalCount, glm::vec3);
+    result.uvs       = PushArray(arena, result.uvCount, glm::vec2);
     result.faces     = PushArray(arena, result.faceCount, ObjFace);
     result.materials = PushArray(arena, result.materialCount, ObjMaterial);
 
@@ -320,11 +320,11 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformAPI* platform, Arena* a
     u32 lineCount     = 1;
     u32 materialIndex = 0;
 
-    char     lineBuf[LINE_BUFFER_CHAR_COUNT];
-    v3*      vertexPtr = result.positions;
-    v3*      normalPtr = result.normals;
-    v2*      uvPtr     = result.uvs;
-    ObjFace* facePtr   = result.faces;
+    char       lineBuf[LINE_BUFFER_CHAR_COUNT];
+    glm::vec3* vertexPtr = result.positions;
+    glm::vec3* normalPtr = result.normals;
+    glm::vec2* uvPtr     = result.uvs;
+    ObjFace*   facePtr   = result.faces;
 
     while (bytesRead < objBufSize)
     {
@@ -366,9 +366,9 @@ Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformAPI* platform, Arena* a
         }
         case ObjLineType_UV:
         {
-            sscanf(lineBuf, "vt %f %f", &uvPtr->u, &uvPtr->v);
-            uvPtr->u = Clamp(uvPtr->u, 0.0f, uvPtr->u);
-            uvPtr->v = Clamp(uvPtr->v, 0.0f, uvPtr->v);
+            sscanf(lineBuf, "vt %f %f", &uvPtr->x, &uvPtr->y);
+            uvPtr->x = glm::clamp(uvPtr->x, 0.0f, uvPtr->x);
+            uvPtr->y = glm::clamp(uvPtr->y, 0.0f, uvPtr->y);
             uvPtr++;
             break;
         }

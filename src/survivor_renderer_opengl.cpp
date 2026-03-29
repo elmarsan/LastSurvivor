@@ -17,8 +17,8 @@ internal void TextureQueueBind(Renderer* renderer, GLint arrayUniformLoc);
 internal void TextureAlloc(Renderer* renderer, Texture* texture, void* imageBuffer, size_t size);
 internal void Batch3DFlush(Renderer* renderer);
 internal void Batch2DFlush(Renderer* renderer);
-internal void Batch2DRect(Renderer* renderer, v2 topLeft, v2 bottomRight, Texture* texture, v2 textureTopLeft,
-                          v2 textureBottomRight, v4 tintColor = white);
+internal void Batch2DRect(Renderer* renderer, glm::vec2 topLeft, glm::vec2 bottomRight, Texture* texture,
+                          glm::vec2 textureTopLeft, glm::vec2 textureBottomRight, glm::vec4 tintColor = white);
 
 void RendererInit(Renderer* renderer, OpenGL* gl, PlatformAPI* platform)
 {
@@ -101,7 +101,7 @@ void RendererInit(Renderer* renderer, OpenGL* gl, PlatformAPI* platform)
     }
 }
 
-void RendererFrameBegin(Renderer* renderer, mat4x4 viewProj)
+void RendererFrameBegin(Renderer* renderer, glm::mat4 viewProj)
 {
     RenderCommandQueue* queue = &renderer->commandQueue;
 
@@ -181,7 +181,7 @@ void RendererFrameEnd(Renderer* renderer)
                 {
                 case UniformType_Mat4x4:
                 {
-                    gl->UniformMatrix4fv(loc, 1, GL_FALSE, &command->mat4x4.ptr[0]);
+                    gl->UniformMatrix4fv(loc, 1, GL_FALSE, &command->mat4x4[0][0]);
                     break;
                 }
                 case UniformType_Int:
@@ -262,7 +262,7 @@ inline void PushRenderProgramUse(Renderer* renderer, GLuint programId)
     command->program.id = programId;
 }
 
-inline void PushRenderUploadUniformMat4x4(Renderer* renderer, GLuint programId, const char* name, mat4x4 mat4)
+inline void PushRenderUploadUniformMat4x4(Renderer* renderer, GLuint programId, const char* name, glm::mat4 mat4)
 {
     ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
@@ -291,7 +291,7 @@ inline void PushRenderUploadUniformIntArray(Renderer* renderer, GLuint programId
     command->type         = UniformType_IntArray;
 }
 
-inline void PushRenderUploadUniformVec3(Renderer* renderer, GLuint programId, const char* name, v3 vec3)
+inline void PushRenderUploadUniformVec3(Renderer* renderer, GLuint programId, const char* name, glm::vec3 vec3)
 {
     ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
@@ -300,7 +300,7 @@ inline void PushRenderUploadUniformVec3(Renderer* renderer, GLuint programId, co
     command->type      = UniformType_Vec3;
 }
 
-inline void PushRenderUploadUniformVec4(Renderer* renderer, GLuint programId, const char* name, v4 vec4)
+inline void PushRenderUploadUniformVec4(Renderer* renderer, GLuint programId, const char* name, glm::vec4 vec4)
 {
     ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
@@ -327,7 +327,7 @@ internal void Batch3DFlush(Renderer* renderer)
     gl->LineWidth(2.0f);
     gl->Enable(GL_DEPTH_TEST);
     gl->UseProgram(batch->program.id);
-    gl->UniformMatrix4fv(viewProjLoc, 1, GL_FALSE, &renderer->viewProj.e[0][0]);
+    gl->UniformMatrix4fv(viewProjLoc, 1, GL_FALSE, &renderer->viewProj[0][0]);
     gl->BindVertexArray(batch->buffer.VAO);
     gl->DrawArrays(GL_LINES, 0, batch->vertexCount);
 
@@ -335,7 +335,7 @@ internal void Batch3DFlush(Renderer* renderer)
     batch->vertexCount     = 0;
 }
 
-void DrawLine(Renderer* renderer, v3 p0, v3 p1, v4 color)
+void DrawLine(Renderer* renderer, glm::vec3 p0, glm::vec3 p1, glm::vec4 color)
 {
     u32 lineVertices = 2;
 
@@ -359,10 +359,10 @@ void DrawLine(Renderer* renderer, v3 p0, v3 p1, v4 color)
 
 internal void Batch2DFlush(Renderer* renderer)
 {
-    Batch2D* batch     = renderer->batch2D;
-    OpenGL*  gl        = renderer->gl;
-    v2u      windowDim = renderer->platform->WindowGetDimension();
-    mat4x4   view2D    = Orthographic(0, (f32)windowDim.w, (f32)windowDim.h, 0);
+    Batch2D*   batch     = renderer->batch2D;
+    OpenGL*    gl        = renderer->gl;
+    glm::uvec2 windowDim = renderer->platform->WindowGetDimension();
+    glm::mat4  view2D    = glm::ortho(0.0f, (f32)windowDim.x, (f32)windowDim.y, 0.0f);
 
     GPUBufferVBOSubdata(renderer, &batch->buffer, batch->vertexBufferBase, sizeof(BatchVertex) * batch->vertexCount);
     GPUBufferEBOSubdata(renderer, &batch->buffer, batch->indexBufferBase, sizeof(u32) * batch->indexCount);
@@ -375,7 +375,7 @@ internal void Batch2DFlush(Renderer* renderer)
     gl->Enable(GL_BLEND);
     gl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     TextureQueueBind(renderer, textureArrayLoc);
-    gl->UniformMatrix4fv(viewProjLoc, 1, GL_FALSE, &view2D.e[0][0]);
+    gl->UniformMatrix4fv(viewProjLoc, 1, GL_FALSE, &view2D[0][0]);
     gl->BindVertexArray(batch->buffer.VAO);
     gl->DrawElements(GL_TRIANGLES, batch->indexCount, GL_UNSIGNED_INT, 0);
 
@@ -386,8 +386,8 @@ internal void Batch2DFlush(Renderer* renderer)
     TextureQueueClear(renderer);
 }
 
-internal void Batch2DRect(Renderer* renderer, v2 position, v2 size, Texture* texture, v2 texturePosition,
-                          v2 textureSize, v4 tintColor)
+internal void Batch2DRect(Renderer* renderer, glm::vec2 position, glm::vec2 size, Texture* texture,
+                          glm::vec2 texturePosition, glm::vec2 textureSize, glm::vec4 tintColor)
 {
     Batch2D* batch = renderer->batch2D;
 
@@ -415,25 +415,25 @@ internal void Batch2DRect(Renderer* renderer, v2 position, v2 size, Texture* tex
     f32 textureY = (1.0f / texture->height) * texturePosition.y;
 
     // Top-right
-    batch->vertexBufferPtr->position     = { position.x + size.x, position.y };
+    batch->vertexBufferPtr->position     = { position.x + size.x, position.y, 0.0f };
     batch->vertexBufferPtr->uv           = { textureX + textureW, textureY };
     batch->vertexBufferPtr->color        = tintColor;
     batch->vertexBufferPtr->textureIndex = textureIndex;
     batch->vertexBufferPtr++;
     // Bottom-right
-    batch->vertexBufferPtr->position     = { position.x + size.x, position.y + size.y };
+    batch->vertexBufferPtr->position     = { position.x + size.x, position.y + size.y, 0.0f };
     batch->vertexBufferPtr->uv           = { textureX + textureW, textureY + textureH };
     batch->vertexBufferPtr->color        = tintColor;
     batch->vertexBufferPtr->textureIndex = textureIndex;
     batch->vertexBufferPtr++;
     // Bottom-left
-    batch->vertexBufferPtr->position     = { position.x, position.y + size.y };
+    batch->vertexBufferPtr->position     = { position.x, position.y + size.y, 0.0f };
     batch->vertexBufferPtr->uv           = { textureX, textureY + textureH };
     batch->vertexBufferPtr->color        = tintColor;
     batch->vertexBufferPtr->textureIndex = textureIndex;
     batch->vertexBufferPtr++;
     // Top-left
-    batch->vertexBufferPtr->position     = { position.x, position.y };
+    batch->vertexBufferPtr->position     = { position.x, position.y, 0.0f };
     batch->vertexBufferPtr->uv           = { textureX, textureY };
     batch->vertexBufferPtr->color        = tintColor;
     batch->vertexBufferPtr->textureIndex = textureIndex;
@@ -442,12 +442,13 @@ internal void Batch2DRect(Renderer* renderer, v2 position, v2 size, Texture* tex
     batch->vertexCount += 4;
 }
 
-void DrawRect(Renderer* renderer, v2 position, v2 size, Texture* texture, v2 texturePosition, v2 textureSize)
+void DrawRect(Renderer* renderer, glm::vec2 position, glm::vec2 size, Texture* texture, glm::vec2 texturePosition,
+              glm::vec2 textureSize)
 {
     Batch2DRect(renderer, position, size, texture, texturePosition, textureSize);
 }
 
-void DrawText(Renderer* renderer, char* text, v2 position, v4 color, f32 scale)
+void DrawText(Renderer* renderer, char* text, glm::vec2 position, glm::vec4 color, f32 scale)
 {
     Batch2D* batch = renderer->batch2D;
 
@@ -461,7 +462,7 @@ void DrawText(Renderer* renderer, char* text, v2 position, v4 color, f32 scale)
         Assert(0);
     }
 
-    v2 rectTopLeft{ 0.0f, 0.0f };
+    glm::vec2 rectTopLeft{ 0.0f, 0.0f };
     rectTopLeft += position;
 
     while (*text)
@@ -470,12 +471,12 @@ void DrawText(Renderer* renderer, char* text, v2 position, v4 color, f32 scale)
 
         rectTopLeft.x += (ttfChar->xoff * scale);
         rectTopLeft.y = position.y + (ttfChar->yoff * scale);
-        v2 rectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) * scale,
-                            ((f32)ttfChar->y1 - (f32)ttfChar->y0) * scale };
+        glm::vec2 rectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) * scale,
+                                   ((f32)ttfChar->y1 - (f32)ttfChar->y0) * scale };
 
-        v2 subrectTopLeft{ (f32)ttfChar->x0 + ttfChar->s0, (f32)ttfChar->y0 + ttfChar->t0 };
-        v2 subrectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) - ttfChar->s1,
-                               ((f32)ttfChar->y1 - (f32)ttfChar->y0) - ttfChar->t1 };
+        glm::vec2 subrectTopLeft{ (f32)ttfChar->x0 + ttfChar->s0, (f32)ttfChar->y0 + ttfChar->t0 };
+        glm::vec2 subrectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) - ttfChar->s1,
+                                      ((f32)ttfChar->y1 - (f32)ttfChar->y0) - ttfChar->t1 };
 
         Batch2DRect(renderer, rectTopLeft, rectBottomRight, &renderer->glyphAtlas, subrectTopLeft, subrectBottomRight,
                     color);

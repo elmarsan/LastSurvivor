@@ -15,20 +15,20 @@
 #include "survivor_weapon.h"
 #include "survivor_debug.h"
 
-global_variable v4 green{ 0.2f, 1.0f, 0.0f, 1.0f };
-global_variable v4 red{ 1.0f, 0.0f, 0.0f, 1.0f };
-global_variable v4 blue{ 0.2f, 0.4f, 1.0f, 1.0f };
-global_variable v4 white{ 1.0f, 1.0f, 1.0f, 1.0f };
-global_variable v4 black{ 0.0f, 0.0f, 0.0f, 1.0f };
-global_variable v4 magenta{ 1.0f, 0.0f, 1.0f, 1.0f };
-global_variable v4 yellow{ 1.0f, 1.0f, 0.0f, 1.0f };
-global_variable v4 orange{ 0.87f, 0.39f, 0.04f, 1.0f };
+global_variable glm::vec4 green{ 0.2f, 1.0f, 0.0f, 1.0f };
+global_variable glm::vec4 red{ 1.0f, 0.0f, 0.0f, 1.0f };
+global_variable glm::vec4 blue{ 0.2f, 0.4f, 1.0f, 1.0f };
+global_variable glm::vec4 white{ 1.0f, 1.0f, 1.0f, 1.0f };
+global_variable glm::vec4 black{ 0.0f, 0.0f, 0.0f, 1.0f };
+global_variable glm::vec4 magenta{ 1.0f, 0.0f, 1.0f, 1.0f };
+global_variable glm::vec4 yellow{ 1.0f, 1.0f, 0.0f, 1.0f };
+global_variable glm::vec4 orange{ 0.87f, 0.39f, 0.04f, 1.0f };
 
 struct Vertex
 {
-    v3 position;
-    v3 normal;
-    v2 uv;
+    glm::vec3  position;
+    glm::vec3  normal;
+    glm::vec2 uv;
 };
 
 enum GameMode

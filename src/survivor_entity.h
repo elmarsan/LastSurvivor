@@ -32,9 +32,9 @@ enum EntityFlag
 struct Entity
 {
     EntityType type;
-    v3         position;
-    v3         velocity;
-    v3         size;
+    glm::vec3  position;
+    glm::vec3  velocity;
+    glm::vec3  size;
     f32        yaw;          // TODO: Replace by v3/quat for rotations?
     Entity*    targetEntity; // TODO: Needed? All enemies will follow player
     AABB       aabb;
@@ -52,13 +52,13 @@ union EntityWorldCorners
 {
     struct
     {
-        v3 topLeft;
-        v3 topRight;
-        v3 bottomLeft;
-        v3 bottomRight;
+        glm::vec3 topLeft;
+        glm::vec3 topRight;
+        glm::vec3 bottomLeft;
+        glm::vec3 bottomRight;
     };
 
-    v3 arr[4];
+    glm::vec3 arr[4];
 };
 
 union EntityCellCorners
