@@ -48,5 +48,5 @@ struct Obj
     AABB         aabb;
 };
 
-Obj  ObjReadData(void* objBuf, size_t objBufSize, PlatformAPI* platform, Arena* arena);
+Obj  ObjParse(char* filename, PlatformAPI* platform, Arena* arena);
 void ObjInitGeometryBuffer(Obj* obj, Arena* arena, Renderer* renderer, GPUBuffer* buffer);

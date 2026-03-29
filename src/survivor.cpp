@@ -491,16 +491,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // Plane
         {
+            size_t vertexSize = sizeof(f32) * 8;
+
             GPUBufferInit(renderer, state->planeBuffer);
-            GPUBufferVBOAlloc(renderer, state->planeBuffer, planeVertexs, sizeof(planeVertexs), sizeof(Vertex),
+            GPUBufferVBOAlloc(renderer, state->planeBuffer, planeVertexs, sizeof(planeVertexs), vertexSize,
                               GL_STATIC_DRAW);
             GPUBufferEBOAlloc(renderer, state->planeBuffer, planeIndices, ArrayCount(planeIndices) * sizeof(u32),
                               sizeof(u32), GL_STATIC_DRAW);
-            GPUBufferVertexAttrib(renderer, state->planeBuffer, 0, 3, GL_FLOAT, sizeof(Vertex),
-                                  offsetof(Vertex, position));
-            GPUBufferVertexAttrib(renderer, state->planeBuffer, 1, 3, GL_FLOAT, sizeof(Vertex),
-                                  offsetof(Vertex, normal));
-            GPUBufferVertexAttrib(renderer, state->planeBuffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
+            GPUBufferVertexAttrib(renderer, state->planeBuffer, 0, 3, GL_FLOAT, vertexSize, offsetof(Vertex, position));
+            GPUBufferVertexAttrib(renderer, state->planeBuffer, 1, 3, GL_FLOAT, vertexSize, offsetof(Vertex, normal));
+            GPUBufferVertexAttrib(renderer, state->planeBuffer, 2, 2, GL_FLOAT, vertexSize, offsetof(Vertex, uv));
         }
 
         // Font loading
@@ -525,58 +525,31 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         platform->AudioSetVolume(-3.0f, AudioClipType_Sfx);
         // platform->AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
-        // Obj test
+        // Obj fence
         {
-            // Fence
-            FileReadResult fenceFile = platform->FileReadEntire("../data/fence_2.obj");
-            if (fenceFile.contentSize > 0)
-            {
-                Obj obj = ObjReadData(fenceFile.content, fenceFile.contentSize, platform, arena);
-                platform->FileFree(fenceFile.content);
+            Obj obj          = ObjParse("../data/fence_2.obj", platform, arena);
+            state->fenceAABB = PushStruct(arena, AABB);
+            // TODO: Remove simetric hack
+            state->fenceAABB->max   = obj.aabb.max;
+            state->fenceAABB->min   = -obj.aabb.max;
+            state->fenceAABB->min.y = obj.aabb.min.y;
 
-                state->fenceAABB = PushStruct(arena, AABB);
-                // TODO: Remove simetric hack
-                state->fenceAABB->max   = obj.aabb.max;
-                state->fenceAABB->min   = -obj.aabb.max;
-                state->fenceAABB->min.y = obj.aabb.min.y;
+            // TODO: .obj material
+            char fenceDiffuseMapFilepath[256];
+            sprintf(fenceDiffuseMapFilepath, "%s", "../data/");
+            strcat(fenceDiffuseMapFilepath, obj.materials[0].diffuseMap);
+            TextureInit(renderer, state->fenceDiffuseMapTexture, fenceDiffuseMapFilepath);
 
-                char fenceDiffuseMapFilepath[256];
-                sprintf(fenceDiffuseMapFilepath, "%s", "../data/");
-                strcat(fenceDiffuseMapFilepath, obj.materials[0].diffuseMap);
+            ObjInitGeometryBuffer(&obj, arena, renderer, state->fenceBuffer);
+        }
 
-                ObjInitGeometryBuffer(&obj, arena, renderer, state->fenceBuffer);
+        // Obj stickman
+        {
+            Obj characterObj      = ObjParse("../data/character.obj", platform, arena);
+            state->characterAABB  = PushStruct(arena, AABB);
+            *state->characterAABB = characterObj.aabb;
 
-                FileReadResult fenceDiffuseMapReadResult = platform->FileReadEntire(fenceDiffuseMapFilepath);
-                if (fenceDiffuseMapReadResult.contentSize > 0)
-                {
-                    TextureInit(renderer, state->fenceDiffuseMapTexture, fenceDiffuseMapFilepath);
-                    platform->FileFree(fenceDiffuseMapReadResult.content);
-                }
-                else
-                {
-                    Assert(0);
-                }
-            }
-            else
-            {
-                Assert(0);
-            }
-
-            // Stickman
-            FileReadResult characterFile = platform->FileReadEntire("../data/character.obj");
-            if (characterFile.contentSize > 0)
-            {
-                Obj characterObj = ObjReadData(characterFile.content, characterFile.contentSize, platform, arena);
-                platform->FileFree(characterFile.content);
-                state->characterAABB  = PushStruct(arena, AABB);
-                *state->characterAABB = characterObj.aabb;
-
-                ObjInitGeometryBuffer(&characterObj, arena, renderer, state->characterBuffer);
-            }
-            else
-            {
-                Assert(0);
-            }
+            ObjInitGeometryBuffer(&characterObj, arena, renderer, state->characterBuffer);
         }
 
         Entity* player   = EntityNew(state->entityManager, EntityType_Player);
@@ -911,7 +884,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     PushRenderCommand(&renderer->commandQueue, FramebufferClear);
 
-    // TODO: Use obj materials
+    // TODO: .obj material
     gl->ActiveTexture(GL_TEXTURE3);
     gl->BindTexture(GL_TEXTURE_2D, state->fenceDiffuseMapTexture->id);
 

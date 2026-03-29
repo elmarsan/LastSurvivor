@@ -294,151 +294,164 @@ internal void ObjParseMaterialFile(ObjMaterial* material, char* filename, Platfo
     }
 }
 
-Obj ObjReadData(void* objBuf, size_t objBufSize, PlatformAPI* platform, Arena* arena)
+Obj ObjParse(char* filename, PlatformAPI* platform, Arena* arena)
 {
     platform->Logf("------------------------------------------------------------");
-    platform->Logf("Reading obj file");
+    platform->Logf("Reading .obj file: '%s'", filename);
 
     Obj result = { 0 };
 
-    ObjPrepass(&result, objBuf, objBufSize);
-    result.positions = PushArray(arena, result.positionCount, glm::vec3);
-    result.normals   = PushArray(arena, result.normalCount, glm::vec3);
-    result.uvs       = PushArray(arena, result.uvCount, glm::vec2);
-    result.faces     = PushArray(arena, result.faceCount, ObjFace);
-    result.materials = PushArray(arena, result.materialCount, ObjMaterial);
-
-    platform->Logf("Vertex   count: %d", result.positionCount);
-    platform->Logf("Normal   count: %d", result.normalCount);
-    platform->Logf("UV       count: %d", result.uvCount);
-    platform->Logf("Face     count: %d", result.faceCount);
-    platform->Logf("Material count: %d", result.materialCount);
-
-    u8* beginCursor   = (u8*)objBuf;
-    u8* cursor        = beginCursor;
-    u64 bytesRead     = 0;
-    u32 lineCount     = 1;
-    u32 materialIndex = 0;
-
-    char       lineBuf[LINE_BUFFER_CHAR_COUNT];
-    glm::vec3* vertexPtr = result.positions;
-    glm::vec3* normalPtr = result.normals;
-    glm::vec2* uvPtr     = result.uvs;
-    ObjFace*   facePtr   = result.faces;
-
-    while (bytesRead < objBufSize)
+    FileReadResult objFile = platform->FileReadEntire(filename);
+    if (objFile.content)
     {
-        while (*cursor != '\n')
+        // void*  objBuf     = objFile.content;
+        // size_t objBufSize = objFile.contentSize;
+
+        ObjPrepass(&result, objFile.content, objFile.contentSize);
+        result.positions = PushArray(arena, result.positionCount, glm::vec3);
+        result.normals   = PushArray(arena, result.normalCount, glm::vec3);
+        result.uvs       = PushArray(arena, result.uvCount, glm::vec2);
+        result.faces     = PushArray(arena, result.faceCount, ObjFace);
+        result.materials = PushArray(arena, result.materialCount, ObjMaterial);
+
+        platform->Logf("Vertex   count: %d", result.positionCount);
+        platform->Logf("Normal   count: %d", result.normalCount);
+        platform->Logf("UV       count: %d", result.uvCount);
+        platform->Logf("Face     count: %d", result.faceCount);
+        platform->Logf("Material count: %d", result.materialCount);
+
+        u8* beginCursor   = (u8*)objFile.content;
+        u8* cursor        = beginCursor;
+        u64 bytesRead     = 0;
+        u32 lineCount     = 1;
+        u32 materialIndex = 0;
+
+        char       lineBuf[LINE_BUFFER_CHAR_COUNT];
+        glm::vec3* vertexPtr = result.positions;
+        glm::vec3* normalPtr = result.normals;
+        glm::vec2* uvPtr     = result.uvs;
+        ObjFace*   facePtr   = result.faces;
+
+        while (bytesRead < objFile.contentSize)
         {
+            while (*cursor != '\n')
+            {
+                bytesRead += sizeof(u8);
+                cursor++;
+            }
+
+            u32 lineCharCount = (u32)((u64)cursor - (u64)beginCursor);
+
+            memcpy(lineBuf, beginCursor, sizeof(char) * (lineCharCount));
+            memset(&lineBuf[lineCharCount], 0, sizeof(char) * (LINE_BUFFER_CHAR_COUNT - lineCharCount));
+
+            ObjLineType lineType = ObjGetLineType(lineBuf);
+
+            switch (lineType)
+            {
+            case ObjLineType_Vertex:
+            {
+                sscanf(lineBuf, "v %f %f %f", &vertexPtr->x, &vertexPtr->y, &vertexPtr->z);
+
+                result.aabb.min.x = Min(result.aabb.min.x, vertexPtr->x);
+                result.aabb.min.y = Min(result.aabb.min.y, vertexPtr->y);
+                result.aabb.min.z = Min(result.aabb.min.z, vertexPtr->z);
+
+                result.aabb.max.x = Max(result.aabb.max.x, vertexPtr->x);
+                result.aabb.max.y = Max(result.aabb.max.y, vertexPtr->y);
+                result.aabb.max.z = Max(result.aabb.max.z, vertexPtr->z);
+
+                vertexPtr++;
+                break;
+            }
+            case ObjLineType_Normal:
+            {
+                sscanf(lineBuf, "vn %f %f %f", &normalPtr->x, &normalPtr->y, &normalPtr->z);
+                normalPtr++;
+                break;
+            }
+            case ObjLineType_UV:
+            {
+                sscanf(lineBuf, "vt %f %f", &uvPtr->x, &uvPtr->y);
+                uvPtr->x = glm::clamp(uvPtr->x, 0.0f, uvPtr->x);
+                uvPtr->y = glm::clamp(uvPtr->y, 0.0f, uvPtr->y);
+                uvPtr++;
+                break;
+            }
+            case ObjLineType_Face:
+            {
+                // TODO: Handle (x, y, z, w) indices
+                // TODO: Handle negative indices
+                // TODO: Handle different patterns "v1" "v1/vt1" "v1/vt1/vn1" "v1//vn1"
+                // Position
+                if (result.normalCount == 0 && result.uvCount == 0)
+                {
+                    facePtr->v0.normal = UNKNOWN_VERTEX_INDEX;
+                    facePtr->v1.normal = UNKNOWN_VERTEX_INDEX;
+                    facePtr->v2.normal = UNKNOWN_VERTEX_INDEX;
+                    facePtr->v0.uv     = UNKNOWN_VERTEX_INDEX;
+                    facePtr->v1.uv     = UNKNOWN_VERTEX_INDEX;
+                    facePtr->v2.uv     = UNKNOWN_VERTEX_INDEX;
+
+                    sscanf(lineBuf, "f %u %u %u", &facePtr->v0.position, &facePtr->v1.position, &facePtr->v2.position);
+
+                    for (u32 cornerIndex = 0; cornerIndex < ArrayCount(facePtr->corners); cornerIndex++)
+                    {
+                        facePtr->corners[cornerIndex].position--;
+                    }
+                    facePtr++;
+                }
+                // Position + uv + normal
+                else if (result.normalCount > 0 && result.uvCount > 0)
+                {
+                    sscanf(lineBuf, "f %u/%u/%u %u/%u/%u %u/%u/%u", &facePtr->v0.position, &facePtr->v0.uv,
+                           &facePtr->v0.normal, &facePtr->v1.position, &facePtr->v1.uv, &facePtr->v1.normal,
+                           &facePtr->v2.position, &facePtr->v2.uv, &facePtr->v2.normal);
+
+                    for (u32 cornerIndex = 0; cornerIndex < ArrayCount(facePtr->corners); cornerIndex++)
+                    {
+                        facePtr->corners[cornerIndex].position--;
+                        facePtr->corners[cornerIndex].normal--;
+                        facePtr->corners[cornerIndex].uv--;
+                    }
+                    facePtr++;
+                }
+                else
+                {
+                    InvalidCodePath;
+                }
+
+                break;
+            }
+            case ObjLineType_Material:
+            {
+                //  TODO: Resolve path properly
+                char materialFileBuf[128];
+                sscanf(lineBuf, "mtllib %s", materialFileBuf);
+
+                char materialFilepath[256];
+                sprintf(materialFilepath, "%s", "../data/");
+                strcat(materialFilepath, materialFileBuf);
+
+                ObjMaterial* material = &result.materials[materialIndex++];
+                ObjParseMaterialFile(material, materialFilepath, platform);
+                break;
+            }
+                DefaultCase;
+            }
+
+            // Jump to the next line
             bytesRead += sizeof(u8);
             cursor++;
+            lineCount++;
+            beginCursor = cursor;
         }
 
-        u32 lineCharCount = (u32)((u64)cursor - (u64)beginCursor);
-
-        memcpy(lineBuf, beginCursor, sizeof(char) * (lineCharCount));
-        memset(&lineBuf[lineCharCount], 0, sizeof(char) * (LINE_BUFFER_CHAR_COUNT - lineCharCount));
-
-        ObjLineType lineType = ObjGetLineType(lineBuf);
-
-        switch (lineType)
-        {
-        case ObjLineType_Vertex:
-        {
-            sscanf(lineBuf, "v %f %f %f", &vertexPtr->x, &vertexPtr->y, &vertexPtr->z);
-
-            result.aabb.min.x = Min(result.aabb.min.x, vertexPtr->x);
-            result.aabb.min.y = Min(result.aabb.min.y, vertexPtr->y);
-            result.aabb.min.z = Min(result.aabb.min.z, vertexPtr->z);
-
-            result.aabb.max.x = Max(result.aabb.max.x, vertexPtr->x);
-            result.aabb.max.y = Max(result.aabb.max.y, vertexPtr->y);
-            result.aabb.max.z = Max(result.aabb.max.z, vertexPtr->z);
-
-            vertexPtr++;
-            break;
-        }
-        case ObjLineType_Normal:
-        {
-            sscanf(lineBuf, "vn %f %f %f", &normalPtr->x, &normalPtr->y, &normalPtr->z);
-            normalPtr++;
-            break;
-        }
-        case ObjLineType_UV:
-        {
-            sscanf(lineBuf, "vt %f %f", &uvPtr->x, &uvPtr->y);
-            uvPtr->x = glm::clamp(uvPtr->x, 0.0f, uvPtr->x);
-            uvPtr->y = glm::clamp(uvPtr->y, 0.0f, uvPtr->y);
-            uvPtr++;
-            break;
-        }
-        case ObjLineType_Face:
-        {
-            // TODO: Handle (x, y, z, w) indices
-            // TODO: Handle negative indices
-            // TODO: Handle different patterns "v1" "v1/vt1" "v1/vt1/vn1" "v1//vn1"
-            // Position
-            if (result.normalCount == 0 && result.uvCount == 0)
-            {
-                facePtr->v0.normal = UNKNOWN_VERTEX_INDEX;
-                facePtr->v1.normal = UNKNOWN_VERTEX_INDEX;
-                facePtr->v2.normal = UNKNOWN_VERTEX_INDEX;
-                facePtr->v0.uv     = UNKNOWN_VERTEX_INDEX;
-                facePtr->v1.uv     = UNKNOWN_VERTEX_INDEX;
-                facePtr->v2.uv     = UNKNOWN_VERTEX_INDEX;
-
-                sscanf(lineBuf, "f %u %u %u", &facePtr->v0.position, &facePtr->v1.position, &facePtr->v2.position);
-
-                for (u32 cornerIndex = 0; cornerIndex < ArrayCount(facePtr->corners); cornerIndex++)
-                {
-                    facePtr->corners[cornerIndex].position--;
-                }
-                facePtr++;
-            }
-            // Position + uv + normal
-            else if (result.normalCount > 0 && result.uvCount > 0)
-            {
-                sscanf(lineBuf, "f %u/%u/%u %u/%u/%u %u/%u/%u", &facePtr->v0.position, &facePtr->v0.uv,
-                       &facePtr->v0.normal, &facePtr->v1.position, &facePtr->v1.uv, &facePtr->v1.normal,
-                       &facePtr->v2.position, &facePtr->v2.uv, &facePtr->v2.normal);
-
-                for (u32 cornerIndex = 0; cornerIndex < ArrayCount(facePtr->corners); cornerIndex++)
-                {
-                    facePtr->corners[cornerIndex].position--;
-                    facePtr->corners[cornerIndex].normal--;
-                    facePtr->corners[cornerIndex].uv--;
-                }
-                facePtr++;
-            }
-            else
-            {
-                InvalidCodePath;
-            }
-
-            break;
-        }
-        case ObjLineType_Material:
-        {
-            //  TODO: Resolve path properly
-            char materialFileBuf[128];
-            sscanf(lineBuf, "mtllib %s", materialFileBuf);
-
-            char materialFilepath[256];
-            sprintf(materialFilepath, "%s", "../data/");
-            strcat(materialFilepath, materialFileBuf);
-
-            ObjMaterial* material = &result.materials[materialIndex++];
-            ObjParseMaterialFile(material, materialFilepath, platform);
-            break;
-        }
-            DefaultCase;
-        }
-
-        // Jump to the next line
-        bytesRead += sizeof(u8);
-        cursor++;
-        lineCount++;
-        beginCursor = cursor;
+        platform->FileFree(objFile.content);
+    }
+    else
+    {
+        platform->Logf("Not found");
     }
     platform->Logf("------------------------------------------------------------");
 
