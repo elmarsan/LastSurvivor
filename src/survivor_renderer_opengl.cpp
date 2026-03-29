@@ -778,7 +778,7 @@ internal void TextureQueueBind(Renderer* renderer, GLint arrayUniformLoc)
     TextureQueue* queue                           = &renderer->textureQueue;
     int           textureArray[MAX_TEXTURE_COUNT] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
-    gl->Uniform1iv(arrayUniformLoc, MAX_TEXTURE_COUNT, textureArray);
+    gl->Uniform1iv(arrayUniformLoc, queue->count, textureArray);
     for (u32 textureIndex = 0; textureIndex < queue->count; textureIndex++)
     {
         gl->ActiveTexture(GL_TEXTURE0 + textureIndex);
