@@ -51,6 +51,15 @@ struct ColorVertex
     glm::vec4 color;
 };
 
+struct Vertex
+{
+    glm::vec3  position;
+    glm::vec3  normal;
+    glm::vec2  uv;
+    glm::uvec4 joints;
+    glm::vec4  weights;
+};
+
 struct Batch2D
 {
     GPUBuffer    buffer;

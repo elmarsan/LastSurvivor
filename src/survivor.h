@@ -9,6 +9,7 @@
 #include "survivor_renderer_opengl.h"
 #include "survivor_camera.h"
 #include "survivor_obj.h"
+#include "survivor_gltf.h"
 #include "survivor_world.h"
 #include "survivor_entity.h"
 #include "survivor_build.h"
@@ -23,13 +24,6 @@ global_variable glm::vec4 black{ 0.0f, 0.0f, 0.0f, 1.0f };
 global_variable glm::vec4 magenta{ 1.0f, 0.0f, 1.0f, 1.0f };
 global_variable glm::vec4 yellow{ 1.0f, 1.0f, 0.0f, 1.0f };
 global_variable glm::vec4 orange{ 0.87f, 0.39f, 0.04f, 1.0f };
-
-struct Vertex
-{
-    glm::vec3  position;
-    glm::vec3  normal;
-    glm::vec2 uv;
-};
 
 enum GameMode
 {

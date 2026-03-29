@@ -21,6 +21,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/gtx/rotate_vector.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
