@@ -72,14 +72,14 @@ SnapCandidate BuildFindSnapCandidate(World* world, Entity* obstacle)
     for (u32 aCornerIndex = 0; aCornerIndex < ArrayCount(worldCorners.arr); aCornerIndex++)
     {
         glm::vec3  aCornerPos = worldCorners.arr[aCornerIndex];
-        cell_index cell       = WorldPositionToGridCell(aCornerPos);
-        if (!WorldIsValidCellIndex(cell))
+        cell_index cellIndex  = WorldPositionToGridCell(aCornerPos);
+        if (!WorldIsValidCellIndex(cellIndex))
         {
             continue;
         }
 
-        s32 row = CELL_ROW(cell);
-        s32 col = CELL_COL(cell);
+        s32 row = CELL_ROW(cellIndex);
+        s32 col = CELL_COL(cellIndex);
 
         s32 startRow = Max(row - 1, GRID_MIN_ROW);
         s32 endRow   = Min(row + 1, GRID_MAX_ROW);

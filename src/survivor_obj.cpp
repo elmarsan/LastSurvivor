@@ -459,8 +459,6 @@ internal u32 FindVertexIndex(ObjIndex* index, ObjIndex* indices, u32 indexCount)
 
 void ObjInitGeometryBuffer(Obj* obj, Arena* arena, Renderer* renderer, GPUBuffer* buffer)
 {
-    OpenGL* gl = renderer->gl;
-
     u32 maxVertices = obj->faceCount * 3;
     u32 maxIndices  = obj->faceCount * 3;
 

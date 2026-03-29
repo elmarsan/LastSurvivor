@@ -685,8 +685,7 @@ void TextureInit(Renderer* renderer, Texture* texture, char* filename)
 
 internal void TextureAlloc(Renderer* renderer, Texture* texture, void* imageBuffer, size_t size)
 {
-    OpenGL*      gl       = renderer->gl;
-    PlatformAPI* platform = renderer->platform;
+    OpenGL* gl = renderer->gl;
 
     int width;
     int height;

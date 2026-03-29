@@ -121,9 +121,7 @@ b32 WorldIsValidEntityPosition(World* world, Entity* entity)
     EntityCellCorners cells = EntityGetCellCorners(entity);
     for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.arr); cellIndex++)
     {
-        cell_index cell     = cells.arr[cellIndex];
-        GridCell*  cellInfo = &world->grid[cell];
-
+        cell_index cell = cells.arr[cellIndex];
         if (!WorldIsValidCellIndex(cell) || !WorldIsCellValidForEntity(world, cell, entity))
         {
             return false;
