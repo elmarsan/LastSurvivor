@@ -15,6 +15,7 @@
 #include "survivor_build.h"
 #include "survivor_weapon.h"
 #include "survivor_debug.h"
+#include "survivor_assets.h"
 
 global_variable glm::vec4 green{ 0.2f, 1.0f, 0.0f, 1.0f };
 global_variable glm::vec4 red{ 1.0f, 0.0f, 0.0f, 1.0f };
@@ -38,17 +39,12 @@ struct GameState
     b32   initialized;
     Arena arena;
 
+    Assets*        assets;
     GPUBuffer*     planeBuffer;
-    GPUBuffer*     characterBuffer;
-    GPUBuffer*     fenceBuffer;
-    AABB*          fenceAABB;
-    AABB*          characterAABB;
-    Program*       program;
-    Camera*        camera;
     AudioClip*     pistolShot;
     AudioClip*     backgroundMusic;
-    Texture*       crosshairAtlas;
-    Texture*       fenceDiffuseMapTexture;
+    Program*       program;
+    Camera*        camera;
     EntityManager* entityManager;
     GameMode       mode;
     World*         world;

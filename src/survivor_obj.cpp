@@ -304,9 +304,6 @@ Obj ObjParse(char* filename, PlatformAPI* platform, Arena* arena)
     FileReadResult objFile = platform->FileReadEntire(filename);
     if (objFile.content)
     {
-        // void*  objBuf     = objFile.content;
-        // size_t objBufSize = objFile.contentSize;
-
         ObjPrepass(&result, objFile.content, objFile.contentSize);
         result.positions = PushArray(arena, result.positionCount, glm::vec3);
         result.normals   = PushArray(arena, result.normalCount, glm::vec3);
@@ -475,14 +472,12 @@ void ObjInitGeometryBuffer(Obj* obj, Arena* arena, Renderer* renderer, GPUBuffer
     u32 maxVertices = obj->faceCount * 3;
     u32 maxIndices  = obj->faceCount * 3;
 
-    Vertex*   vertexs       = PushArray(arena, maxVertices, Vertex);
-    u32*      indices       = PushArray(arena, maxIndices, u32);
+    obj->vertexs            = PushArray(arena, maxVertices, Vertex);
+    obj->indices            = PushArray(arena, maxIndices, u32);
     ObjIndex* uniqueIndices = PushArray(arena, maxVertices, ObjIndex);
 
-    u32     vertexCount = 0;
-    u32     indexCount  = 0;
-    u32*    indexPtr    = indices;
-    Vertex* vertexPtr   = vertexs;
+    u32*    indexPtr  = obj->indices;
+    Vertex* vertexPtr = obj->vertexs;
 
     for (u32 faceIndex = 0; faceIndex < obj->faceCount; faceIndex++)
     {
@@ -492,12 +487,12 @@ void ObjInitGeometryBuffer(Obj* obj, Arena* arena, Renderer* renderer, GPUBuffer
         {
             ObjIndex* corner = &face->corners[cornerIndex];
 
-            u32 vertexIndex = FindVertexIndex(corner, uniqueIndices, vertexCount);
+            u32 vertexIndex = FindVertexIndex(corner, uniqueIndices, obj->vertexCount);
 
             if (vertexIndex != UNKNOWN_VERTEX_INDEX)
             {
                 *indexPtr++ = vertexIndex;
-                indexCount++;
+                obj->indexCount++;
             }
             else
             {
@@ -512,12 +507,12 @@ void ObjInitGeometryBuffer(Obj* obj, Arena* arena, Renderer* renderer, GPUBuffer
                     vertexPtr->uv = obj->uvs[corner->uv];
                 }
 
-                *indexPtr++                = vertexCount;
-                uniqueIndices[vertexCount] = *corner;
+                *indexPtr++                     = obj->vertexCount;
+                uniqueIndices[obj->vertexCount] = *corner;
 
-                vertexCount++;
+                obj->vertexCount++;
                 vertexPtr++;
-                indexCount++;
+                obj->indexCount++;
             }
         }
     }
@@ -526,8 +521,8 @@ void ObjInitGeometryBuffer(Obj* obj, Arena* arena, Renderer* renderer, GPUBuffer
     size_t indexSize  = sizeof(u32);
 
     GPUBufferInit(renderer, buffer);
-    GPUBufferVBOAlloc(renderer, buffer, vertexs, vertexSize * vertexCount, vertexSize, GL_STATIC_DRAW);
-    GPUBufferEBOAlloc(renderer, buffer, indices, indexSize * indexCount, indexSize, GL_STATIC_DRAW);
+    GPUBufferVBOAlloc(renderer, buffer, obj->vertexs, vertexSize * obj->vertexCount, vertexSize, GL_STATIC_DRAW);
+    GPUBufferEBOAlloc(renderer, buffer, obj->indices, indexSize * obj->indexCount, indexSize, GL_STATIC_DRAW);
 
     GPUBufferVertexAttrib(renderer, buffer, 0, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, position));
     GPUBufferVertexAttrib(renderer, buffer, 1, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, normal));

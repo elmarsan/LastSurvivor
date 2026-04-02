@@ -13,6 +13,7 @@
 #define GLM_FORCE_INTRINSICS
 #define GLM_FORCE_INLINE
 #define GLM_ENABLE_EXPERIMENTAL
+#define GLM_FORCE_QUAT_DATA_XYZW
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -20,6 +21,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <glm/gtc/quaternion.hpp>
 

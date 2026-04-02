@@ -4,9 +4,11 @@
 #include "survivor_debug_geometry.cpp"
 #include "survivor_debug.cpp"
 #include "survivor_obj.cpp"
+#include "survivor_gltf.cpp"
 #include "survivor_entity.cpp"
 #include "survivor_world.cpp"
 #include "survivor_build.cpp"
+#include "survivor_assets.cpp"
 
 // TODO
 /*
@@ -15,7 +17,7 @@
 - (Game): gamepad controller
 */
 
-void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* weapon, glm::vec3 dir)
+internal void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* weapon, glm::vec3 dir)
 {
     if (weapon->type == WeaponType_Hand)
     {
@@ -67,8 +69,8 @@ void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* 
     }
 }
 
-void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* platform, GameInputController* controller,
-                  Mouse* mouse, glm::vec3 cameraOffset)
+internal void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* platform,
+                           GameInputController* controller, Mouse* mouse, glm::vec3 cameraOffset)
 {
     Assert(player->type == EntityType_Player);
 
@@ -257,7 +259,7 @@ void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* plat
     }
 }
 
-void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta)
+internal void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta)
 {
     Assert(entity->type == EntityType_Enemy);
     Assert(entity->targetEntity);
@@ -413,13 +415,24 @@ void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta
     entity->position = newEntityPosition;
 }
 
-void BuildExit(GameState* state)
+internal void BuildExit(GameState* state)
 {
     if (state->buildObstacle)
     {
         EntityDestroy(state->entityManager, state->buildObstacle, state->world);
         state->buildObstacle = 0;
     }
+}
+
+internal void LoadAssets(Assets* assets)
+{
+    AssetLoad(assets, AssetID_ZombieTexture);
+    AssetLoad(assets, AssetID_CrosshairTexture);
+    AssetLoad(assets, AssetID_FenceTexture);
+    AssetLoad(assets, AssetID_Fence);
+    AssetLoad(assets, AssetID_ZombieFemaleA);
+    AssetLoad(assets, AssetID_ZombieMaleA);
+    AssetLoad(assets, AssetID_Stickman);
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -441,25 +454,21 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         ArenaInit(arena, (size_t)memory->permanentStorageSize - sizeof(GameState),
                   (u8*)memory->permanentStorage + sizeof(GameState));
 
-        state->program                = PushStruct(arena, Program);
-        state->camera                 = PushStruct(arena, Camera);
-        state->planeBuffer            = PushStruct(arena, GPUBuffer);
-        state->characterBuffer        = PushStruct(arena, GPUBuffer);
-        state->fenceBuffer            = PushStruct(arena, GPUBuffer);
-        state->fenceDiffuseMapTexture = PushStruct(arena, Texture);
-        state->crosshairAtlas         = PushStruct(arena, Texture);
-        state->world                  = PushStruct(arena, World);
-        state->world->grid            = PushArray(arena, GRID_CELLS, GridCell);
-        state->mode                   = GameMode_Round;
-        state->roundMaxEnemy          = 1;
-        state->roundCount             = 1;
-        state->roundSpawnIntervalSec  = 0.3;
-        state->roundLastSpawnTime     = 0;
-        state->roundEnemyCount        = 0;
-        state->buildObstacle          = 0;
-        state->buildModeDurationSec   = 10;
-        state->buildModeBeginTime     = 0;
-        state->entityManager          = PushStruct(arena, EntityManager);
+        state->program               = PushStruct(arena, Program);
+        state->camera                = PushStruct(arena, Camera);
+        state->planeBuffer           = PushStruct(arena, GPUBuffer);
+        state->world                 = PushStruct(arena, World);
+        state->world->grid           = PushArray(arena, GRID_CELLS, GridCell);
+        state->mode                  = GameMode_Round;
+        state->roundMaxEnemy         = 1;
+        state->roundCount            = 1;
+        state->roundSpawnIntervalSec = 0.3;
+        state->roundLastSpawnTime    = 0;
+        state->roundEnemyCount       = 0;
+        state->buildObstacle         = 0;
+        state->buildModeDurationSec  = 10;
+        state->buildModeBeginTime    = 0;
+        state->entityManager         = PushStruct(arena, EntityManager);
 
         memset(state->world->grid, 0, sizeof(GridCell) * GRID_CELLS);
 
@@ -470,6 +479,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         ArenaInit(&state->renderer->arena, rendererArenaSize, rendererPermMem);
         RendererInit(state->renderer, gl, platform);
         Renderer* renderer = state->renderer;
+
+        // Assets
+        {
+            state->assets           = PushStruct(arena, Assets);
+            state->assets->platform = platform;
+            state->assets->renderer = renderer;
+            size_t arenaSize        = Megabytes(10);
+            void*  arenaBlock       = PushBlock(arena, arenaSize);
+            ArenaInit(&state->assets->arena, arenaSize, arenaBlock);
+        }
+        Assets* assets = state->assets;
 
 #ifdef BUILD_TYPE_DEBUG
         state->debug                    = PushStruct(arena, Debug);
@@ -506,9 +526,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // Font loading
         RendererTTFLoad(state->renderer, "c:\\windows\\fonts\\calibri.ttf");
 
-        // Texture loading
-        TextureInit(renderer, state->crosshairAtlas, "../data/crosshairs.png");
-
         CameraInit(state->camera,          //
                    { 0.0f, 16.0f, 5.0f },  // Position
                    { 0.0f, -0.9f, -0.4f }, // Target
@@ -525,48 +542,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         platform->AudioSetVolume(-3.0f, AudioClipType_Sfx);
         // platform->AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
-        // Obj fence
-        {
-            Obj obj          = ObjParse("../data/fence_2.obj", platform, arena);
-            state->fenceAABB = PushStruct(arena, AABB);
-            // TODO: Remove simetric hack
-            state->fenceAABB->max   = obj.aabb.max;
-            state->fenceAABB->min   = -obj.aabb.max;
-            state->fenceAABB->min.y = obj.aabb.min.y;
-
-            // TODO: .obj material
-            char fenceDiffuseMapFilepath[256];
-            sprintf(fenceDiffuseMapFilepath, "%s", "../data/");
-            strcat(fenceDiffuseMapFilepath, obj.materials[0].diffuseMap);
-            TextureInit(renderer, state->fenceDiffuseMapTexture, fenceDiffuseMapFilepath);
-
-            ObjInitGeometryBuffer(&obj, arena, renderer, state->fenceBuffer);
-        }
-
-        // Obj stickman
-        {
-            Obj characterObj      = ObjParse("../data/character.obj", platform, arena);
-            state->characterAABB  = PushStruct(arena, AABB);
-            *state->characterAABB = characterObj.aabb;
-
-            ObjInitGeometryBuffer(&characterObj, arena, renderer, state->characterBuffer);
-        }
+        LoadAssets(assets);
+        // GLTFModel                  model      = GLTFParse("../data/ZombieMale_A_joined.gltf", platform);
+        // std::vector<GLTFAnimation> animations = GLTFParseAnimations("../data/ZombieMale@attack_left_70f.gltf",
+        // platform);
 
         Entity* player   = EntityNew(state->entityManager, EntityType_Player);
         player->position = glm::vec3{ 0.0f, 0.0f, 0.0f };
         player->size     = glm::vec3{ 1.0f, 1.0f, 1.0f };
-        player->aabb     = *state->characterAABB;
-
-        // Entity* enemy0       = EntityNew(state->entityManager, EntityType_Enemy);
-        // enemy0->position     = { 4.0f, 0.0f, -8.0f };
-        // enemy0->size         = { 1.0f, 1.0f, 1.0f };
-        // enemy0->aabb         = *state->characterAABB;
-        // enemy0->targetEntity = player;
+        player->aabb     = assets->models[AssetID_Stickman]->aabb;
 
         Entity* fence0   = EntityNew(state->entityManager, EntityType_Obstacle);
         fence0->position = { 0.0f, 0.0f, -2.0f };
         fence0->size     = { 1.0f, 1.0f, 1.0f };
-        fence0->aabb     = *state->fenceAABB;
+        fence0->aabb     = assets->models[AssetID_Fence]->aabb;
         BuildPlaceObstacle(state->world, state->entityManager, fence0);
 
 #if 0
@@ -576,14 +565,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 Entity* enemy1       = EntityNew(state->entityManager, EntityType_Enemy);
                 enemy1->position     = { (f32)i, 0.0f, -12.0f };
                 enemy1->size         = { 1.0f, 1.0f, 1.0f };
-                enemy1->aabb         = *state->characterAABB;
+                enemy1->aabb         = assets->models[AssetID_Stickman]->aabb;
                 enemy1->targetEntity = player;
             }
             {
                 Entity* enemy1       = EntityNew(state->entityManager, EntityType_Enemy);
                 enemy1->position     = { (f32)i, 0.0f, 12.0f };
                 enemy1->size         = { 1.0f, 1.0f, 1.0f };
-                enemy1->aabb         = *state->characterAABB;
+                enemy1->aabb         = assets->models[AssetID_Stickman]->aabb;
                 enemy1->targetEntity = player;
             }
         }
@@ -603,12 +592,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     glm::mat4      view          = CameraView(camera);
     World*         world         = state->world;
 
-    // glm::mat4 view = glm::lookAt(
-    //	glm::vec3(0,2,5),
-    //	glm::vec3(0,0,0),
-    //	glm::vec3(0,1,0)
-    //);
-
     glm::vec4 playerColor{ white };
 
     local_persist cell_index debugSelectedCellIndex = CELL_EMPTY;
@@ -623,10 +606,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
 #if 1
     glm::vec3 cameraOffset{ 0.0f, 16.0f, 5.0f };
-    // CameraSetPitch(camera, -68.0f);
+    CameraSetPitch(camera, -68.0f);
 #else
     glm::vec3 cameraOffset{ 0.0f, 4.0f, 8.0f };
-    // CameraSetPitch(camera, -26.0f);
+    CameraSetPitch(camera, -26.0f);
 #endif
 
 #if BUILD_TYPE_DEBUG
@@ -741,7 +724,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             state->buildObstacle->position = position;
             state->buildObstacle->size     = { 1.0f, 1.0f, 1.0f };
             state->buildObstacle->flags |= EntityFlag_Positioning;
-            state->buildObstacle->aabb = *state->fenceAABB;
+            state->buildObstacle->aabb = state->assets->models[AssetID_Fence]->aabb;
         }
         else if (state->buildObstacle)
         {
@@ -821,7 +804,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             Entity* enemy       = EntityNew(entityManager, EntityType_Enemy);
             enemy->position     = { -2.0f, 0.0f, -8.0f };
             enemy->size         = { 1.0f, 1.0f, 1.0f };
-            enemy->aabb         = *state->characterAABB;
+            enemy->aabb         = state->assets->models[AssetID_Stickman]->aabb;
             enemy->targetEntity = player;
         }
         else if (state->roundEnemyCount < state->roundMaxEnemy)
@@ -837,7 +820,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 Entity* enemy       = EntityNew(entityManager, EntityType_Enemy);
                 enemy->position     = { -2.0f, 0.0f, -8.0f };
                 enemy->size         = { 1.0f, 1.0f, 1.0f };
-                enemy->aabb         = *state->characterAABB;
+                enemy->aabb         = state->assets->models[AssetID_Stickman]->aabb;
                 enemy->targetEntity = player;
             }
         }
@@ -884,20 +867,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     PushRenderCommand(&renderer->commandQueue, FramebufferClear);
 
-    // TODO: .obj material
-    gl->ActiveTexture(GL_TEXTURE3);
-    gl->BindTexture(GL_TEXTURE_2D, state->fenceDiffuseMapTexture->id);
-
     // 2D
     {
         glm::vec2 crosshairSpriteSize{ 128.0f, 128.0f };
         glm::vec2 cursorSize{ 32.0f, 32.0f };
 
-        DrawRect(renderer, { (f32)mouse->pos.x, (f32)mouse->pos.y }, cursorSize, state->crosshairAtlas,
-                 { 965.0f, 0.0f }, crosshairSpriteSize);
+        Texture* crosshairAtlas = state->assets->textures[1];
 
-        DrawRect(renderer, { 50.0f, 50.0f }, cursorSize, state->crosshairAtlas, { 2074.0f, 142.0f },
+        DrawRect(renderer, { (f32)mouse->pos.x, (f32)mouse->pos.y }, cursorSize, crosshairAtlas, { 965.0f, 0.0f },
                  crosshairSpriteSize);
+
+        DrawRect(renderer, { 50.0f, 50.0f }, cursorSize, crosshairAtlas, { 2074.0f, 142.0f }, crosshairSpriteSize);
 
         char coordBuffer[64];
 #if 1
@@ -942,10 +922,36 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // 3D
     {
+        // TODO: .obj material
+        gl->ActiveTexture(GL_TEXTURE3);
+        gl->BindTexture(GL_TEXTURE_2D, state->assets->textures[2]->id); // Fence
+        gl->ActiveTexture(GL_TEXTURE4);
+        gl->BindTexture(GL_TEXTURE_2D, state->assets->textures[0]->id); // Zombie
+
         glm::mat4 viewProj = projection * view;
 
         PushRenderProgramUse(renderer, state->program->id);
-        PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
+
+        PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
+        PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 4);
+        PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 1.0f });
+
+        {
+            glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 5.0f, 0.0f, -2.0f });
+            glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
+            glm::mat4 model     = translate * scale;
+
+            PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+            PushRenderDrawBuffer(renderer, state->assets->models[AssetID_ZombieFemaleA]->gpuBuffer);
+        }
+
+        {
+            glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 8.0f, 0.0f, -2.0f });
+            glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
+            glm::mat4 model     = translate * scale;
+            PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+            PushRenderDrawBuffer(renderer, state->assets->models[AssetID_ZombieMaleA]->gpuBuffer);
+        }
 
         // Floor
         {
@@ -953,6 +959,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 20.0f });
             glm::mat4 model     = translate * scale;
 
+            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
             PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
             PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 0.5f });
             PushRenderDrawBuffer(renderer, state->planeBuffer);
@@ -974,7 +981,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
                     PushRenderUploadUniformVec4(renderer, state->program->id, "color",
                                                 entityIndex == 0 ? playerColor : green);
-                    PushRenderDrawBuffer(renderer, state->characterBuffer);
+                    PushRenderDrawBuffer(renderer, state->assets->models[AssetID_Stickman]->gpuBuffer);
                 }
                 else
                 {
@@ -993,7 +1000,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 3);
                     PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
                     PushRenderUploadUniformVec4(renderer, state->program->id, "color", tintColor);
-                    PushRenderDrawBuffer(renderer, state->fenceBuffer);
+                    PushRenderDrawBuffer(renderer, state->assets->models[AssetID_Fence]->gpuBuffer);
                 }
             }
         }

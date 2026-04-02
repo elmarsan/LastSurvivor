@@ -42,8 +42,9 @@ inline void* _ArenaPush(Arena* arena, size_t size, size_t alignment = 4)
     allocSize += alignmentOffset;
 
     Assert((arena->used + allocSize) <= arena->size);
-    void* result = arena->ptr + arena->used + alignmentOffset;
+    void* result = arena->ptr + alignmentOffset;
     arena->used += allocSize;
+    arena->ptr += allocSize;
     Assert(allocSize >= size);
 
     return result;
@@ -54,3 +55,19 @@ inline void ArenaClear(Arena* arena)
     arena->used = 0;
     arena->ptr  = arena->base;
 }
+
+struct Stream
+{
+    u8* beginBlock;
+    u8* ptr;
+};
+
+inline Stream StreamInit(u8* data) { return Stream{ data, data }; }
+
+inline void StreamRead(Stream* stream, void* dst, size_t size, size_t count)
+{
+    memcpy(dst, stream->ptr, size * count);
+    stream->ptr += size * count;
+}
+
+inline void StreamSkip(Stream* stream, size_t offset) { stream->ptr += offset; }

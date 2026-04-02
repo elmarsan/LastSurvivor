@@ -134,6 +134,24 @@ internal PLATFORM_FILE_FREE(Win32FileFree)
     }
 }
 
+internal PLATFORM_FILE_WRITE_ENTIRE(Win32FileWriteEntire)
+{
+    FILE* file = fopen(filename, "wb");
+    if (file)
+    {
+        size_t writenCount = fwrite(fileContent, size, 1, file);
+        if (writenCount != size)
+        {
+            Log("%zu bytes of %zu were writen", writenCount, size);
+        }
+        fclose(file);
+    }
+    else
+    {
+        Log("Unable to open file '%s'", filename);
+    }
+}
+
 internal PLATFORM_WINDOW_GET_DIMENSION(Win32WindowGetDimension)
 {
     glm::uvec2 result;
@@ -691,6 +709,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
     gameMemory.platform.Logf               = Win32Log;
     gameMemory.platform.FileReadEntire     = Win32FileReadEntire;
     gameMemory.platform.FileFree           = Win32FileFree;
+    gameMemory.platform.FileWriteEntire    = Win32FileWriteEntire;
     gameMemory.platform.WindowGetDimension = Win32WindowGetDimension;
     gameMemory.platform.AudioClipLoad      = Win32AudioClipLoad;
     gameMemory.platform.AudioClipPlay      = Win32AudioClipPlay;

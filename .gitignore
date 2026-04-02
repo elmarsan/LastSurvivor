@@ -1,6 +1,4 @@
 build
 .vs
 
-data/**.obj
-data/**.mtl
-data/**.jpg
+data

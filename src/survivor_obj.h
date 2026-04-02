@@ -46,6 +46,10 @@ struct Obj
     ObjFace*     faces;
     ObjMaterial* materials;
     AABB         aabb;
+    Vertex*      vertexs;
+    u32*         indices;
+    u32          vertexCount;
+    u32          indexCount;
 };
 
 Obj  ObjParse(char* filename, PlatformAPI* platform, Arena* arena);
