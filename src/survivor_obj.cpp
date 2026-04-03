@@ -422,13 +422,13 @@ Obj ObjParse(char* filename, PlatformAPI* platform, Arena* arena)
             }
             case ObjLineType_Material:
             {
-                //  TODO: Resolve path properly
-                char materialFileBuf[128];
-                sscanf(lineBuf, "mtllib %s", materialFileBuf);
+                char   materialFilename[128];
+                char   materialFilepath[256];
+                size_t directoryLen = GetParentPathLength(filename);
 
-                char materialFilepath[256];
-                sprintf(materialFilepath, "%s", "../data/");
-                strcat(materialFilepath, materialFileBuf);
+                sscanf(lineBuf, "mtllib %s", materialFilename);
+                memcpy(materialFilepath, filename, directoryLen);
+                strcpy(materialFilepath + directoryLen, materialFilename);
 
                 ObjMaterial* material = &result.materials[materialIndex++];
                 ObjParseMaterialFile(material, materialFilepath, platform);

@@ -3,9 +3,9 @@
 #include "survivor_renderer_opengl.cpp"
 #include "survivor_debug_geometry.cpp"
 #include "survivor_debug.cpp"
+#include "survivor_assets.cpp"
 #include "survivor_obj.cpp"
 #include "survivor_gltf.cpp"
-#include "survivor_assets.cpp"
 #include "survivor_entity.cpp"
 #include "survivor_world.cpp"
 #include "survivor_build.cpp"
@@ -533,17 +533,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // platform->AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
         LoadAssets(assets);
-#if 0
-        // Export one mesh GLTF example
-        {
-            GLTFModel model = GLTFParse("../data/original/zombies/ZombieMale_A_joined.gltf", platform);
-            // std::vector<GLTFAnimation> animations = GLTFParseAnimations("../data/ZombieMale@attack_left_70f.gltf",
-            // platform);
-            GLTFMeshPrimitive* primitive = &model.meshes[0].primitives[0];
-            AssetExportModel(assets, AssetID_ZombieMaleA, primitive->vertexs.data(), primitive->indices.data(),
-                             (u32)primitive->vertexs.size(), (u32)primitive->indices.size());
-        }
-#endif
 
         Entity* player   = EntityNew(state->entityManager, EntityType_Player);
         player->position = glm::vec3{ 0.0f, 0.0f, 0.0f };
@@ -855,7 +844,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         break;
     }
     }
-    //  ----------------------------------------------------------------------------
+    // ----------------------------------------------------------------------------
 
     // ----------------------------------------------------------------------------
     // Draw

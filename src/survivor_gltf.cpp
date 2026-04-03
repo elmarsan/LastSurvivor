@@ -4,17 +4,6 @@
 #define MESH_NONE     -1
 #define MATERIAL_NONE -1
 
-inline size_t GetParentPathLength(const char* path)
-{
-    const char* last_slash = strrchr(path, '/');
-    if (!last_slash)
-    {
-        return 0;
-    }
-
-    return (last_slash - path) + 1;
-}
-
 GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
 {
     GLTFModel result;
@@ -467,7 +456,7 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
                 for (cgltf_size channelIndex = 0; channelIndex < cgltfAnimation->channels_count; channelIndex++)
                 {
                     cgltf_animation_channel* cgltfChannel = &cgltfAnimation->channels[channelIndex];
-                    AnimationChannel&        channel      = animation.channels[channelIndex];
+                    GLTFAnimationChannel&    channel      = animation.channels[channelIndex];
 
                     channel.nodeIndex    = (int)cgltf_node_index(cgltfData, cgltfChannel->target_node);
                     channel.samplerIndex = (int)cgltf_animation_sampler_index(cgltfAnimation, cgltfChannel->sampler);
@@ -476,17 +465,17 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
                     {
                     case cgltf_animation_path_type_translation:
                     {
-                        channel.path = AnimationChannelPath_Translation;
+                        channel.path = GLTFAnimationChannelPath_Translation;
                         break;
                     }
                     case cgltf_animation_path_type_rotation:
                     {
-                        channel.path = AnimationChannelPath_Rotation;
+                        channel.path = GLTFAnimationChannelPath_Rotation;
                         break;
                     }
                     case cgltf_animation_path_type_scale:
                     {
-                        channel.path = AnimationChannelPath_Scale;
+                        channel.path = GLTFAnimationChannelPath_Scale;
                         break;
                     }
                     default:
@@ -505,7 +494,7 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
                         cgltf_accessor*          cgltfInput   = cgltfSampler->input;
                         cgltf_accessor*          cgltfOutput  = cgltfSampler->output;
 
-                        AnimationSampler& sampler = animation.samplers[samplerIndex];
+                        GLTFAnimationSampler& sampler = animation.samplers[samplerIndex];
                         sampler.times.resize(cgltfInput->count);
                         sampler.transformations.resize(cgltfOutput->count);
 
@@ -532,17 +521,17 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
                         {
                         case cgltf_interpolation_type_linear:
                         {
-                            sampler.interpolation = AnimationSamplerInterpolation_Linear;
+                            sampler.interpolation = GLTFAnimationSamplerInterpolation_Linear;
                             break;
                         }
                         case cgltf_interpolation_type_step:
                         {
-                            sampler.interpolation = AnimationSamplerInterpolation_Step;
+                            sampler.interpolation = GLTFAnimationSamplerInterpolation_Step;
                             break;
                         }
                         case cgltf_interpolation_type_cubic_spline:
                         {
-                            sampler.interpolation = AnimationSamplerInterpolation_CubicSpline;
+                            sampler.interpolation = GLTFAnimationSamplerInterpolation_CubicSpline;
                             break;
                         }
                         default:
@@ -567,6 +556,40 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
     if (binFile.content)
     {
         platform->FileFree(binFile.content);
+    }
+
+    return result;
+}
+
+Skeleton* GLTFConvertSkeleton(GLTFModel* model, Arena* arena)
+{
+    u32 jointCount = (u32)model->skeleton.joints.size();
+
+    Skeleton* result   = PushStruct(arena, Skeleton);
+    result->joints     = PushArray(arena, jointCount, Joint);
+    result->jointCount = jointCount;
+
+    for (u32 jointIndex = 0; jointIndex < jointCount; jointIndex++)
+    {
+        Joint*    joint    = result->joints + jointIndex;
+        GLTFNode* gltfNode = &model->nodes[model->skeleton.joints[jointIndex]];
+
+        u32 childrenCount = (u32)gltfNode->childrenIndexes.size();
+
+        Assert(childrenCount <= JOINT_MAX_CHILDREN_COUNT);
+        for (u32 childrenIndex = 0; childrenIndex < childrenCount; childrenIndex++)
+        {
+            joint->childrenIndexes[childrenIndex] = gltfNode->childrenIndexes[childrenIndex];
+        }
+
+        strcpy(joint->name, gltfNode->name);
+        joint->childrenCount   = childrenCount;
+        joint->bindTranslation = gltfNode->bindTranslation;
+        joint->bindRotation    = gltfNode->bindRotation;
+        joint->bindScale       = gltfNode->bindScale;
+        joint->translation     = gltfNode->localTranslation;
+        joint->rotation        = gltfNode->localRotation;
+        joint->scale           = gltfNode->localScale;
     }
 
     return result;

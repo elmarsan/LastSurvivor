@@ -19,6 +19,7 @@ struct AssetModelFileHeader
 {
     u32 vertexCount;
     u32 indicesCount;
+    b32 skinned;
 };
 
 // clang-format off
@@ -104,6 +105,18 @@ void AssetsLoad(Assets* assets, AssetID id)
                     model->aabb.min.y = model->aabb.min.y;
                 }
 
+                if (modelHeader.skinned)
+                {
+                    u32 jointCount;
+                    StreamRead(&stream, &jointCount, sizeof(jointCount), 1);
+
+                    model->skeleton             = PushStruct(arena, Skeleton);
+                    model->skeleton->joints     = PushArray(arena, jointCount, Joint);
+                    model->skeleton->jointCount = jointCount;
+
+                    StreamRead(&stream, model->skeleton->joints, sizeof(Joint), jointCount);
+                }
+
                 model->gpuBuffer = PushStruct(arena, GPUBuffer);
 
                 GPUBufferInit(renderer, model->gpuBuffer);
@@ -163,7 +176,8 @@ Texture* AssetsTextureGet(Assets* assets, AssetID id)
     return assets->textures[id - AssetID_ZombieTexture];
 }
 
-void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount)
+void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount,
+                      Skeleton* skeleton)
 {
     PlatformAPI* platform = assets->platform;
     Arena*       arena    = &assets->arena;
@@ -181,8 +195,24 @@ void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices,
         header->type              = AssetType_Model;
         modelHeader->vertexCount  = vertexCount;
         modelHeader->indicesCount = indexCount;
+        modelHeader->skinned      = skeleton ? true : false;
+
         memcpy(vertexs2, vertexs, sizeof(Vertex) * vertexCount);
         memcpy(indices2, indices, sizeof(u32) * indexCount);
+
+        if (skeleton)
+        {
+            u32*   jointCount = PushStruct(arena, u32);
+            Joint* joints     = PushArray(arena, skeleton->jointCount, Joint);
+
+            *jointCount = skeleton->jointCount;
+            for (u32 jointIndex = 0; jointIndex < skeleton->jointCount; jointIndex++)
+            {
+                Joint* joint = joints + jointIndex;
+
+                memcpy(joint, &skeleton->joints[jointIndex], sizeof(Joint));
+            }
+        }
 
         u8* beginFileContent = (u8*)header;
         platform->FileWriteEntire(assetFilename, beginFileContent, (arena->ptr) - beginFileContent);

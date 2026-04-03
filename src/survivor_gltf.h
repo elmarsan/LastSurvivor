@@ -6,40 +6,40 @@
 // Only one .bin buffer
 // Materials (only pbr albedo textures)
 
-enum AnimationChannelPath
+enum GLTFAnimationChannelPath
 {
-    AnimationChannelPath_Translation,
-    AnimationChannelPath_Rotation,
-    AnimationChannelPath_Scale
+    GLTFAnimationChannelPath_Translation,
+    GLTFAnimationChannelPath_Rotation,
+    GLTFAnimationChannelPath_Scale
 };
 
-enum AnimationSamplerInterpolation
+enum GLTFAnimationSamplerInterpolation
 {
-    AnimationSamplerInterpolation_Linear,
-    AnimationSamplerInterpolation_Step,
-    AnimationSamplerInterpolation_CubicSpline
+    GLTFAnimationSamplerInterpolation_Linear,
+    GLTFAnimationSamplerInterpolation_Step,
+    GLTFAnimationSamplerInterpolation_CubicSpline
 };
 
-struct AnimationChannel
+struct GLTFAnimationChannel
 {
-    int                  samplerIndex;
-    int                  nodeIndex;
-    AnimationChannelPath path;
+    int                      samplerIndex;
+    int                      nodeIndex;
+    GLTFAnimationChannelPath path;
 };
 
-struct AnimationSampler
+struct GLTFAnimationSampler
 {
-    std::vector<float>            times;
-    std::vector<glm::vec4>        transformations;
-    AnimationSamplerInterpolation interpolation;
+    std::vector<float>                times;
+    std::vector<glm::vec4>            transformations;
+    GLTFAnimationSamplerInterpolation interpolation;
 };
 
 struct GLTFAnimation
 {
-    char                          name[256];
-    f32                           duration;
-    std::vector<AnimationChannel> channels;
-    std::vector<AnimationSampler> samplers;
+    char                              name[256];
+    f32                               duration;
+    std::vector<GLTFAnimationChannel> channels;
+    std::vector<GLTFAnimationSampler> samplers;
 };
 
 struct GLTFMaterial
@@ -100,3 +100,4 @@ struct GLTFModel
 
 GLTFModel                  GLTFParse(char* gltfFilename, PlatformAPI* platform);
 std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* platform);
+Skeleton*                  GLTFConvertSkeleton(GLTFModel* model, Arena* arena);
