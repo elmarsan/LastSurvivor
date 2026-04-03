@@ -40,6 +40,7 @@ struct Entity
     AABB       aabb;
     u32        flags;
     s32        health;
+    AssetID    assetID;
 };
 
 struct EntityManager
@@ -99,6 +100,27 @@ inline Entity* EntityNew(EntityManager* manager, EntityType type)
     Entity* entity = &manager->entities[manager->entityCount++];
     entity->type   = type;
     entity->health = maxHealth;
+
+    switch (entity->type)
+    {
+    case EntityType_Player:
+    {
+        entity->assetID = AssetID_Stickman;
+        break;
+    }
+    case EntityType_Enemy:
+    {
+        u32 min         = AssetID_ZombieFemaleA;
+        u32 max         = AssetID_ZombieMaleA;
+        entity->assetID = (AssetID)(rand() % (max + 1 - min) + min);
+        break;
+    }
+    case EntityType_Obstacle:
+    {
+        entity->assetID = AssetID_Fence;
+        break;
+    }
+    }
 
     return entity;
 }

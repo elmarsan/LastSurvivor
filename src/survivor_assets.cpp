@@ -25,15 +25,22 @@ struct AssetModelFileHeader
 internal char* assetFilenames[AssetID_Count] = {
     "../data/stickman.svv",
     "../data/fence.svv",
-    "../data/ZombieFemale_A.svv",
-    "../data/ZombieMale_A.svv",
-    "../data/zcolors.png",
-    "../data/crosshairs.png",
-    "../data/WoodPlanksOld0242_7_S.jpg"
+    "../data/zombie_Female_A.svv",
+    "../data/zombie_Male_A.svv",
+    "../data/zombie_diffuse.svv",
+    "../data/crosshairs.svv",
+    "../data/fence_diffuse.svv"
 };
 // clang-format on
 
-void AssetLoad(Assets* assets, AssetID id)
+void AssetsInit(Assets* assets, Arena* baseArena, Renderer* renderer, PlatformAPI* platform)
+{
+    SubArena(&assets->arena, baseArena, Megabytes(10));
+    assets->platform = platform;
+    assets->renderer = renderer;
+}
+
+void AssetsLoad(Assets* assets, AssetID id)
 {
     PlatformAPI* platform = assets->platform;
     Arena*       arena    = &assets->arena;
@@ -134,8 +141,29 @@ void AssetLoad(Assets* assets, AssetID id)
     }
 }
 
-internal void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount,
-                               u32 indexCount)
+Model* AssetsModelGet(Assets* assets, AssetID id)
+{
+    if (id > AssetID_ZombieMaleA)
+    {
+        assets->platform->Logf("Invalid model id");
+        Assert(0);
+    }
+
+    return assets->models[id];
+}
+
+Texture* AssetsTextureGet(Assets* assets, AssetID id)
+{
+    if (id < AssetID_ZombieTexture || id > AssetID_FenceTexture)
+    {
+        assets->platform->Logf("Invalid texture id");
+        Assert(0);
+    }
+
+    return assets->textures[id - AssetID_ZombieTexture];
+}
+
+void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount)
 {
     PlatformAPI* platform = assets->platform;
     Arena*       arena    = &assets->arena;
@@ -143,61 +171,21 @@ internal void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32*
     char* assetFilename = assetFilenames[id];
     platform->Logf("Exporting model '%s'", assetFilename);
 
-    // TODO: Temp arenas
-    AssetFileHeader*      header      = PushStruct(arena, AssetFileHeader);
-    AssetModelFileHeader* modelHeader = PushStruct(arena, AssetModelFileHeader);
-    Vertex*               vertexs2    = PushArray(arena, vertexCount, Vertex);
-    u32*                  indices2    = PushArray(arena, indexCount, u32);
+    TemporaryMemory tempMemory = TemporaryMemoryBegin(arena);
+    {
+        AssetFileHeader*      header      = PushStruct(arena, AssetFileHeader);
+        AssetModelFileHeader* modelHeader = PushStruct(arena, AssetModelFileHeader);
+        Vertex*               vertexs2    = PushArray(arena, vertexCount, Vertex);
+        u32*                  indices2    = PushArray(arena, indexCount, u32);
 
-    header->type              = AssetType_Model;
-    modelHeader->vertexCount  = vertexCount;
-    modelHeader->indicesCount = indexCount;
-    memcpy(vertexs2, vertexs, sizeof(Vertex) * vertexCount);
-    memcpy(indices2, indices, sizeof(u32) * indexCount);
+        header->type              = AssetType_Model;
+        modelHeader->vertexCount  = vertexCount;
+        modelHeader->indicesCount = indexCount;
+        memcpy(vertexs2, vertexs, sizeof(Vertex) * vertexCount);
+        memcpy(indices2, indices, sizeof(u32) * indexCount);
 
-    u8* beginFileContent = (u8*)header;
-    platform->FileWriteEntire(assetFilename, beginFileContent, (arena->ptr) - beginFileContent);
-}
-
-internal void AssetExportOBJ(Obj* obj, PlatformAPI* platform, char* filename)
-{
-    FILE* file = fopen(filename, "wb");
-    Assert(file);
-
-    AssetFileHeader      header;
-    AssetModelFileHeader modelHeader;
-    header.type              = AssetType_Model;
-    modelHeader.vertexCount  = obj->vertexCount;
-    modelHeader.indicesCount = obj->indexCount;
-
-    fwrite(&header, sizeof(header), 1, file);
-    fwrite(&modelHeader, sizeof(modelHeader), 1, file);
-    fwrite(obj->vertexs, sizeof(Vertex), obj->vertexCount, file);
-    fwrite(obj->indices, sizeof(u32), obj->indexCount, file);
-
-    fclose(file);
-}
-
-internal void AssetExportGLTF(GLTFModel* gltf, PlatformAPI* platform, char* filename)
-{
-    Assert(gltf->meshes.size() == 1);
-    Assert(gltf->meshes[0].primitives.size() == 1);
-
-    GLTFMeshPrimitive* primitive = &gltf->meshes[0].primitives[0];
-
-    FILE* file = fopen(filename, "wb");
-    Assert(file);
-
-    AssetFileHeader      header;
-    AssetModelFileHeader modelHeader;
-    header.type              = AssetType_Model;
-    modelHeader.vertexCount  = (u32)primitive->vertexs.size();
-    modelHeader.indicesCount = (u32)primitive->indices.size();
-
-    fwrite(&header, sizeof(header), 1, file);
-    fwrite(&modelHeader, sizeof(modelHeader), 1, file);
-    fwrite(primitive->vertexs.data(), sizeof(Vertex), primitive->vertexs.size(), file);
-    fwrite(primitive->indices.data(), sizeof(u32), primitive->indices.size(), file);
-
-    fclose(file);
+        u8* beginFileContent = (u8*)header;
+        platform->FileWriteEntire(assetFilename, beginFileContent, (arena->ptr) - beginFileContent);
+    }
+    TemporaryMemoryEnd(tempMemory);
 }

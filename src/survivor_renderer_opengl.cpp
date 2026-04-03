@@ -20,8 +20,9 @@ internal void Batch2DFlush(Renderer* renderer);
 internal void Batch2DRect(Renderer* renderer, glm::vec2 topLeft, glm::vec2 bottomRight, Texture* texture,
                           glm::vec2 textureTopLeft, glm::vec2 textureBottomRight, glm::vec4 tintColor = white);
 
-void RendererInit(Renderer* renderer, OpenGL* gl, PlatformAPI* platform)
+void RendererInit(Renderer* renderer, Arena* baseArena, OpenGL* gl, PlatformAPI* platform)
 {
+    SubArena(&renderer->arena, baseArena, Megabytes(10));
     renderer->gl       = gl;
     renderer->platform = platform;
     Arena* arena       = &renderer->arena;
@@ -501,51 +502,55 @@ void RendererTTFLoad(Renderer* renderer, char* filename)
             int fontAtlasWidth  = 1024;
             int fontAtlasHeight = 1024;
             f32 fontSize        = 64.0f;
-            // TODO: (Temporal arenas) Free bitmap after allocating texture
-            u8* bitmapFontBuffer = PushArray(arena, fontAtlasWidth * fontAtlasHeight, u8);
 
-            stbtt_pack_context packCtx;
-            stbtt_packedchar   packedChars[TTF_GLYPH_COUNT];
-
-            stbtt_PackBegin(&packCtx, bitmapFontBuffer, fontAtlasWidth, fontAtlasHeight, 0, 1, 0);
-            stbtt_PackFontRange(&packCtx, fontBuffer, 0, fontSize, TTF_FIRST_GLYPH_OFFSET, TTF_GLYPH_COUNT,
-                                packedChars);
-            stbtt_PackEnd(&packCtx);
-
-            for (u32 charIndex = 0; charIndex < TTF_GLYPH_COUNT; charIndex++)
+            TemporaryMemory tempMemory = TemporaryMemoryBegin(arena);
             {
-                f32 x, y;
+                u8* bitmapFontBuffer = PushArray(arena, fontAtlasWidth * fontAtlasHeight, u8);
 
-                stbtt_aligned_quad alignedQuad;
-                stbtt_GetPackedQuad(packedChars, fontAtlasWidth, fontAtlasHeight, (int)charIndex, &x, &y, &alignedQuad,
-                                    0);
+                stbtt_pack_context packCtx;
+                stbtt_packedchar   packedChars[TTF_GLYPH_COUNT];
 
-                TTFGlyph* ttfChar = &renderer->ttfChars[charIndex];
-                ttfChar->x0       = packedChars[charIndex].x0;
-                ttfChar->y0       = packedChars[charIndex].y0;
-                ttfChar->x1       = packedChars[charIndex].x1;
-                ttfChar->y1       = packedChars[charIndex].y1;
-                ttfChar->xoff     = packedChars[charIndex].xoff;
-                ttfChar->yoff     = packedChars[charIndex].yoff;
-                ttfChar->xadvance = packedChars[charIndex].xadvance;
-                ttfChar->s0       = alignedQuad.s0;
-                ttfChar->t0       = alignedQuad.t0;
-                ttfChar->s1       = alignedQuad.s1;
-                ttfChar->t1       = alignedQuad.t1;
+                stbtt_PackBegin(&packCtx, bitmapFontBuffer, fontAtlasWidth, fontAtlasHeight, 0, 1, 0);
+                stbtt_PackFontRange(&packCtx, fontBuffer, 0, fontSize, TTF_FIRST_GLYPH_OFFSET, TTF_GLYPH_COUNT,
+                                    packedChars);
+                stbtt_PackEnd(&packCtx);
+
+                for (u32 charIndex = 0; charIndex < TTF_GLYPH_COUNT; charIndex++)
+                {
+                    f32 x, y;
+
+                    stbtt_aligned_quad alignedQuad;
+                    stbtt_GetPackedQuad(packedChars, fontAtlasWidth, fontAtlasHeight, (int)charIndex, &x, &y,
+                                        &alignedQuad, 0);
+
+                    TTFGlyph* ttfChar = &renderer->ttfChars[charIndex];
+                    ttfChar->x0       = packedChars[charIndex].x0;
+                    ttfChar->y0       = packedChars[charIndex].y0;
+                    ttfChar->x1       = packedChars[charIndex].x1;
+                    ttfChar->y1       = packedChars[charIndex].y1;
+                    ttfChar->xoff     = packedChars[charIndex].xoff;
+                    ttfChar->yoff     = packedChars[charIndex].yoff;
+                    ttfChar->xadvance = packedChars[charIndex].xadvance;
+                    ttfChar->s0       = alignedQuad.s0;
+                    ttfChar->t0       = alignedQuad.t0;
+                    ttfChar->s1       = alignedQuad.s1;
+                    ttfChar->t1       = alignedQuad.t1;
+                }
+
+                platform->FileFree(fontFile.content);
+
+                gl->GenTextures(1, &renderer->glyphAtlas.id);
+                gl->BindTexture(GL_TEXTURE_2D, renderer->glyphAtlas.id);
+                gl->TexImage2D(GL_TEXTURE_2D, 0, GL_R8, (GLsizei)fontAtlasWidth, (GLsizei)fontAtlasHeight, 0, GL_RED,
+                               GL_UNSIGNED_BYTE, (void*)bitmapFontBuffer);
+                GLint swizzleMask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
+                gl->TexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
+                gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                renderer->glyphAtlas.width  = (u32)fontAtlasWidth;
+                renderer->glyphAtlas.height = (u32)fontAtlasHeight;
             }
-
-            platform->FileFree(fontFile.content);
-
-            gl->GenTextures(1, &renderer->glyphAtlas.id);
-            gl->BindTexture(GL_TEXTURE_2D, renderer->glyphAtlas.id);
-            gl->TexImage2D(GL_TEXTURE_2D, 0, GL_R8, (GLsizei)fontAtlasWidth, (GLsizei)fontAtlasHeight, 0, GL_RED,
-                           GL_UNSIGNED_BYTE, (void*)bitmapFontBuffer);
-            GLint swizzleMask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
-            gl->TexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            renderer->glyphAtlas.width  = (u32)fontAtlasWidth;
-            renderer->glyphAtlas.height = (u32)fontAtlasHeight;
+            TemporaryMemoryEnd(tempMemory);
         }
         else
         {

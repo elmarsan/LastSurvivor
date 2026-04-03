@@ -11,11 +11,11 @@
 #include "survivor_obj.h"
 #include "survivor_gltf.h"
 #include "survivor_world.h"
+#include "survivor_assets.h"
 #include "survivor_entity.h"
 #include "survivor_build.h"
 #include "survivor_weapon.h"
 #include "survivor_debug.h"
-#include "survivor_assets.h"
 
 global_variable glm::vec4 green{ 0.2f, 1.0f, 0.0f, 1.0f };
 global_variable glm::vec4 red{ 1.0f, 0.0f, 0.0f, 1.0f };

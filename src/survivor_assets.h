@@ -36,4 +36,8 @@ struct Assets
     Texture*     textures[TEXTURE_COUNT];
 };
 
-void AssetLoad(Assets* assets, AssetID id);
+void     AssetsInit(Assets* assets, Arena* baseArena, PlatformAPI* platform);
+void     AssetsLoad(Assets* assets, AssetID id);
+Model*   AssetsModelGet(Assets* assets, AssetID id);
+Texture* AssetsTextureGet(Assets* assets, AssetID id);
+void     AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount);

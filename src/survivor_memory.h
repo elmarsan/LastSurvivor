@@ -6,6 +6,13 @@ struct Arena
     u8*    ptr;
     size_t size;
     size_t used;
+    u32    tempCount;
+};
+
+struct TemporaryMemory
+{
+    Arena* arena;
+    size_t used;
 };
 
 #define PushStruct(arena, type)       (type*)_ArenaPush(arena, sizeof(type))
@@ -14,10 +21,11 @@ struct Arena
 
 inline void ArenaInit(Arena* arena, size_t size, void* buffer)
 {
-    arena->base = (u8*)buffer;
-    arena->ptr  = (u8*)buffer;
-    arena->size = size;
-    arena->used = 0;
+    arena->base      = (u8*)buffer;
+    arena->ptr       = (u8*)buffer;
+    arena->size      = size;
+    arena->used      = 0;
+    arena->tempCount = 0;
 }
 
 inline size_t ArenaGetAlignmentOffset(Arena* arena, size_t alignment)
@@ -52,8 +60,38 @@ inline void* _ArenaPush(Arena* arena, size_t size, size_t alignment = 4)
 
 inline void ArenaClear(Arena* arena)
 {
-    arena->used = 0;
-    arena->ptr  = arena->base;
+    arena->used      = 0;
+    arena->ptr       = arena->base;
+    arena->tempCount = 0;
+}
+
+inline void SubArena(Arena* subArena, Arena* baseArena, size_t size)
+{
+    subArena->size      = size;
+    subArena->base      = (u8*)PushBlock(baseArena, size);
+    subArena->ptr       = subArena->base;
+    subArena->used      = 0;
+    subArena->tempCount = 0;
+}
+
+inline TemporaryMemory TemporaryMemoryBegin(Arena* arena)
+{
+    TemporaryMemory result;
+
+    result.arena = arena;
+    result.used  = arena->used;
+    arena->tempCount++;
+
+    return result;
+}
+
+inline void TemporaryMemoryEnd(TemporaryMemory temp)
+{
+    Arena* arena = temp.arena;
+    Assert(arena->used >= temp.used);
+    arena->used = temp.used;
+    Assert(arena->tempCount > 0);
+    --arena->tempCount;
 }
 
 struct Stream

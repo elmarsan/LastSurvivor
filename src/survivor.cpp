@@ -5,15 +5,14 @@
 #include "survivor_debug.cpp"
 #include "survivor_obj.cpp"
 #include "survivor_gltf.cpp"
+#include "survivor_assets.cpp"
 #include "survivor_entity.cpp"
 #include "survivor_world.cpp"
 #include "survivor_build.cpp"
-#include "survivor_assets.cpp"
 
 // TODO
 /*
 - (Audio) Make easy to tweak volumes (ignore db conversion)
-- (Misc): Temporal arenas
 - (Game): gamepad controller
 */
 
@@ -426,13 +425,13 @@ internal void BuildExit(GameState* state)
 
 internal void LoadAssets(Assets* assets)
 {
-    AssetLoad(assets, AssetID_ZombieTexture);
-    AssetLoad(assets, AssetID_CrosshairTexture);
-    AssetLoad(assets, AssetID_FenceTexture);
-    AssetLoad(assets, AssetID_Fence);
-    AssetLoad(assets, AssetID_ZombieFemaleA);
-    AssetLoad(assets, AssetID_ZombieMaleA);
-    AssetLoad(assets, AssetID_Stickman);
+    AssetsLoad(assets, AssetID_ZombieTexture);
+    AssetsLoad(assets, AssetID_CrosshairTexture);
+    AssetsLoad(assets, AssetID_FenceTexture);
+    AssetsLoad(assets, AssetID_Fence);
+    AssetsLoad(assets, AssetID_ZombieFemaleA);
+    AssetsLoad(assets, AssetID_ZombieMaleA);
+    AssetsLoad(assets, AssetID_Stickman);
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -448,6 +447,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     // Init
     if (!state->initialized)
     {
+        srand((unsigned int)time(NULL));
+
         platform->Logf("Initializing game state...");
         state->initialized = true;
 
@@ -459,6 +460,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->planeBuffer           = PushStruct(arena, GPUBuffer);
         state->world                 = PushStruct(arena, World);
         state->world->grid           = PushArray(arena, GRID_CELLS, GridCell);
+        state->entityManager         = PushStruct(arena, EntityManager);
+        state->renderer              = PushStruct(arena, Renderer);
+        state->assets                = PushStruct(arena, Assets);
         state->mode                  = GameMode_Round;
         state->roundMaxEnemy         = 1;
         state->roundCount            = 1;
@@ -468,34 +472,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->buildObstacle         = 0;
         state->buildModeDurationSec  = 10;
         state->buildModeBeginTime    = 0;
-        state->entityManager         = PushStruct(arena, EntityManager);
-
-        memset(state->world->grid, 0, sizeof(GridCell) * GRID_CELLS);
-
-        // Renderer setup
-        size_t rendererArenaSize = Megabytes(10);
-        state->renderer          = PushStruct(arena, Renderer);
-        void* rendererPermMem    = PushBlock(arena, rendererArenaSize);
-        ArenaInit(&state->renderer->arena, rendererArenaSize, rendererPermMem);
-        RendererInit(state->renderer, gl, platform);
-        Renderer* renderer = state->renderer;
-
-        // Assets
-        {
-            state->assets           = PushStruct(arena, Assets);
-            state->assets->platform = platform;
-            state->assets->renderer = renderer;
-            size_t arenaSize        = Megabytes(10);
-            void*  arenaBlock       = PushBlock(arena, arenaSize);
-            ArenaInit(&state->assets->arena, arenaSize, arenaBlock);
-        }
-        Assets* assets = state->assets;
-
 #ifdef BUILD_TYPE_DEBUG
         state->debug                    = PushStruct(arena, Debug);
         state->debug->state             = state;
         state->debug->selectedCellIndex = CELL_EMPTY;
 #endif
+
+        memset(state->world->grid, 0, sizeof(GridCell) * GRID_CELLS);
+
+        Renderer* renderer = state->renderer;
+        Assets*   assets   = state->assets;
+
+        RendererInit(renderer, arena, gl, platform);
+        AssetsInit(assets, arena, renderer, platform);
+
         FileReadResult vertexSourceFile   = platform->FileReadEntire("../src/shaders/basic.vert");
         FileReadResult fragmentSourceFile = platform->FileReadEntire("../src/shaders/basic.frag");
 
@@ -543,9 +533,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // platform->AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
         LoadAssets(assets);
-        // GLTFModel                  model      = GLTFParse("../data/ZombieMale_A_joined.gltf", platform);
-        // std::vector<GLTFAnimation> animations = GLTFParseAnimations("../data/ZombieMale@attack_left_70f.gltf",
-        // platform);
+#if 0
+        // Export one mesh GLTF example
+        {
+            GLTFModel model = GLTFParse("../data/original/zombies/ZombieMale_A_joined.gltf", platform);
+            // std::vector<GLTFAnimation> animations = GLTFParseAnimations("../data/ZombieMale@attack_left_70f.gltf",
+            // platform);
+            GLTFMeshPrimitive* primitive = &model.meshes[0].primitives[0];
+            AssetExportModel(assets, AssetID_ZombieMaleA, primitive->vertexs.data(), primitive->indices.data(),
+                             (u32)primitive->vertexs.size(), (u32)primitive->indices.size());
+        }
+#endif
 
         Entity* player   = EntityNew(state->entityManager, EntityType_Player);
         player->position = glm::vec3{ 0.0f, 0.0f, 0.0f };
@@ -867,12 +865,18 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     PushRenderCommand(&renderer->commandQueue, FramebufferClear);
 
+    Model*   zombieMaleAModel   = AssetsModelGet(state->assets, AssetID_ZombieMaleA);
+    Model*   zombieFemaleAModel = AssetsModelGet(state->assets, AssetID_ZombieFemaleA);
+    Texture* crosshairAtlas     = AssetsTextureGet(state->assets, AssetID_CrosshairTexture);
+    Texture* zombieTexture      = AssetsTextureGet(state->assets, AssetID_ZombieTexture);
+    Texture* fenceTexture       = AssetsTextureGet(state->assets, AssetID_FenceTexture);
+
     // 2D
     {
         glm::vec2 crosshairSpriteSize{ 128.0f, 128.0f };
         glm::vec2 cursorSize{ 32.0f, 32.0f };
 
-        Texture* crosshairAtlas = state->assets->textures[1];
+        Texture* crosshairAtlas = AssetsTextureGet(state->assets, AssetID_CrosshairTexture);
 
         DrawRect(renderer, { (f32)mouse->pos.x, (f32)mouse->pos.y }, cursorSize, crosshairAtlas, { 965.0f, 0.0f },
                  crosshairSpriteSize);
@@ -922,35 +926,37 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // 3D
     {
-        // TODO: .obj material
-        gl->ActiveTexture(GL_TEXTURE3);
-        gl->BindTexture(GL_TEXTURE_2D, state->assets->textures[2]->id); // Fence
-        gl->ActiveTexture(GL_TEXTURE4);
-        gl->BindTexture(GL_TEXTURE_2D, state->assets->textures[0]->id); // Zombie
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, fenceTexture->id);
+        gl->ActiveTexture(GL_TEXTURE1);
+        gl->BindTexture(GL_TEXTURE_2D, zombieTexture->id);
 
         glm::mat4 viewProj = projection * view;
 
         PushRenderProgramUse(renderer, state->program->id);
 
-        PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
-        PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 4);
-        PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 1.0f });
-
+        // Test zombies
         {
-            glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 5.0f, 0.0f, -2.0f });
-            glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
-            glm::mat4 model     = translate * scale;
+            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
+            PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 1);
+            PushRenderUploadUniformVec4(renderer, state->program->id, "color", white);
 
-            PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-            PushRenderDrawBuffer(renderer, state->assets->models[AssetID_ZombieFemaleA]->gpuBuffer);
-        }
+            {
+                glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 5.0f, 0.0f, -2.0f });
+                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
+                glm::mat4 model     = translate * scale;
 
-        {
-            glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 8.0f, 0.0f, -2.0f });
-            glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
-            glm::mat4 model     = translate * scale;
-            PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-            PushRenderDrawBuffer(renderer, state->assets->models[AssetID_ZombieMaleA]->gpuBuffer);
+                PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                PushRenderDrawBuffer(renderer, zombieFemaleAModel->gpuBuffer);
+            }
+
+            {
+                glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 8.0f, 0.0f, -2.0f });
+                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
+                glm::mat4 model     = translate * scale;
+                PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                PushRenderDrawBuffer(renderer, zombieMaleAModel->gpuBuffer);
+            }
         }
 
         // Floor
@@ -969,21 +975,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
             {
-                Entity* entity = &entityManager->entities[entityIndex];
+                Entity* entity      = &entityManager->entities[entityIndex];
+                Model*  entityModel = AssetsModelGet(state->assets, entity->assetID);
 
                 glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, entity->position);
                 glm::mat4 rotate    = glm::rotate(glm::mat4{ 1.0f }, entity->yaw, { 0.0f, 1.0f, 0.0f });
-                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ entity->size });
-                glm::mat4 model     = translate * rotate * scale;
-
-                if (entity->type != EntityType_Obstacle)
+                // TODO: Model scales
+                glm::mat4 scale = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ entity->size });
+                if (entity->assetID >= AssetID_ZombieFemaleA && entity->assetID <= AssetID_ZombieMaleA)
                 {
-                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                    PushRenderUploadUniformVec4(renderer, state->program->id, "color",
-                                                entityIndex == 0 ? playerColor : green);
-                    PushRenderDrawBuffer(renderer, state->assets->models[AssetID_Stickman]->gpuBuffer);
+                    scale = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
                 }
-                else
+                glm::mat4 model = translate * rotate * scale;
+
+                if (entity->type == EntityType_Obstacle)
                 {
                     glm::vec4 tintColor{ white };
 
@@ -997,11 +1002,24 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     }
 
                     PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
-                    PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 3);
+                    PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 0);
                     PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                    PushRenderUploadUniformVec4(renderer, state->program->id, "color", tintColor);
-                    PushRenderDrawBuffer(renderer, state->assets->models[AssetID_Fence]->gpuBuffer);
                 }
+                else if (entity->type == EntityType_Enemy)
+                {
+                    PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
+                    PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 1);
+                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                    PushRenderUploadUniformVec4(renderer, state->program->id, "color", white);
+                }
+                else
+                {
+                    PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
+                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                    PushRenderUploadUniformVec4(renderer, state->program->id, "color", green);
+                }
+
+                PushRenderDrawBuffer(renderer, entityModel->gpuBuffer);
             }
         }
     }
