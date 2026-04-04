@@ -11,6 +11,8 @@ enum AssetID
     AssetID_CrosshairTexture,
     AssetID_FenceTexture,
 
+    AssetID_ZombieAttackLeftAnimation,
+
     AssetID_Count
 };
 
@@ -54,16 +56,19 @@ struct AnimationChannel
 
 struct AnimationSampler
 {
+    u32        count;
     f32*       times;
     glm::vec4* transformations;
-    u32        count;
 };
 
 struct Animation
 {
-    f32 duration;
-    u32 channelCount;
-    u32 samplerCount;
+    char              name[256];
+    f32               duration;
+    u32               channelCount;
+    u32               samplerCount;
+    AnimationSampler* samplers;
+    AnimationChannel* channels;
 };
 
 struct Model
@@ -85,6 +90,7 @@ struct Assets
     Renderer*    renderer;
     Model*       models[MODEL_COUNT];
     Texture*     textures[TEXTURE_COUNT];
+    Animation*   animations[1];
 };
 
 void     AssetsInit(Assets* assets, Arena* baseArena, PlatformAPI* platform);
@@ -93,3 +99,4 @@ Model*   AssetsModelGet(Assets* assets, AssetID id);
 Texture* AssetsTextureGet(Assets* assets, AssetID id);
 void     AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount,
                           Skeleton* skeleton);
+void     AssetExportAnimation(Assets* assets, AssetID id, Animation* animation);

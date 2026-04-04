@@ -140,9 +140,9 @@ internal PLATFORM_FILE_WRITE_ENTIRE(Win32FileWriteEntire)
     if (file)
     {
         size_t writenCount = fwrite(fileContent, size, 1, file);
-        if (writenCount != size)
+        if (writenCount != 1)
         {
-            Log("%zu bytes of %zu were writen", writenCount, size);
+            Log("File '%s' was partially written", filename);
         }
         fclose(file);
     }

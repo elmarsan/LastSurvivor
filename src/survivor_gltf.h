@@ -29,7 +29,7 @@ struct GLTFAnimationChannel
 
 struct GLTFAnimationSampler
 {
-    std::vector<float>                times;
+    std::vector<f32>                  times;
     std::vector<glm::vec4>            transformations;
     GLTFAnimationSamplerInterpolation interpolation;
 };
@@ -101,3 +101,4 @@ struct GLTFModel
 GLTFModel                  GLTFParse(char* gltfFilename, PlatformAPI* platform);
 std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* platform);
 Skeleton*                  GLTFConvertSkeleton(GLTFModel* model, Arena* arena);
+Animation*                 GLTFConvertAnimation(GLTFAnimation* animation, Arena* arena);

@@ -100,24 +100,24 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
 
                 if (cgltfNode->has_translation)
                 {
-                    memcpy(&translation.x, cgltfNode->translation, 3 * sizeof(float));
+                    memcpy(&translation.x, cgltfNode->translation, 3 * sizeof(f32));
                 }
                 if (cgltfNode->has_rotation)
                 {
                     glm::vec4 rotationVec;
-                    memcpy(&rotationVec.x, cgltfNode->rotation, 4 * sizeof(float));
+                    memcpy(&rotationVec.x, cgltfNode->rotation, 4 * sizeof(f32));
 
                     // rotation = glm::quat{ rotationVec.w, rotationVec.x, rotationVec.y, rotationVec.z };
                     rotation = glm::quat{ rotationVec.x, rotationVec.y, rotationVec.z, rotationVec.w };
                 }
                 if (cgltfNode->has_scale)
                 {
-                    memcpy(&scale.x, cgltfNode->scale, 3 * sizeof(float));
+                    memcpy(&scale.x, cgltfNode->scale, 3 * sizeof(f32));
                 }
                 if (cgltfNode->has_matrix)
                 {
                     glm::mat4 baseLocalTransform;
-                    memcpy(&baseLocalTransform[0][0], cgltfNode->matrix, 16 * sizeof(float));
+                    memcpy(&baseLocalTransform[0][0], cgltfNode->matrix, 16 * sizeof(f32));
 
                     glm::vec3 skew;
                     glm::vec4 perspective;
@@ -591,6 +591,40 @@ Skeleton* GLTFConvertSkeleton(GLTFModel* model, Arena* arena)
         joint->rotation        = gltfNode->localRotation;
         joint->scale           = gltfNode->localScale;
     }
+
+    return result;
+}
+
+Animation* GLTFConvertAnimation(GLTFAnimation* animation, Arena* arena)
+{
+    u32 samplerCount = (u32)animation->samplers.size();
+    u32 channelCount = (u32)animation->channels.size();
+
+    Animation* result = PushStruct(arena, Animation);
+    result->samplers  = PushArray(arena, samplerCount, AnimationSampler);
+    result->channels  = PushArray(arena, channelCount, AnimationChannel);
+
+    strcpy(result->name, animation->name);
+    result->duration     = animation->duration;
+    result->samplerCount = samplerCount;
+    result->channelCount = channelCount;
+
+    for (u32 samplerIndex = 0; samplerIndex < samplerCount; samplerIndex++)
+    {
+        AnimationSampler*     sampler     = result->samplers + samplerIndex;
+        GLTFAnimationSampler* gltfSampler = &animation->samplers[samplerIndex];
+        Assert(gltfSampler->times.size() == gltfSampler->transformations.size());
+
+        u32 count                = (u32)gltfSampler->times.size();
+        sampler->count           = count;
+        sampler->times           = PushArray(arena, count, f32);
+        sampler->transformations = PushArray(arena, count, glm::vec4);
+
+        memcpy(sampler->times, gltfSampler->times.data(), sizeof(f32) * count);
+        memcpy(sampler->transformations, gltfSampler->transformations.data(), sizeof(glm::vec4) * count);
+    }
+
+    memcpy(result->channels, animation->channels.data(), sizeof(AnimationChannel) * channelCount);
 
     return result;
 }

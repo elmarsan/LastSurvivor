@@ -1,9 +1,10 @@
 enum AssetType
 {
-    AssetType_Model   = 1,
-    AssetType_Font    = 2,
-    AssetType_Sfx     = 3,
-    AssetType_Texture = 4,
+    AssetType_Model     = 1,
+    AssetType_Font      = 2,
+    AssetType_Sfx       = 3,
+    AssetType_Texture   = 4,
+    AssetType_Animation = 5,
 };
 
 struct AssetFileHeader
@@ -22,6 +23,14 @@ struct AssetModelFileHeader
     b32 skinned;
 };
 
+struct AssetAnimationFileHeader
+{
+    char name[256];
+    f32  duration;
+    u32  channelCount;
+    u32  samplerCount;
+};
+
 // clang-format off
 internal char* assetFilenames[AssetID_Count] = {
     "../data/stickman.svv",
@@ -30,7 +39,8 @@ internal char* assetFilenames[AssetID_Count] = {
     "../data/zombie_Male_A.svv",
     "../data/zombie_diffuse.svv",
     "../data/crosshairs.svv",
-    "../data/fence_diffuse.svv"
+    "../data/fence_diffuse.svv",
+	"../data/zombie_male_attack_left.svv"
 };
 // clang-format on
 
@@ -133,6 +143,43 @@ void AssetsLoad(Assets* assets, AssetID id)
 
                 break;
             }
+            case AssetType_Animation:
+            {
+                u32 animationId = id - AssetID_ZombieAttackLeftAnimation;
+                Assert(assets->animations[animationId] == 0);
+
+                assets->animations[animationId] = PushStruct(arena, Animation);
+                Animation* animation            = assets->animations[animationId];
+
+                AssetAnimationFileHeader header;
+                StreamRead(&stream, &header, sizeof(header), 1);
+
+                strcpy(animation->name, header.name);
+                animation->duration     = header.duration;
+                animation->channelCount = header.channelCount;
+                animation->samplerCount = header.samplerCount;
+
+                animation->samplers = PushArray(arena, animation->samplerCount, AnimationSampler);
+                animation->channels = PushArray(arena, animation->channelCount, AnimationChannel);
+
+                for (u32 samplerIndex = 0; samplerIndex < animation->samplerCount; samplerIndex++)
+                {
+                    AnimationSampler* sampler = animation->samplers + samplerIndex;
+
+                    StreamRead(&stream, &sampler->count, sizeof(sampler->count), 1);
+
+                    f32*       times           = PushArray(arena, sampler->count, f32);
+                    glm::vec4* transformations = PushArray(arena, sampler->count, glm::vec4);
+
+                    StreamRead(&stream, times, sizeof(f32), sampler->count);
+                    StreamRead(&stream, transformations, sizeof(glm::vec4), sampler->count);
+
+                    sampler->times           = times;
+                    sampler->transformations = transformations;
+                }
+
+                break;
+            }
             case AssetType_Font:
             {
                 Assert(0);
@@ -216,6 +263,52 @@ void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices,
 
         u8* beginFileContent = (u8*)header;
         platform->FileWriteEntire(assetFilename, beginFileContent, (arena->ptr) - beginFileContent);
+    }
+    TemporaryMemoryEnd(tempMemory);
+}
+
+void AssetExportAnimation(Assets* assets, AssetID id, Animation* animation)
+{
+    Arena*       arena    = &assets->arena;
+    PlatformAPI* platform = assets->platform;
+
+    char* filename = assetFilenames[id];
+    platform->Logf("Exporting animation '%s'", filename);
+
+    TemporaryMemory tempMemory = TemporaryMemoryBegin(arena);
+    {
+        u32 channelCount = animation->channelCount;
+        u32 samplerCount = animation->samplerCount;
+
+        AssetFileHeader*          header     = PushStruct(arena, AssetFileHeader);
+        AssetAnimationFileHeader* animHeader = PushStruct(arena, AssetAnimationFileHeader);
+
+        header->type = AssetType_Animation;
+        strcpy(animHeader->name, animation->name);
+        animHeader->duration     = animation->duration;
+        animHeader->channelCount = channelCount;
+        animHeader->samplerCount = samplerCount;
+
+        // Samplers
+        for (u32 samplerIndex = 0; samplerIndex < animation->samplerCount; samplerIndex++)
+        {
+            AnimationSampler* inSampler = animation->samplers + samplerIndex;
+
+            u32*       count           = PushStruct(arena, u32);
+            f32*       times           = PushArray(arena, inSampler->count, f32);
+            glm::vec4* transformations = PushArray(arena, inSampler->count, glm::vec4);
+
+            *count = inSampler->count;
+            memcpy(times, inSampler->times, sizeof(f32) * inSampler->count);
+            memcpy(transformations, inSampler->transformations, sizeof(glm::vec4) * inSampler->count);
+        }
+
+        // Channels
+        AnimationChannel* channels = PushArray(arena, channelCount, AnimationChannel);
+        memcpy(channels, animation->channels, sizeof(AnimationChannel) * channelCount);
+
+        u8* beginFileContent = (u8*)header;
+        platform->FileWriteEntire(filename, beginFileContent, (arena->ptr) - beginFileContent);
     }
     TemporaryMemoryEnd(tempMemory);
 }

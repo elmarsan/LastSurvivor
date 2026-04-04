@@ -432,6 +432,7 @@ internal void LoadAssets(Assets* assets)
     AssetsLoad(assets, AssetID_ZombieFemaleA);
     AssetsLoad(assets, AssetID_ZombieMaleA);
     AssetsLoad(assets, AssetID_Stickman);
+    AssetsLoad(assets, AssetID_ZombieAttackLeftAnimation);
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
