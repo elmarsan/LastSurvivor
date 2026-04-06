@@ -294,8 +294,8 @@ internal void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, 
     if (!path.empty())
     {
         glm::vec3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
-        entityDir                = SafeNorm(targetPosition - entity->position);
-        entityDir.y              = 0.0f;
+        // entityDir                = SafeNorm(targetPosition - entity->position);
+        // entityDir.y              = 0.0f;
         // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
     }
     // TODO: Break obstacles
@@ -432,7 +432,24 @@ internal void LoadAssets(Assets* assets)
     AssetsLoad(assets, AssetID_ZombieFemaleA);
     AssetsLoad(assets, AssetID_ZombieMaleA);
     AssetsLoad(assets, AssetID_Stickman);
-    AssetsLoad(assets, AssetID_ZombieAttackLeftAnimation);
+    AssetsLoad(assets, AssetID_ZombieMaleAttackLeftAnimation);
+    AssetsLoad(assets, AssetID_ZombieFemaleWalkAnimation);
+}
+
+internal void ComputeJointMatrices(Skeleton* skeleton, u32 fromJointIndex, glm::mat4 parent)
+{
+    Joint* joint = skeleton->joints + fromJointIndex;
+
+    glm::mat4 local = glm::translate(glm::mat4(1.0f), joint->translation) * glm::mat4_cast(joint->rotation) *
+                      glm::scale(glm::mat4(1.0f), joint->scale);
+
+    glm::mat4 global                        = parent * local;
+    skeleton->jointMatrices[fromJointIndex] = global * joint->inverseBindMatrix;
+
+    for (u32 childrenIndex = 0; childrenIndex < joint->childrenCount; childrenIndex++)
+    {
+        ComputeJointMatrices(skeleton, joint->childrenIndexes[childrenIndex], global);
+    }
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -457,6 +474,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                   (u8*)memory->permanentStorage + sizeof(GameState));
 
         state->program               = PushStruct(arena, Program);
+        state->programSkinned        = PushStruct(arena, Program);
         state->camera                = PushStruct(arena, Camera);
         state->planeBuffer           = PushStruct(arena, GPUBuffer);
         state->world                 = PushStruct(arena, World);
@@ -487,18 +505,37 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         RendererInit(renderer, arena, gl, platform);
         AssetsInit(assets, arena, renderer, platform);
 
-        FileReadResult vertexSourceFile   = platform->FileReadEntire("../src/shaders/basic.vert");
-        FileReadResult fragmentSourceFile = platform->FileReadEntire("../src/shaders/basic.frag");
+        // Basic program
+        {
+            FileReadResult vertexSourceFile   = platform->FileReadEntire("../src/shaders/basic.vert");
+            FileReadResult fragmentSourceFile = platform->FileReadEntire("../src/shaders/basic.frag");
 
-        ProgramInit(renderer, state->program);
-        ProgramAttachShader(renderer, state->program, (char*)vertexSourceFile.content, vertexSourceFile.contentSize,
-                            GL_VERTEX_SHADER);
-        ProgramAttachShader(renderer, state->program, (char*)fragmentSourceFile.content, fragmentSourceFile.contentSize,
-                            GL_FRAGMENT_SHADER);
-        ProgramBuild(renderer, state->program);
+            ProgramInit(renderer, state->program);
+            ProgramAttachShader(renderer, state->program, (char*)vertexSourceFile.content, vertexSourceFile.contentSize,
+                                GL_VERTEX_SHADER);
+            ProgramAttachShader(renderer, state->program, (char*)fragmentSourceFile.content,
+                                fragmentSourceFile.contentSize, GL_FRAGMENT_SHADER);
+            ProgramBuild(renderer, state->program);
 
-        platform->FileFree(vertexSourceFile.content);
-        platform->FileFree(fragmentSourceFile.content);
+            platform->FileFree(vertexSourceFile.content);
+            platform->FileFree(fragmentSourceFile.content);
+        }
+
+        // Skinned program
+        {
+            FileReadResult vertexSourceFile   = platform->FileReadEntire("../src/shaders/skinned.vert");
+            FileReadResult fragmentSourceFile = platform->FileReadEntire("../src/shaders/skinned.frag");
+
+            ProgramInit(renderer, state->programSkinned);
+            ProgramAttachShader(renderer, state->programSkinned, (char*)vertexSourceFile.content,
+                                vertexSourceFile.contentSize, GL_VERTEX_SHADER);
+            ProgramAttachShader(renderer, state->programSkinned, (char*)fragmentSourceFile.content,
+                                fragmentSourceFile.contentSize, GL_FRAGMENT_SHADER);
+            ProgramBuild(renderer, state->programSkinned);
+
+            platform->FileFree(vertexSourceFile.content);
+            platform->FileFree(fragmentSourceFile.content);
+        }
 
         // Plane
         {
@@ -534,6 +571,46 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // platform->AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
         LoadAssets(assets);
+
+#if 1
+        TemporaryMemory tempMemory = TemporaryMemoryBegin(arena);
+
+        // Zombie Male
+        {
+            GLTFModel model = GLTFParse("../data/original/zombies/ZombieMale_A_joined.gltf", platform);
+
+            // Export model
+            //
+            GLTFMeshPrimitive* primitive = &model.meshes[0].primitives[0];
+            Skeleton*          skeleton  = GLTFConvertSkeleton(&model, arena);
+            AssetExportModel(assets, AssetID_ZombieMaleA, primitive->vertexs.data(), primitive->indices.data(),
+                             (u32)primitive->vertexs.size(), (u32)primitive->indices.size(), skeleton);
+
+            // Attack-left animation
+            std::vector<GLTFAnimation> gltfAnimations =
+                GLTFParseAnimations("../data/original/animations/ZombieMale@attack_left_70f.gltf", platform);
+            Animation* animation = GLTFConvertAnimation(&model, &gltfAnimations[0], arena);
+            AssetExportAnimation(assets, AssetID_ZombieMaleAttackLeftAnimation, animation);
+        }
+        // Zombie Female
+        {
+            GLTFModel          model     = GLTFParse("../data/original/zombies/ZombieFemale_A_joined.gltf", platform);
+            GLTFMeshPrimitive* primitive = &model.meshes[0].primitives[0];
+
+            Skeleton* skeleton = GLTFConvertSkeleton(&model, arena);
+
+            AssetExportModel(assets, AssetID_ZombieFemaleA, primitive->vertexs.data(), primitive->indices.data(),
+                             (u32)primitive->vertexs.size(), (u32)primitive->indices.size(), skeleton);
+
+            // Female walk animation
+            std::vector<GLTFAnimation> gltfAnimations =
+                GLTFParseAnimations("../data/original/animations/ZombieFemale@walk_64f.gltf", platform);
+            Animation* animation = GLTFConvertAnimation(&model, &gltfAnimations[0], arena);
+            AssetExportAnimation(assets, AssetID_ZombieFemaleWalkAnimation, animation);
+        }
+
+        TemporaryMemoryEnd(tempMemory);
+#endif
 
         Entity* player   = EntityNew(state->entityManager, EntityType_Player);
         player->position = glm::vec3{ 0.0f, 0.0f, 0.0f };
@@ -592,7 +669,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     GameInputController* controller = GetController(input, 0);
 
-#if 1
+#if 0
     glm::vec3 cameraOffset{ 0.0f, 16.0f, 5.0f };
     CameraSetPitch(camera, -68.0f);
 #else
@@ -830,6 +907,89 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             }
         }
 
+        // Debug animations
+        {
+            Model* zombieMaleAModel   = AssetsModelGet(state->assets, AssetID_ZombieMaleA);
+            Model* zombieFemaleAModel = AssetsModelGet(state->assets, AssetID_ZombieFemaleA);
+
+            if (ButtonIsPressed(input->debug.f4))
+            {
+                Animation* zombieMaleAttackLeft = state->assets->animations[0];
+                state->animData[0].animation    = state->animData[0].animation ? 0 : zombieMaleAttackLeft;
+                state->animData[0].animTime     = 0.0f;
+                state->animData[0].skeleton     = zombieMaleAModel->skeleton;
+            }
+
+            if (ButtonIsPressed(input->debug.f5))
+            {
+                Animation* zombieFemaleWalk  = state->assets->animations[1];
+                state->animData[1].animation = state->animData[1].animation ? 0 : zombieFemaleWalk;
+                state->animData[1].animTime  = 0.0f;
+                state->animData[1].skeleton  = zombieFemaleAModel->skeleton;
+            }
+
+            for (u32 i = 0; i < ArrayCount(state->animData); i++)
+            {
+                AnimData* data = &state->animData[i];
+
+                if (data->animation)
+                {
+                    Animation* animation = data->animation;
+                    data->animTime += delta;
+
+                    // End of the animation, loop
+                    if (data->animTime >= animation->duration)
+                    {
+                        data->animTime = 0.0f;
+                    }
+
+                    // TODO: Give the animation logic the skeleton it has to modify
+                    Model*    model    = AssetsModelGet(state->assets, AssetID_ZombieMaleA);
+                    Skeleton* skeleton = data->skeleton;
+
+                    for (u32 channelIndex = 0; channelIndex < animation->channelCount; channelIndex++)
+                    {
+                        AnimationChannel* channel = animation->channels + channelIndex;
+                        AnimationSampler* sampler = animation->samplers + channel->samplerIndex;
+                        Joint*            joint   = skeleton->joints + channel->jointIndex;
+
+                        for (u32 timeIndex = 0; timeIndex + 1 < sampler->count; timeIndex++)
+                        {
+                            f32 t0 = sampler->times[timeIndex];
+                            f32 t1 = sampler->times[timeIndex + 1];
+
+                            if (data->animTime >= t0 && data->animTime <= t1)
+                            {
+                                f32 a = (data->animTime - t0) / (t1 - t0);
+
+                                glm::vec4 v0 = sampler->transformations[timeIndex];
+                                glm::vec4 v1 = sampler->transformations[timeIndex + 1];
+
+                                if (channel->path == AnimationChannelPath_Rotation)
+                                {
+                                    glm::quat q0{ v0.x, v0.y, v0.z, v0.w };
+                                    glm::quat q1{ v1.x, v1.y, v1.z, v1.w };
+                                    joint->rotation = glm::normalize(glm::slerp(q0, q1, a));
+                                }
+                                else if (channel->path == AnimationChannelPath_Translation)
+                                {
+                                    joint->translation = glm::mix(v0, v1, a);
+                                }
+                                else if (channel->path == AnimationChannelPath_Scale)
+                                {
+                                    joint->scale = glm::mix(v0, v1, a);
+                                }
+
+                                break;
+                            }
+                        }
+                    }
+
+                    ComputeJointMatrices(skeleton, 0, glm::mat4{ 1.0f });
+                }
+            }
+        }
+
         WorldUpdate(world, entityManager);
         PlayerUpdate(state, player, delta, platform, controller, mouse, cameraOffset);
 
@@ -923,31 +1083,74 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         glm::mat4 viewProj = projection * view;
 
-        PushRenderProgramUse(renderer, state->program->id);
-
         // Test zombies
         {
-            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
-            PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 1);
-            PushRenderUploadUniformVec4(renderer, state->program->id, "color", white);
+            PushRenderProgramUse(renderer, state->programSkinned->id);
+            PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 1);
 
             {
+                Skeleton* skeleton = zombieMaleAModel->skeleton;
+
+                for (u32 i = 0; i < skeleton->jointCount - 1; i++)
+                {
+                    char uniformBuffer[64];
+                    sprintf(uniformBuffer, "%s[%d]", "uJoints", i);
+
+                    u32       jointIndex  = skeleton->jointIndexBindOrder[i];
+                    glm::mat4 jointMatrix = skeleton->jointMatrices[jointIndex];
+
+                    if (state->animData[0].animation)
+                    {
+                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer, jointMatrix);
+                    }
+                    else
+                    {
+                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer,
+                                                      glm::mat4{ 1.0f });
+                    }
+                }
+
+                {
+                    glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 8.0f, 0.0f, -2.0f });
+                    glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
+                    glm::mat4 model     = translate * scale;
+
+                    PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "mvp", viewProj * model);
+                    PushRenderDrawBuffer(renderer, zombieMaleAModel->gpuBuffer);
+                }
+            }
+
+            {
+                Skeleton* skeleton = zombieFemaleAModel->skeleton;
+
+                for (u32 i = 0; i < skeleton->jointCount - 1; i++)
+                {
+                    char uniformBuffer[64];
+                    sprintf(uniformBuffer, "%s[%d]", "uJoints", i);
+
+                    u32       jointIndex  = skeleton->jointIndexBindOrder[i];
+                    glm::mat4 jointMatrix = skeleton->jointMatrices[jointIndex];
+
+                    if (state->animData[1].animation)
+                    {
+                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer, jointMatrix);
+                    }
+                    else
+                    {
+                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer,
+                                                      glm::mat4{ 1.0f });
+                    }
+                }
+
                 glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 5.0f, 0.0f, -2.0f });
                 glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
                 glm::mat4 model     = translate * scale;
-
-                PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "mvp", viewProj * model);
                 PushRenderDrawBuffer(renderer, zombieFemaleAModel->gpuBuffer);
             }
-
-            {
-                glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 8.0f, 0.0f, -2.0f });
-                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.015f });
-                glm::mat4 model     = translate * scale;
-                PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                PushRenderDrawBuffer(renderer, zombieMaleAModel->gpuBuffer);
-            }
         }
+
+        PushRenderProgramUse(renderer, state->program->id);
 
         // Floor
         {

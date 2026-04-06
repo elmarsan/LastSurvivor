@@ -40,7 +40,8 @@ internal char* assetFilenames[AssetID_Count] = {
     "../data/zombie_diffuse.svv",
     "../data/crosshairs.svv",
     "../data/fence_diffuse.svv",
-	"../data/zombie_male_attack_left.svv"
+	"../data/zombie_male_attack_left.svv",
+	"../data/zombie_female_walk.svv",
 };
 // clang-format on
 
@@ -120,12 +121,14 @@ void AssetsLoad(Assets* assets, AssetID id)
                     u32 jointCount;
                     StreamRead(&stream, &jointCount, sizeof(jointCount), 1);
 
-                    model->skeleton                = PushStruct(arena, Skeleton);
-                    model->skeleton->joints        = PushArray(arena, jointCount, Joint);
-                    model->skeleton->jointMatrices = PushArray(arena, jointCount, glm::mat4);
-                    model->skeleton->jointCount    = jointCount;
+                    model->skeleton                      = PushStruct(arena, Skeleton);
+                    model->skeleton->joints              = PushArray(arena, jointCount, Joint);
+                    model->skeleton->jointMatrices       = PushArray(arena, jointCount, glm::mat4);
+                    model->skeleton->jointIndexBindOrder = PushArray(arena, jointCount - 1, u32);
+                    model->skeleton->jointCount          = jointCount;
 
                     StreamRead(&stream, model->skeleton->joints, sizeof(Joint), jointCount);
+                    StreamRead(&stream, model->skeleton->jointIndexBindOrder, sizeof(u32), jointCount - 1);
                 }
 
                 model->gpuBuffer = PushStruct(arena, GPUBuffer);
@@ -141,13 +144,17 @@ void AssetsLoad(Assets* assets, AssetID id)
                 GPUBufferVertexAttrib(renderer, model->gpuBuffer, 1, 3, GL_FLOAT, sizeof(Vertex),
                                       offsetof(Vertex, normal));
                 GPUBufferVertexAttrib(renderer, model->gpuBuffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
+                GPUBufferVertexAttrib(renderer, model->gpuBuffer, 3, 4, GL_UNSIGNED_INT, sizeof(Vertex),
+                                      offsetof(Vertex, joints));
+                GPUBufferVertexAttrib(renderer, model->gpuBuffer, 4, 4, GL_FLOAT, sizeof(Vertex),
+                                      offsetof(Vertex, weights));
 
                 break;
             }
             case AssetType_Animation:
             {
-                u32 animationId = id - AssetID_ZombieAttackLeftAnimation;
-                Assert(assets->animations[animationId] == 0);
+                Assert(id >= AssetID_ZombieMaleAttackLeftAnimation && id <= AssetID_ZombieFemaleWalkAnimation);
+                u32 animationId = id - AssetID_ZombieMaleAttackLeftAnimation;
 
                 assets->animations[animationId] = PushStruct(arena, Animation);
                 Animation* animation            = assets->animations[animationId];
@@ -178,6 +185,8 @@ void AssetsLoad(Assets* assets, AssetID id)
                     sampler->times           = times;
                     sampler->transformations = transformations;
                 }
+
+                StreamRead(&stream, animation->channels, sizeof(AnimationChannel), animation->channelCount);
 
                 break;
             }
@@ -250,8 +259,9 @@ void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices,
 
         if (skeleton)
         {
-            u32*   jointCount = PushStruct(arena, u32);
-            Joint* joints     = PushArray(arena, skeleton->jointCount, Joint);
+            u32*   jointCount          = PushStruct(arena, u32);
+            Joint* joints              = PushArray(arena, skeleton->jointCount, Joint);
+            u32*   jointIndexBindOrder = PushArray(arena, skeleton->jointCount - 1, u32);
 
             *jointCount = skeleton->jointCount;
             for (u32 jointIndex = 0; jointIndex < skeleton->jointCount; jointIndex++)
@@ -260,6 +270,8 @@ void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices,
 
                 memcpy(joint, &skeleton->joints[jointIndex], sizeof(Joint));
             }
+
+            memcpy(jointIndexBindOrder, skeleton->jointIndexBindOrder, sizeof(u32) * skeleton->jointCount - 1);
         }
 
         u8* beginFileContent = (u8*)header;

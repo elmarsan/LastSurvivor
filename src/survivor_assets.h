@@ -11,13 +11,15 @@ enum AssetID
     AssetID_CrosshairTexture,
     AssetID_FenceTexture,
 
-    AssetID_ZombieAttackLeftAnimation,
+    AssetID_ZombieMaleAttackLeftAnimation,
+    AssetID_ZombieFemaleWalkAnimation,
 
     AssetID_Count
 };
 
 #define MODEL_COUNT              4
 #define TEXTURE_COUNT            3
+#define ANIMATION_COUNT          2
 #define JOINT_MAX_CHILDREN_COUNT 4
 
 struct Joint
@@ -26,12 +28,10 @@ struct Joint
     u32       childrenIndexes[JOINT_MAX_CHILDREN_COUNT];
     u32       childrenCount;
     glm::mat4 inverseBindMatrix;
-    glm::vec3 bindTranslation;
-    glm::quat bindRotation;
-    glm::vec3 bindScale;
     glm::vec3 translation;
     glm::quat rotation;
     glm::vec3 scale;
+    glm::mat4 matrix;
 };
 
 struct Skeleton
@@ -39,6 +39,7 @@ struct Skeleton
     u32        jointCount;
     Joint*     joints;
     glm::mat4* jointMatrices;
+    u32*       jointIndexBindOrder;
 };
 
 enum AnimationChannelPath
@@ -91,7 +92,7 @@ struct Assets
     Renderer*    renderer;
     Model*       models[MODEL_COUNT];
     Texture*     textures[TEXTURE_COUNT];
-    Animation*   animations[1];
+    Animation*   animations[ANIMATION_COUNT];
 };
 
 void     AssetsInit(Assets* assets, Arena* baseArena, PlatformAPI* platform);

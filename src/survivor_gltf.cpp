@@ -1,8 +1,7 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
-#define MESH_NONE     -1
-#define MATERIAL_NONE -1
+#define EMPTY -1
 
 GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
 {
@@ -107,7 +106,6 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                     glm::vec4 rotationVec;
                     memcpy(&rotationVec.x, cgltfNode->rotation, 4 * sizeof(f32));
 
-                    // rotation = glm::quat{ rotationVec.w, rotationVec.x, rotationVec.y, rotationVec.z };
                     rotation = glm::quat{ rotationVec.x, rotationVec.y, rotationVec.z, rotationVec.w };
                 }
                 if (cgltfNode->has_scale)
@@ -125,10 +123,6 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                     glm::decompose(baseLocalTransform, scale, rotation, translation, skew, perspective);
                 }
 
-                node.bindTranslation = node.localTranslation = translation;
-                node.bindRotation = node.localRotation = rotation;
-                node.bindScale = node.localScale = scale;
-
                 node.inverseBindMatrix = glm::mat4{ 1.0f };
 
                 node.childrenIndexes.resize(cgltfNode->children_count);
@@ -138,21 +132,28 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                         (int)cgltf_node_index(cgltfData, cgltfNode->children[childIndex]);
                 }
 
+                // Mesh
                 if (cgltfNode->mesh)
                 {
                     node.meshIndex = (int)cgltf_mesh_index(cgltfData, cgltfNode->mesh);
                 }
                 else
                 {
-                    node.meshIndex = MESH_NONE;
+                    node.meshIndex = EMPTY;
                 }
+                // Skin
                 if (cgltfNode->skin)
                 {
                     result.skeleton.meshNodeIndex = (int)cgltf_skin_index(cgltfData, cgltfNode->skin);
                 }
+                // Parent
+                if (cgltfNode->parent)
+                {
+                    node.parentIndex = (int)cgltf_node_index(cgltfData, cgltfNode->parent);
+                }
                 else
                 {
-                    // node.skinIndex = SKIN_NONE;
+                    node.parentIndex = EMPTY;
                 }
             }
         }
@@ -273,7 +274,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                     }
                     else
                     {
-                        meshPrimitive.materialIndex = MATERIAL_NONE;
+                        meshPrimitive.materialIndex = EMPTY;
                     }
                 }
             }
@@ -561,41 +562,95 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
     return result;
 }
 
-Skeleton* GLTFConvertSkeleton(GLTFModel* model, Arena* arena)
+internal GLTFNode* JointGetMappedGLTFNode(Joint* joint, GLTFModel* gltfModel)
 {
-    u32 jointCount = (u32)model->skeleton.joints.size();
-
-    Skeleton* result   = PushStruct(arena, Skeleton);
-    result->joints     = PushArray(arena, jointCount, Joint);
-    result->jointCount = jointCount;
-
-    for (u32 jointIndex = 0; jointIndex < jointCount; jointIndex++)
+    for (u32 nodeIndex = 0; nodeIndex < gltfModel->nodes.size(); nodeIndex++)
     {
-        Joint*    joint    = result->joints + jointIndex;
-        GLTFNode* gltfNode = &model->nodes[model->skeleton.joints[jointIndex]];
-
-        strcpy(joint->name, gltfNode->name);
-        joint->inverseBindMatrix = gltfNode->inverseBindMatrix;
-        joint->bindTranslation   = gltfNode->bindTranslation;
-        joint->bindRotation      = gltfNode->bindRotation;
-        joint->bindScale         = gltfNode->bindScale;
-        joint->translation       = gltfNode->localTranslation;
-        joint->rotation          = gltfNode->localRotation;
-        joint->scale             = gltfNode->localScale;
+        GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
+        if (strcmp(joint->name, gltfNode->name) == 0)
+        {
+            return gltfNode;
+        }
     }
 
-    std::unordered_map<u32, u32> gltfNodeIndexToJointIndexMap{};
-    for (u32 gltfNodeIndex = 0; gltfNodeIndex < (u32)model->nodes.size(); gltfNodeIndex++)
-    {
-        GLTFNode* gltfNode = &model->nodes[gltfNodeIndex];
+    return 0;
+}
 
-        for (u32 jointIndex = 0; jointIndex < jointCount; jointIndex++)
+internal Joint* GLTFNodeGetMappedJoint(Skeleton* skeleton, GLTFNode* gltfNode)
+{
+    for (u32 jointIndex = 0; jointIndex < skeleton->jointCount; jointIndex++)
+    {
+        Joint* joint = skeleton->joints + jointIndex;
+        if (strcmp(joint->name, gltfNode->name) == 0)
         {
-            Joint* joint = result->joints + jointIndex;
-            if (strcmp(joint->name, gltfNode->name) == 0)
+            return joint;
+        }
+    }
+
+    return 0;
+}
+
+internal void JointInitFromGLTFNode(Joint* joint, GLTFNode* gltfNode)
+{
+    strcpy(joint->name, gltfNode->name);
+    joint->inverseBindMatrix = gltfNode->inverseBindMatrix;
+    joint->translation       = gltfNode->translation;
+    joint->rotation          = gltfNode->rotation;
+    joint->scale             = gltfNode->scale;
+}
+
+Skeleton* GLTFConvertSkeleton(GLTFModel* gltfModel, Arena* arena)
+{
+    u32 jointCount = (u32)gltfModel->skeleton.joints.size() + 1;
+
+    Skeleton* result            = PushStruct(arena, Skeleton);
+    result->joints              = PushArray(arena, jointCount, Joint);
+    result->jointIndexBindOrder = PushArray(arena, jointCount - 1, u32);
+    result->jointCount          = jointCount;
+
+    Joint* root           = result->joints;
+    u32    nextJointIndex = 1;
+
+    for (u32 nodeIndex = 0; nodeIndex < gltfModel->nodes.size(); nodeIndex++)
+    {
+        b32 isJoint = false;
+        for (int jointIndex : gltfModel->skeleton.joints)
+        {
+            if ((u32)jointIndex == nodeIndex)
             {
-                gltfNodeIndexToJointIndexMap[gltfNodeIndex] = jointIndex;
+                isJoint = true;
                 break;
+            }
+        }
+
+        if (isJoint)
+        {
+            Joint*    joint    = result->joints + nextJointIndex;
+            GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
+
+            JointInitFromGLTFNode(joint, gltfNode);
+            nextJointIndex++;
+        }
+        else
+        {
+            // Detect if this node represents the skeleton root.
+            // GLTF convention: the root is a node with no parent that has only one child, and that child is a joint.
+            // This node itself is not a joint, but acts as the parent (transform root) of the joint hierarchy.
+            GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
+
+            if (gltfNode->parentIndex == EMPTY && !gltfNode->childrenIndexes.empty())
+            {
+                Assert(gltfNode->childrenIndexes.size() == 1);
+
+                GLTFNode* gltfChild = &gltfModel->nodes[gltfNode->childrenIndexes[0]];
+                if (gltfChild)
+                {
+                    Joint* childJoint = GLTFNodeGetMappedJoint(result, gltfChild);
+
+                    JointInitFromGLTFNode(root, gltfNode);
+                    root->childrenCount      = 1;
+                    root->childrenIndexes[0] = (u32)(result->joints - childJoint);
+                }
             }
         }
     }
@@ -603,38 +658,48 @@ Skeleton* GLTFConvertSkeleton(GLTFModel* model, Arena* arena)
     for (u32 jointIndex = 0; jointIndex < jointCount; jointIndex++)
     {
         Joint*    joint    = result->joints + jointIndex;
-        GLTFNode* gltfNode = &model->nodes[model->skeleton.joints[jointIndex]];
+        GLTFNode* gltfNode = JointGetMappedGLTFNode(joint, gltfModel);
+        Assert(gltfNode);
 
         u32 childrenCount    = (u32)gltfNode->childrenIndexes.size();
         joint->childrenCount = childrenCount;
+
         for (u32 childrenIndex = 0; childrenIndex < childrenCount; childrenIndex++)
         {
-            u32 gltfChildIndex                    = gltfNode->childrenIndexes[childrenIndex];
-            joint->childrenIndexes[childrenIndex] = gltfNodeIndexToJointIndexMap[gltfChildIndex];
+            GLTFNode* gltfChildNode = &gltfModel->nodes[gltfNode->childrenIndexes[childrenIndex]];
+
+            Joint* child      = GLTFNodeGetMappedJoint(result, gltfChildNode);
+            s64    childIndex = child - result->joints;
+
+            joint->childrenIndexes[childrenIndex] = (u32)childIndex;
         }
     }
+
+    memcpy(result->jointIndexBindOrder, gltfModel->skeleton.joints.data(), sizeof(u32) * jointCount - 1);
 
     return result;
 }
 
-Animation* GLTFConvertAnimation(GLTFAnimation* animation, Arena* arena)
+Animation* GLTFConvertAnimation(GLTFModel* gltfModel, GLTFAnimation* gltfAnimation, Arena* arena)
 {
-    u32 samplerCount = (u32)animation->samplers.size();
-    u32 channelCount = (u32)animation->channels.size();
+    Skeleton* skeleton = GLTFConvertSkeleton(gltfModel, arena);
+
+    u32 samplerCount = (u32)gltfAnimation->samplers.size();
+    u32 channelCount = (u32)gltfAnimation->channels.size();
 
     Animation* result = PushStruct(arena, Animation);
     result->samplers  = PushArray(arena, samplerCount, AnimationSampler);
     result->channels  = PushArray(arena, channelCount, AnimationChannel);
 
-    strcpy(result->name, animation->name);
-    result->duration     = animation->duration;
+    strcpy(result->name, gltfAnimation->name);
+    result->duration     = gltfAnimation->duration;
     result->samplerCount = samplerCount;
     result->channelCount = channelCount;
 
     for (u32 samplerIndex = 0; samplerIndex < samplerCount; samplerIndex++)
     {
         AnimationSampler*     sampler     = result->samplers + samplerIndex;
-        GLTFAnimationSampler* gltfSampler = &animation->samplers[samplerIndex];
+        GLTFAnimationSampler* gltfSampler = &gltfAnimation->samplers[samplerIndex];
         Assert(gltfSampler->times.size() == gltfSampler->transformations.size());
 
         u32 count                = (u32)gltfSampler->times.size();
@@ -646,7 +711,16 @@ Animation* GLTFConvertAnimation(GLTFAnimation* animation, Arena* arena)
         memcpy(sampler->transformations, gltfSampler->transformations.data(), sizeof(glm::vec4) * count);
     }
 
-    memcpy(result->channels, animation->channels.data(), sizeof(AnimationChannel) * channelCount);
+    memcpy(result->channels, gltfAnimation->channels.data(), sizeof(AnimationChannel) * channelCount);
+    for (u32 channelIndex = 0; channelIndex < channelCount; channelIndex++)
+    {
+        AnimationChannel* channel = result->channels + channelIndex;
+
+        GLTFNode* gltfTargetNode = &gltfModel->nodes[channel->jointIndex];
+        Joint*    targetJoint    = GLTFNodeGetMappedJoint(skeleton, gltfTargetNode);
+        s64       jointIndex     = targetJoint - skeleton->joints;
+        channel->jointIndex      = (u32)jointIndex;
+    }
 
     return result;
 }

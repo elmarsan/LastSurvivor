@@ -71,12 +71,9 @@ struct GLTFNode
     int              parentIndex;
     std::vector<int> childrenIndexes;
     glm::mat4        inverseBindMatrix;
-    glm::vec3        bindTranslation;
-    glm::quat        bindRotation;
-    glm::vec3        bindScale;
-    glm::vec3        localTranslation;
-    glm::quat        localRotation;
-    glm::vec3        localScale;
+    glm::vec3        translation;
+    glm::quat        rotation;
+    glm::vec3        scale;
 };
 
 struct GLTFSkeleton
@@ -101,4 +98,4 @@ struct GLTFModel
 GLTFModel                  GLTFParse(char* gltfFilename, PlatformAPI* platform);
 std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* platform);
 Skeleton*                  GLTFConvertSkeleton(GLTFModel* model, Arena* arena);
-Animation*                 GLTFConvertAnimation(GLTFAnimation* animation, Arena* arena);
+Animation*                 GLTFConvertAnimation(GLTFModel* model, GLTFAnimation* animation, Arena* arena);
