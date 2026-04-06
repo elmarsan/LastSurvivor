@@ -120,9 +120,10 @@ void AssetsLoad(Assets* assets, AssetID id)
                     u32 jointCount;
                     StreamRead(&stream, &jointCount, sizeof(jointCount), 1);
 
-                    model->skeleton             = PushStruct(arena, Skeleton);
-                    model->skeleton->joints     = PushArray(arena, jointCount, Joint);
-                    model->skeleton->jointCount = jointCount;
+                    model->skeleton                = PushStruct(arena, Skeleton);
+                    model->skeleton->joints        = PushArray(arena, jointCount, Joint);
+                    model->skeleton->jointMatrices = PushArray(arena, jointCount, glm::mat4);
+                    model->skeleton->jointCount    = jointCount;
 
                     StreamRead(&stream, model->skeleton->joints, sizeof(Joint), jointCount);
                 }

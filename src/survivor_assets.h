@@ -22,9 +22,10 @@ enum AssetID
 
 struct Joint
 {
+    char      name[256];
     u32       childrenIndexes[JOINT_MAX_CHILDREN_COUNT];
     u32       childrenCount;
-    char      name[256];
+    glm::mat4 inverseBindMatrix;
     glm::vec3 bindTranslation;
     glm::quat bindRotation;
     glm::vec3 bindScale;

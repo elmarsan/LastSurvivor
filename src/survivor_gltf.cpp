@@ -574,22 +574,44 @@ Skeleton* GLTFConvertSkeleton(GLTFModel* model, Arena* arena)
         Joint*    joint    = result->joints + jointIndex;
         GLTFNode* gltfNode = &model->nodes[model->skeleton.joints[jointIndex]];
 
-        u32 childrenCount = (u32)gltfNode->childrenIndexes.size();
+        strcpy(joint->name, gltfNode->name);
+        joint->inverseBindMatrix = gltfNode->inverseBindMatrix;
+        joint->bindTranslation   = gltfNode->bindTranslation;
+        joint->bindRotation      = gltfNode->bindRotation;
+        joint->bindScale         = gltfNode->bindScale;
+        joint->translation       = gltfNode->localTranslation;
+        joint->rotation          = gltfNode->localRotation;
+        joint->scale             = gltfNode->localScale;
+    }
 
-        Assert(childrenCount <= JOINT_MAX_CHILDREN_COUNT);
+    std::unordered_map<u32, u32> gltfNodeIndexToJointIndexMap{};
+    for (u32 gltfNodeIndex = 0; gltfNodeIndex < (u32)model->nodes.size(); gltfNodeIndex++)
+    {
+        GLTFNode* gltfNode = &model->nodes[gltfNodeIndex];
+
+        for (u32 jointIndex = 0; jointIndex < jointCount; jointIndex++)
+        {
+            Joint* joint = result->joints + jointIndex;
+            if (strcmp(joint->name, gltfNode->name) == 0)
+            {
+                gltfNodeIndexToJointIndexMap[gltfNodeIndex] = jointIndex;
+                break;
+            }
+        }
+    }
+
+    for (u32 jointIndex = 0; jointIndex < jointCount; jointIndex++)
+    {
+        Joint*    joint    = result->joints + jointIndex;
+        GLTFNode* gltfNode = &model->nodes[model->skeleton.joints[jointIndex]];
+
+        u32 childrenCount    = (u32)gltfNode->childrenIndexes.size();
+        joint->childrenCount = childrenCount;
         for (u32 childrenIndex = 0; childrenIndex < childrenCount; childrenIndex++)
         {
-            joint->childrenIndexes[childrenIndex] = gltfNode->childrenIndexes[childrenIndex];
+            u32 gltfChildIndex                    = gltfNode->childrenIndexes[childrenIndex];
+            joint->childrenIndexes[childrenIndex] = gltfNodeIndexToJointIndexMap[gltfChildIndex];
         }
-
-        strcpy(joint->name, gltfNode->name);
-        joint->childrenCount   = childrenCount;
-        joint->bindTranslation = gltfNode->bindTranslation;
-        joint->bindRotation    = gltfNode->bindRotation;
-        joint->bindScale       = gltfNode->bindScale;
-        joint->translation     = gltfNode->localTranslation;
-        joint->rotation        = gltfNode->localRotation;
-        joint->scale           = gltfNode->localScale;
     }
 
     return result;
