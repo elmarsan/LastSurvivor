@@ -14,6 +14,7 @@
 #define GLM_FORCE_INLINE
 #define GLM_ENABLE_EXPERIMENTAL
 #define GLM_FORCE_QUAT_DATA_XYZW
+#define GLM_FORCE_XYZW_ONLY
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>

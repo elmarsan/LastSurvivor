@@ -247,17 +247,17 @@ internal void ObjParseMaterialFile(ObjMaterial* material, char* filename, Platfo
             }
             case MaterialLineType_Ambient:
             {
-                sscanf(lineBuf, "Ka %f %f %f", &material->ambient.r, &material->ambient.g, &material->ambient.b);
+                sscanf(lineBuf, "Ka %f %f %f", &material->ambient.x, &material->ambient.y, &material->ambient.z);
                 break;
             }
             case MaterialLineType_Diffuse:
             {
-                sscanf(lineBuf, "Kd %f %f %f", &material->diffuse.r, &material->diffuse.g, &material->diffuse.b);
+                sscanf(lineBuf, "Kd %f %f %f", &material->diffuse.x, &material->diffuse.y, &material->diffuse.z);
                 break;
             }
             case MaterialLineType_Specular:
             {
-                sscanf(lineBuf, "Ks %f %f %f", &material->specular.r, &material->specular.g, &material->specular.b);
+                sscanf(lineBuf, "Ks %f %f %f", &material->specular.x, &material->specular.y, &material->specular.z);
                 break;
             }
             case MaterialLineType_SpecularExponent:

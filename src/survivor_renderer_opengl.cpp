@@ -139,7 +139,7 @@ void RendererFrameEnd(Renderer* renderer)
             command += sizeof(FramebufferClear);
             FramebufferClear* command = (FramebufferClear*)payload;
 
-            gl->ClearColor(command->color.r, command->color.g, command->color.b, 1.0f);
+            gl->ClearColor(command->color.x, command->color.y, command->color.z, 1.0f);
             gl->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             break;
         }
