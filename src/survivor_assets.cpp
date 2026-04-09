@@ -40,8 +40,8 @@ internal char* assetFilenames[AssetID_Count] = {
     "../data/zombie_diffuse.svv",
     "../data/crosshairs.svv",
     "../data/fence_diffuse.svv",
-	"../data/zombie_male_attack_left.svv",
-	"../data/zombie_female_walk.svv",
+    "../data/zombie_male_attack_left.svv",
+    "../data/zombie_female_walk.svv",
 };
 // clang-format on
 
@@ -233,8 +233,19 @@ Texture* AssetsTextureGet(Assets* assets, AssetID id)
     return assets->textures[id - AssetID_ZombieTexture];
 }
 
-void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount,
-                      Skeleton* skeleton)
+Animation* AssetsAnimationGet(Assets* assets, AssetID id)
+{
+    if (id < AssetID_ZombieMaleAttackLeftAnimation || id > AssetID_ZombieFemaleWalkAnimation)
+    {
+        assets->platform->Logf("Invalid animation id");
+        Assert(0);
+    }
+
+    return assets->animations[id - AssetID_ZombieMaleAttackLeftAnimation];
+}
+
+void AssetsModelExport(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount,
+                       Skeleton* skeleton)
 {
     PlatformAPI* platform = assets->platform;
     Arena*       arena    = &assets->arena;
@@ -280,7 +291,7 @@ void AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices,
     TemporaryMemoryEnd(tempMemory);
 }
 
-void AssetExportAnimation(Assets* assets, AssetID id, Animation* animation)
+void AssetsAnimationExport(Assets* assets, AssetID id, Animation* animation)
 {
     Arena*       arena    = &assets->arena;
     PlatformAPI* platform = assets->platform;
@@ -324,4 +335,63 @@ void AssetExportAnimation(Assets* assets, AssetID id, Animation* animation)
         platform->FileWriteEntire(filename, beginFileContent, (arena->ptr) - beginFileContent);
     }
     TemporaryMemoryEnd(tempMemory);
+}
+
+internal void SkeletonComputeJointMatrices(Skeleton* skeleton, u32 fromJointIndex, glm::mat4 parent)
+{
+    Joint* joint = skeleton->joints + fromJointIndex;
+
+    glm::mat4 local = glm::translate(glm::mat4(1.0f), joint->translation) * glm::mat4_cast(joint->rotation) *
+                      glm::scale(glm::mat4(1.0f), joint->scale);
+
+    glm::mat4 global                        = parent * local;
+    skeleton->jointMatrices[fromJointIndex] = global * joint->inverseBindMatrix;
+
+    for (u32 childrenIndex = 0; childrenIndex < joint->childrenCount; childrenIndex++)
+    {
+        SkeletonComputeJointMatrices(skeleton, joint->childrenIndexes[childrenIndex], global);
+    }
+}
+
+void SkeletonUpdatePose(Skeleton* skeleton) { SkeletonComputeJointMatrices(skeleton, 0, glm::mat4{ 1.0f }); }
+
+void SkeletonApplyAnimation(Skeleton* skeleton, Animation* animation, f32 time)
+{
+    for (u32 channelIndex = 0; channelIndex < animation->channelCount; channelIndex++)
+    {
+        AnimationChannel* channel = animation->channels + channelIndex;
+        AnimationSampler* sampler = animation->samplers + channel->samplerIndex;
+        Joint*            joint   = skeleton->joints + channel->jointIndex;
+
+        for (u32 timeIndex = 0; timeIndex + 1 < sampler->count; timeIndex++)
+        {
+            f32 t0 = sampler->times[timeIndex];
+            f32 t1 = sampler->times[timeIndex + 1];
+
+            if (time >= t0 && time <= t1)
+            {
+                f32 a = (time - t0) / (t1 - t0);
+
+                glm::vec4 v0 = sampler->transformations[timeIndex];
+                glm::vec4 v1 = sampler->transformations[timeIndex + 1];
+
+                if (channel->path == AnimationChannelPath_Rotation)
+                {
+                    glm::quat q0{ v0.x, v0.y, v0.z, v0.w };
+                    glm::quat q1{ v1.x, v1.y, v1.z, v1.w };
+                    joint->rotation = glm::normalize(glm::slerp(q0, q1, a));
+                }
+                else if (channel->path == AnimationChannelPath_Translation)
+                {
+                    joint->translation = glm::mix(v0, v1, a);
+                }
+                else if (channel->path == AnimationChannelPath_Scale)
+                {
+                    joint->scale = glm::mix(v0, v1, a);
+                }
+
+                break;
+            }
+        }
+    }
 }

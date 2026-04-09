@@ -29,24 +29,35 @@ enum EntityFlag
     EntityFlag_InvalidPosition = (1 << 3)
 };
 
+struct ActiveAnimation
+{
+    Animation* current;
+    f32        time;
+};
+
 struct Entity
 {
-    EntityType type;
-    glm::vec3  position;
-    glm::vec3  velocity;
-    glm::vec3  size;
-    f32        yaw;          // TODO: Replace by v3/quat for rotations?
-    Entity*    targetEntity; // TODO: Needed? All enemies will follow player
-    AABB       aabb;
-    u32        flags;
-    s32        health;
-    AssetID    assetID;
+    EntityType      type;
+    glm::vec3       position;
+    glm::vec3       velocity;
+    glm::vec3       scale;
+    f32             yaw;          // TODO: Replace by v3/quat for rotations?
+    Entity*         targetEntity; // TODO: Needed? All enemies will follow player
+    AABB            aabb;
+    u32             flags;
+    s32             health;
+    AssetID         assetID;
+    Skeleton*       skeleton;
+    ActiveAnimation animation;
 };
 
 struct EntityManager
 {
-    Entity entities[MAX_ENTITY_COUNT];
-    u32    entityCount;
+    Arena   arena;
+    Arena   transientArena;
+    Assets* assets;
+    Entity  entities[MAX_ENTITY_COUNT];
+    u32     entityCount;
 };
 
 union EntityWorldCorners
@@ -89,111 +100,35 @@ inline b32 EntityIsHorizontalOriented(Entity* entity)
     return (entity->yaw == Pi) || (entity->yaw == (2 * Pi)) || (entity->yaw == 0.0f);
 }
 
-void EntityUpdate(Entity* entity);
-
-inline Entity* EntityGet(EntityManager* manager, u32 index) { return &manager->entities[index]; }
-
-inline Entity* EntityNew(EntityManager* manager, EntityType type)
+inline void EntityManagerInit(EntityManager* manager, Arena* arena, Assets* assets)
 {
-    Assert(manager->entityCount < ArrayCount(manager->entities));
+    SubArena(&manager->arena, arena, Megabytes(1));
+    SubArena(&manager->transientArena, arena, Megabytes(1));
 
-    Entity* entity = &manager->entities[manager->entityCount++];
-    entity->type   = type;
-    entity->health = maxHealth;
-
-    switch (entity->type)
-    {
-    case EntityType_Player:
-    {
-        entity->assetID = AssetID_Stickman;
-        break;
-    }
-    case EntityType_Enemy:
-    {
-        u32 min         = AssetID_ZombieFemaleA;
-        u32 max         = AssetID_ZombieMaleA;
-        entity->assetID = (AssetID)(rand() % (max + 1 - min) + min);
-        break;
-    }
-    case EntityType_Obstacle:
-    {
-        entity->assetID = AssetID_Fence;
-        break;
-    }
-    }
-
-    return entity;
+    manager->assets = assets;
 }
 
-inline void WorldRemoveEntity(World* world, Entity* entity)
+inline void EntityManagerFreeTransient(EntityManager* manager)
 {
-    if (entity->type == EntityType_Obstacle)
-    {
-        EntityCellCorners cells = EntityGetCellCorners(entity);
-
-        // Corners
-        {
-            for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.arr); cellIndex++)
-            {
-                cell_index cornerCellIndex = cells.arr[cellIndex];
-                GridCell*  cell            = &world->grid[cornerCellIndex];
-
-                for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cell->entities); entityPtrIndex++)
-                {
-                    if (cell->entities[entityPtrIndex] == entity)
-                    {
-                        cell->entities[entityPtrIndex] = 0;
-                        cell->entityCount--;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Occupied cells
-        {
-            u32 beginRow = CELL_ROW(cells.bottomRight);
-            u32 endRow   = CELL_ROW(cells.topRight);
-            u32 beginCol = CELL_COL(cells.bottomLeft);
-            u32 endCol   = CELL_COL(cells.bottomRight);
-
-            for (u32 row = beginRow; row <= endRow; row++)
-            {
-                for (u32 col = beginCol; col <= endCol; col++)
-                {
-                    world->grid[CELL_INDEX(row, col)].entityCount--;
-                }
-            }
-        }
-    }
-}
-
-inline void EntityRemove(EntityManager* manager, Entity* entity)
-{
-    u32 index = 0;
+#if BUILD_TYPE_DEBUG
+    u32 enemyCount = 0;
     for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
     {
-        if (entity == &manager->entities[entityIndex])
+        if (manager->entities[entityIndex].type == EntityType_Enemy)
         {
-            index = entityIndex;
-            break;
+            enemyCount++;
         }
     }
 
-    while (index < manager->entityCount)
-    {
-        manager->entities[index] = manager->entities[index + 1];
-        index++;
-    }
+    Assert(enemyCount == 0);
+#endif
 
-    manager->entityCount--;
+    ArenaClear(&manager->transientArena);
 }
 
-inline void EntityDestroy(EntityManager* manager, Entity* entity, World* world)
-{
-    WorldRemoveEntity(world, entity);
-    EntityRemove(manager, entity);
-}
+inline Entity* EntityGet(EntityManager* manager, u32 index) { return &manager->entities[index]; }
+Entity*        EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position);
+void           EntityDestroy(EntityManager* manager, Entity* entity, World* world);
 
 inline void EntitiesRemoveFlag(EntityManager* manager, u32 flag)
 {

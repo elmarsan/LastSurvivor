@@ -1,3 +1,133 @@
+Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
+{
+    Assert(manager->entityCount < ArrayCount(manager->entities));
+
+    // Arena* arena          = &manager->arena;
+    Arena* transientArena = &manager->transientArena;
+
+    Entity* entity   = &manager->entities[manager->entityCount++];
+    entity->type     = type;
+    entity->health   = maxHealth;
+    entity->position = position;
+
+    switch (entity->type)
+    {
+    case EntityType_Player:
+    {
+        entity->assetID = AssetID_Stickman;
+        entity->scale   = glm::vec3{ 1.0f, 1.0f, 1.0f };
+        Model* model    = AssetsModelGet(manager->assets, entity->assetID);
+        entity->aabb    = model->aabb;
+        // TODO: Push player skeleton to permanent arena
+        break;
+    }
+    case EntityType_Enemy:
+    {
+        u32     min        = AssetID_ZombieFemaleA;
+        u32     max        = AssetID_ZombieMaleA;
+        AssetID assetID    = (AssetID)(rand() % (max + 1 - min) + min);
+        Model*  model      = AssetsModelGet(manager->assets, assetID);
+        u32     jointCount = model->skeleton->jointCount;
+
+        entity->assetID = assetID;
+        entity->scale   = ZOMBIE_SCALE;
+        // TODO: Apply ZOMBIE_SCALE factor to zombie aabb
+        entity->aabb                          = AssetsModelGet(manager->assets, AssetID_Stickman)->aabb;
+        entity->skeleton                      = PushStruct(transientArena, Skeleton);
+        entity->skeleton->joints              = PushArray(transientArena, jointCount, Joint);
+        entity->skeleton->jointMatrices       = PushArray(transientArena, jointCount, glm::mat4);
+        entity->skeleton->jointIndexBindOrder = PushArray(transientArena, jointCount - 1, u32);
+        entity->skeleton->jointCount          = jointCount;
+
+        memcpy(entity->skeleton->joints, model->skeleton->joints, sizeof(Joint) * jointCount);
+        memcpy(entity->skeleton->jointIndexBindOrder, model->skeleton->jointIndexBindOrder,
+               sizeof(u32) * jointCount - 1);
+
+        break;
+    }
+    case EntityType_Obstacle:
+    {
+        entity->assetID = AssetID_Fence;
+        entity->scale   = glm::vec3{ 1.0f, 1.0f, 1.0f };
+        Model* model    = AssetsModelGet(manager->assets, AssetID_Fence);
+        entity->aabb    = model->aabb;
+        break;
+    }
+    }
+
+    return entity;
+}
+
+internal void WorldRemoveEntity(World* world, Entity* entity)
+{
+    if (entity->type == EntityType_Obstacle)
+    {
+        EntityCellCorners cells = EntityGetCellCorners(entity);
+
+        // Corners
+        {
+            for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.arr); cellIndex++)
+            {
+                cell_index cornerCellIndex = cells.arr[cellIndex];
+                GridCell*  cell            = &world->grid[cornerCellIndex];
+
+                for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cell->entities); entityPtrIndex++)
+                {
+                    if (cell->entities[entityPtrIndex] == entity)
+                    {
+                        cell->entities[entityPtrIndex] = 0;
+                        cell->entityCount--;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Occupied cells
+        {
+            u32 beginRow = CELL_ROW(cells.bottomRight);
+            u32 endRow   = CELL_ROW(cells.topRight);
+            u32 beginCol = CELL_COL(cells.bottomLeft);
+            u32 endCol   = CELL_COL(cells.bottomRight);
+
+            for (u32 row = beginRow; row <= endRow; row++)
+            {
+                for (u32 col = beginCol; col <= endCol; col++)
+                {
+                    world->grid[CELL_INDEX(row, col)].entityCount--;
+                }
+            }
+        }
+    }
+}
+
+internal void EntityRemove(EntityManager* manager, Entity* entity)
+{
+    u32 index = 0;
+    for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
+    {
+        if (entity == &manager->entities[entityIndex])
+        {
+            index = entityIndex;
+            break;
+        }
+    }
+
+    while (index < manager->entityCount)
+    {
+        manager->entities[index] = manager->entities[index + 1];
+        index++;
+    }
+
+    manager->entityCount--;
+}
+
+void EntityDestroy(EntityManager* manager, Entity* entity, World* world)
+{
+    WorldRemoveEntity(world, entity);
+    EntityRemove(manager, entity);
+}
+
 EntityWorldCorners EntityGetWorldCorners(Entity* entity)
 {
     glm::vec3 localCorners[4] = {
@@ -139,29 +269,3 @@ b32 EntitiesIntersect(Entity* a, Entity* b, AABB* intersection = 0)
 
     return AABBIntersection(aWorldAABB, bWorldAABB, intersection);
 }
-
-// typedef void (*EntityUpdateFunc)(GameState* state, f32 delta, Entity* entity);
-//
-// internal void PlayerUpdate(GameState* state, f32 delta, PlatformAPI platform, Entity* entity)
-//{
-// }
-//  internal void EnemyUpdate(GameState* state, Entity* entity)
-//{
-//      //
-//      Assert(0);
-//  }
-//  internal void ObstacleUpdate(GameState* state, Entity* entity)
-//{
-//      //
-//      Assert(0);
-//  }
-//
-// void EntityUpdate(GameState* state, f32 delta, Entity* entity)
-//{
-//     local_persist EntityUpdateFunc updateTable[EntityType_Count] = {
-//         PlayerUpdate,
-//         // EnemyUpdate,
-//         // ObstacleUpdate
-//     };
-//     updateTable[entity->type](state, entity);
-// }

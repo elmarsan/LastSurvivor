@@ -22,6 +22,8 @@ enum AssetID
 #define ANIMATION_COUNT          2
 #define JOINT_MAX_CHILDREN_COUNT 4
 
+#define ZOMBIE_SCALE glm::vec3{ 0.015f, 0.015f, 0.015f }
+
 struct Joint
 {
     char      name[256];
@@ -95,10 +97,14 @@ struct Assets
     Animation*   animations[ANIMATION_COUNT];
 };
 
-void     AssetsInit(Assets* assets, Arena* baseArena, PlatformAPI* platform);
-void     AssetsLoad(Assets* assets, AssetID id);
-Model*   AssetsModelGet(Assets* assets, AssetID id);
-Texture* AssetsTextureGet(Assets* assets, AssetID id);
-void     AssetExportModel(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount,
-                          Skeleton* skeleton);
-void     AssetExportAnimation(Assets* assets, AssetID id, Animation* animation);
+void       AssetsInit(Assets* assets, Arena* baseArena, PlatformAPI* platform);
+void       AssetsLoad(Assets* assets, AssetID id);
+Model*     AssetsModelGet(Assets* assets, AssetID id);
+void       AssetsModelExport(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount,
+                             Skeleton* skeleton);
+Animation* AssetsAnimationGet(Assets* assets, AssetID id);
+void       AssetsAnimationExport(Assets* assets, AssetID id, Animation* animation);
+Texture*   AssetsTextureGet(Assets* assets, AssetID id);
+
+void SkeletonUpdatePose(Skeleton* skeleton);
+void SkeletonApplyAnimation(Skeleton* skeleton, Animation* animation, f32 time);
