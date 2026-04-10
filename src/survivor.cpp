@@ -3,8 +3,6 @@
 #include "survivor_debug_geometry.cpp"
 #include "survivor_debug.cpp"
 #include "survivor_assets.cpp"
-#include "survivor_obj.cpp"
-#include "survivor_gltf.cpp"
 #include "survivor_entity.cpp"
 #include "survivor_world.cpp"
 #include "survivor_build.cpp"
@@ -446,15 +444,35 @@ internal void BuildExit(GameState* state)
 
 internal void LoadAssets(Assets* assets)
 {
-    AssetsLoad(assets, AssetID_ZombieTexture);
-    AssetsLoad(assets, AssetID_CrosshairTexture);
-    AssetsLoad(assets, AssetID_FenceTexture);
-    AssetsLoad(assets, AssetID_Fence);
-    AssetsLoad(assets, AssetID_ZombieFemaleA);
-    AssetsLoad(assets, AssetID_ZombieMaleA);
-    AssetsLoad(assets, AssetID_Stickman);
-    AssetsLoad(assets, AssetID_ZombieMaleAttackLeftAnimation);
-    AssetsLoad(assets, AssetID_ZombieFemaleWalkAnimation);
+    AssetsLoad(assets, Texture_Zombie);
+    AssetsLoad(assets, Texture_Crosshair);
+    AssetsLoad(assets, Texture_Fence);
+    AssetsLoad(assets, Model_Fence);
+    AssetsLoad(assets, Model_ZombieFemaleA);
+    AssetsLoad(assets, Model_ZombieMaleA);
+    AssetsLoad(assets, Model_Stickman);
+
+    AssetsLoad(assets, Anim_ZombieMaleAttackLeft);
+    AssetsLoad(assets, Anim_ZombieMaleAttackRight);
+    AssetsLoad(assets, Anim_ZombieMaleIdle);
+    AssetsLoad(assets, Anim_ZombieMaleIdleAlert);
+    AssetsLoad(assets, Anim_ZombieMaleIdle2);
+    AssetsLoad(assets, Anim_ZombieMaleRunning);
+    AssetsLoad(assets, Anim_ZombieMaleSlowWalk);
+    AssetsLoad(assets, Anim_ZombieMaleWalk);
+    AssetsLoad(assets, Anim_ZombieMaleWalkAgressive);
+    AssetsLoad(assets, Anim_ZombieMaleWalkLimp);
+
+    AssetsLoad(assets, Anim_ZombieFemaleAttackLeft);
+    AssetsLoad(assets, Anim_ZombieFemaleAttackRight);
+    AssetsLoad(assets, Anim_ZombieFemaleIdle);
+    AssetsLoad(assets, Anim_ZombieFemaleIdleAlert);
+    AssetsLoad(assets, Anim_ZombieFemaleIdle2);
+    AssetsLoad(assets, Anim_ZombieFemaleRunning);
+    AssetsLoad(assets, Anim_ZombieFemaleSlowWalk);
+    AssetsLoad(assets, Anim_ZombieFemaleWalk);
+    AssetsLoad(assets, Anim_ZombieFemaleWalkAgressive);
+    AssetsLoad(assets, Anim_ZombieFemaleWalkLimp);
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -577,46 +595,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         // platform->AudioClipPlay(state->backgroundMusic, AudioClipPlayFlag_Loop);
 
         LoadAssets(assets);
-
-#if 0
-        TemporaryMemory tempMemory = TemporaryMemoryBegin(arena);
-
-        // Zombie Male
-        {
-            GLTFModel model = GLTFParse("../data/original/zombies/ZombieMale_A_joined.gltf", platform);
-
-            // Export model
-            //
-            GLTFMeshPrimitive* primitive = &model.meshes[0].primitives[0];
-            Skeleton*          skeleton  = GLTFConvertSkeleton(&model, arena);
-            AssetsModelExport(assets, AssetID_ZombieMaleA, primitive->vertexs.data(), primitive->indices.data(),
-                              (u32)primitive->vertexs.size(), (u32)primitive->indices.size(), skeleton);
-
-            // Attack-left animation
-            std::vector<GLTFAnimation> gltfAnimations =
-                GLTFParseAnimations("../data/original/animations/ZombieMale@attack_left_70f.gltf", platform);
-            Animation* animation = GLTFConvertAnimation(&model, &gltfAnimations[0], arena);
-            AssetsAnimationExport(assets, AssetID_ZombieMaleAttackLeftAnimation, animation);
-        }
-        // Zombie Female
-        {
-            GLTFModel          model     = GLTFParse("../data/original/zombies/ZombieFemale_A_joined.gltf", platform);
-            GLTFMeshPrimitive* primitive = &model.meshes[0].primitives[0];
-
-            Skeleton* skeleton = GLTFConvertSkeleton(&model, arena);
-
-            AssetsModelExport(assets, AssetID_ZombieFemaleA, primitive->vertexs.data(), primitive->indices.data(),
-                              (u32)primitive->vertexs.size(), (u32)primitive->indices.size(), skeleton);
-
-            // Female walk animation
-            std::vector<GLTFAnimation> gltfAnimations =
-                GLTFParseAnimations("../data/original/animations/ZombieFemale@walk_64f.gltf", platform);
-            Animation* animation = GLTFConvertAnimation(&model, &gltfAnimations[0], arena);
-            AssetsAnimationExport(assets, AssetID_ZombieFemaleWalkAnimation, animation);
-        }
-
-        TemporaryMemoryEnd(tempMemory);
-#endif
 
         Entity* player = EntitySpawn(state->entityManager, EntityType_Player, { 0.0f, 0.0f, 0.0f });
         Entity* fence0 = EntitySpawn(state->entityManager, EntityType_Obstacle, { 0.0f, 0.0f, -2.0f });
@@ -907,13 +885,18 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 }
                 else
                 {
-                    if (enemy->assetID == AssetID_ZombieMaleA)
+                    if (enemy->assetID == Model_ZombieMaleA)
                     {
-                        enemy->animation.current = AssetsAnimationGet(assets, AssetID_ZombieMaleAttackLeftAnimation);
+                        // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleAttackLeft);
+                        // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleRunning);
+                        // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleWalkLimp);
+                        enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleSlowWalk);
                     }
-                    else if (enemy->assetID == AssetID_ZombieFemaleA)
+                    else if (enemy->assetID == Model_ZombieFemaleA)
                     {
-                        enemy->animation.current = AssetsAnimationGet(assets, AssetID_ZombieFemaleWalkAnimation);
+                        enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleWalk);
+                        // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleAttackLeft);
+                        // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleIdle);
                     }
                     else
                     {
@@ -948,16 +931,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     PushRenderCommand(&renderer->commandQueue, FramebufferClear);
 
-    Texture* crosshairAtlas = AssetsTextureGet(assets, AssetID_CrosshairTexture);
-    Texture* zombieTexture  = AssetsTextureGet(assets, AssetID_ZombieTexture);
-    Texture* fenceTexture   = AssetsTextureGet(assets, AssetID_FenceTexture);
+    Texture* crosshairAtlas = AssetsTextureGet(assets, Texture_Crosshair);
+    Texture* zombieTexture  = AssetsTextureGet(assets, Texture_Zombie);
+    Texture* fenceTexture   = AssetsTextureGet(assets, Texture_Fence);
 
     // 2D
     {
         glm::vec2 crosshairSpriteSize{ 128.0f, 128.0f };
         glm::vec2 cursorSize{ 32.0f, 32.0f };
 
-        Texture* crosshairAtlas = AssetsTextureGet(assets, AssetID_CrosshairTexture);
+        Texture* crosshairAtlas = AssetsTextureGet(assets, Texture_Crosshair);
 
         DrawRect(renderer, { (f32)mouse->pos.x, (f32)mouse->pos.y }, cursorSize, crosshairAtlas, { 965.0f, 0.0f },
                  crosshairSpriteSize);

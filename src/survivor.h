@@ -10,8 +10,6 @@
 #include "survivor_renderer_opengl.h"
 #include "survivor_camera.h"
 #include "survivor_assets.h"
-#include "survivor_obj.h"
-#include "survivor_gltf.h"
 #include "survivor_world.h"
 #include "survivor_entity.h"
 #include "survivor_build.h"

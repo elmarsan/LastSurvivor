@@ -46,7 +46,7 @@ struct Entity
     AABB            aabb;
     u32             flags;
     s32             health;
-    AssetID         assetID;
+    u32             assetID;
     Skeleton*       skeleton;
     ActiveAnimation animation;
 };

@@ -1,28 +1,83 @@
 #pragma once
 
-enum AssetID
+enum
 {
-    AssetID_Stickman,
-    AssetID_Fence,
-    AssetID_ZombieFemaleA,
-    AssetID_ZombieMaleA,
+    Model_ZombieMaleA,
+    Model_ZombieFemaleA,
+    Model_Stickman,
+    Model_Fence,
 
-    AssetID_ZombieTexture,
-    AssetID_CrosshairTexture,
-    AssetID_FenceTexture,
+    Texture_Zombie,
+    Texture_Crosshair,
+    Texture_Fence,
 
-    AssetID_ZombieMaleAttackLeftAnimation,
-    AssetID_ZombieFemaleWalkAnimation,
+    Anim_ZombieMaleAttackLeft,
+    Anim_ZombieMaleAttackRight,
+    Anim_ZombieMaleIdle,
+    Anim_ZombieMaleIdleAlert,
+    Anim_ZombieMaleIdle2,
+    Anim_ZombieMaleRunning,
+    Anim_ZombieMaleSlowWalk,
+    Anim_ZombieMaleWalk,
+    Anim_ZombieMaleWalkAgressive,
+    Anim_ZombieMaleWalkLimp,
 
-    AssetID_Count
+    Anim_ZombieFemaleAttackLeft,
+    Anim_ZombieFemaleAttackRight,
+    Anim_ZombieFemaleIdle,
+    Anim_ZombieFemaleIdleAlert,
+    Anim_ZombieFemaleIdle2,
+    Anim_ZombieFemaleRunning,
+    Anim_ZombieFemaleSlowWalk,
+    Anim_ZombieFemaleWalk,
+    Anim_ZombieFemaleWalkAgressive,
+    Anim_ZombieFemaleWalkLimp,
+
+    AssetCount
+};
+
+char* assetFilenames[AssetCount] = {
+    // Models
+    "../data/zombie_Male_A.svv",
+    "../data/zombie_Female_A.svv",
+    "../data/stickman.svv",
+    "../data/fence.svv",
+
+    // Textures
+    "../data/zombie_diffuse.svv",
+    "../data/crosshairs.svv",
+    "../data/fence_diffuse.svv",
+
+    // Zombie male animations
+    "../data/zombie_male_attack_left.svv",
+    "../data/zombie_male_attack_right.svv",
+    "../data/zombie_male_idle.svv",
+    "../data/zombie_male_idle_alert.svv",
+    "../data/zombie_male_idle_2.svv",
+    "../data/zombie_male_running.svv",
+    "../data/zombie_male_slow_walk.svv",
+    "../data/zombie_male_walk.svv",
+    "../data/zombie_male_walk_agressive.svv",
+    "../data/zombie_male_walk_limp.svv",
+
+    // Zombie female animations
+    "../data/zombie_female_attack_left.svv",
+    "../data/zombie_female_attack_right.svv",
+    "../data/zombie_female_idle.svv",
+    "../data/zombie_female_idle_alert.svv",
+    "../data/zombie_female_idle_2.svv",
+    "../data/zombie_female_running.svv",
+    "../data/zombie_female_slow_walk.svv",
+    "../data/zombie_female_walk.svv",
+    "../data/zombie_female_walk_agressive.svv",
+    "../data/zombie_female_walk_limp.svv",
 };
 
 #define MODEL_COUNT              4
 #define TEXTURE_COUNT            3
-#define ANIMATION_COUNT          2
+#define ANIMATION_COUNT          20
 #define JOINT_MAX_CHILDREN_COUNT 4
-
-#define ZOMBIE_SCALE glm::vec3{ 0.015f, 0.015f, 0.015f }
+#define ZOMBIE_SCALE             glm::vec3{ 0.015f, 0.015f, 0.015f }
 
 struct Joint
 {
@@ -97,14 +152,42 @@ struct Assets
     Animation*   animations[ANIMATION_COUNT];
 };
 
+enum AssetType
+{
+    AssetType_Model     = 1,
+    AssetType_Font      = 2,
+    AssetType_Sfx       = 3,
+    AssetType_Texture   = 4,
+    AssetType_Animation = 5,
+};
+
+struct AssetFileHeader
+{
+    u8  type;
+    u8  reserved[3];
+    u64 reserved4;
+};
+
+struct AssetModelFileHeader
+{
+    u32 vertexCount;
+    u32 indicesCount;
+    b32 skinned;
+};
+
+struct AssetAnimationFileHeader
+{
+    char name[256];
+    f32  duration;
+    u32  channelCount;
+    u32  samplerCount;
+};
+
 void       AssetsInit(Assets* assets, Arena* baseArena, PlatformAPI* platform);
-void       AssetsLoad(Assets* assets, AssetID id);
-Model*     AssetsModelGet(Assets* assets, AssetID id);
-void       AssetsModelExport(Assets* assets, AssetID id, Vertex* vertexs, u32* indices, u32 vertexCount, u32 indexCount,
-                             Skeleton* skeleton);
-Animation* AssetsAnimationGet(Assets* assets, AssetID id);
-void       AssetsAnimationExport(Assets* assets, AssetID id, Animation* animation);
-Texture*   AssetsTextureGet(Assets* assets, AssetID id);
+void       AssetsLoad(Assets* assets, u32 id);
+Model*     AssetsModelGet(Assets* assets, u32 id);
+Animation* AssetsAnimationGet(Assets* assets, u32 id);
+Texture*   AssetsTextureGet(Assets* assets, u32 id);
 
 void SkeletonUpdatePose(Skeleton* skeleton);
 void SkeletonApplyAnimation(Skeleton* skeleton, Animation* animation, f32 time);

@@ -1,5 +1,58 @@
+#pragma once
+
 #define LINE_BUFFER_CHAR_COUNT 128
 #define UNKNOWN_VERTEX_INDEX   0xFFFFFFFF
+
+// Note: Limited to triangulated faces
+
+struct ObjIndex
+{
+    u32 position;
+    u32 uv;
+    u32 normal;
+};
+
+union ObjFace
+{
+    struct
+    {
+        ObjIndex v0;
+        ObjIndex v1;
+        ObjIndex v2;
+    };
+
+    ObjIndex corners[3];
+};
+
+struct ObjMaterial
+{
+    char      name[64];
+    char      diffuseMap[256];
+    glm::vec3 ambient;
+    glm::vec3 diffuse;
+    glm::vec3 specular;
+    f32       specularExponent;
+    f32       disolve;
+    u32       illumModel;
+};
+
+struct Obj
+{
+    u32          positionCount;
+    u32          normalCount;
+    u32          uvCount;
+    u32          faceCount;
+    u32          materialCount;
+    glm::vec3*   positions;
+    glm::vec3*   normals;
+    glm::vec2*   uvs;
+    ObjFace*     faces;
+    ObjMaterial* materials;
+    AABB         aabb;
+    // GPU buffers
+    std::vector<Vertex> vertexs;
+    std::vector<u32>    indices;
+};
 
 enum ObjLineType
 {
@@ -33,7 +86,7 @@ enum MaterialLineType
     MaterialLineType_Empty
 };
 
-internal ObjLineType ObjGetLineType(char* lineBuf)
+ObjLineType ObjGetLineType(char* lineBuf)
 {
     char attrBuf[64];
     sscanf(lineBuf, "%s ", attrBuf);
@@ -93,7 +146,7 @@ internal ObjLineType ObjGetLineType(char* lineBuf)
     }
 }
 
-internal void ObjPrepass(Obj* data, void* objBuffer, size_t size)
+void ObjPrepass(Obj* data, void* objBuffer, size_t size)
 {
     u8* beginCursor = (u8*)objBuffer;
     u8* cursor      = beginCursor;
@@ -149,7 +202,7 @@ internal void ObjPrepass(Obj* data, void* objBuffer, size_t size)
     }
 }
 
-internal MaterialLineType MaterialGetLineType(char* lineBuf)
+MaterialLineType MaterialGetLineType(char* lineBuf)
 {
     char attrBuf[64];
     sscanf(lineBuf, "%s ", attrBuf);
@@ -209,7 +262,7 @@ internal MaterialLineType MaterialGetLineType(char* lineBuf)
     }
 }
 
-internal void ObjParseMaterialFile(ObjMaterial* material, char* filename, PlatformAPI* platform)
+void ObjParseMaterialFile(ObjMaterial* material, char* filename, PlatformAPI* platform)
 {
     FileReadResult materialFile = platform->FileReadEntire(filename);
     if (materialFile.contentSize > 0)
@@ -291,6 +344,68 @@ internal void ObjParseMaterialFile(ObjMaterial* material, char* filename, Platfo
     else
     {
         InvalidCodePath;
+    }
+}
+
+u32 FindVertexIndex(ObjIndex* index, ObjIndex* indices, u32 indexCount)
+{
+    for (u32 i = 0; i < indexCount; i++)
+    {
+        if (indices[i].position == index->position && indices[i].uv == index->uv && indices[i].normal == index->normal)
+        {
+            return i;
+        }
+    }
+    return UNKNOWN_VERTEX_INDEX;
+}
+
+void ObjComputeGPUBuffers(Obj* obj)
+{
+    u32 maxVertices = obj->faceCount * 3;
+
+    obj->vertexs.clear();
+    obj->indices.clear();
+    obj->vertexs.reserve(maxVertices);
+    obj->indices.reserve(maxVertices);
+
+    std::vector<ObjIndex> uniqueIndices;
+    uniqueIndices.reserve(maxVertices);
+
+    for (u32 faceIndex = 0; faceIndex < obj->faceCount; faceIndex++)
+    {
+        ObjFace* face = &obj->faces[faceIndex];
+
+        for (u32 cornerIndex = 0; cornerIndex < 3; cornerIndex++)
+        {
+            ObjIndex* corner = &face->corners[cornerIndex];
+
+            u32 vertexIndex = FindVertexIndex(corner, uniqueIndices.data(), (u32)uniqueIndices.size());
+
+            if (vertexIndex != UNKNOWN_VERTEX_INDEX)
+            {
+                obj->indices.push_back(vertexIndex);
+            }
+            else
+            {
+                Vertex vertex   = {};
+                vertex.position = obj->positions[corner->position];
+
+                if (corner->normal != UNKNOWN_VERTEX_INDEX)
+                {
+                    vertex.normal = obj->normals[corner->normal];
+                }
+                if (corner->uv != UNKNOWN_VERTEX_INDEX)
+                {
+                    vertex.uv = obj->uvs[corner->uv];
+                }
+
+                u32 newIndex = (u32)obj->vertexs.size();
+
+                obj->vertexs.push_back(vertex);
+                obj->indices.push_back(newIndex);
+                uniqueIndices.push_back(*corner);
+            }
+        }
     }
 }
 
@@ -452,79 +567,7 @@ Obj ObjParse(char* filename, PlatformAPI* platform, Arena* arena)
     }
     platform->Logf("------------------------------------------------------------");
 
+    ObjComputeGPUBuffers(&result);
+
     return result;
-}
-
-internal u32 FindVertexIndex(ObjIndex* index, ObjIndex* indices, u32 indexCount)
-{
-    for (u32 i = 0; i < indexCount; i++)
-    {
-        if (indices[i].position == index->position && indices[i].uv == index->uv && indices[i].normal == index->normal)
-        {
-            return i;
-        }
-    }
-    return UNKNOWN_VERTEX_INDEX;
-}
-
-void ObjInitGeometryBuffer(Obj* obj, Arena* arena, Renderer* renderer, GPUBuffer* buffer)
-{
-    u32 maxVertices = obj->faceCount * 3;
-    u32 maxIndices  = obj->faceCount * 3;
-
-    obj->vertexs            = PushArray(arena, maxVertices, Vertex);
-    obj->indices            = PushArray(arena, maxIndices, u32);
-    ObjIndex* uniqueIndices = PushArray(arena, maxVertices, ObjIndex);
-
-    u32*    indexPtr  = obj->indices;
-    Vertex* vertexPtr = obj->vertexs;
-
-    for (u32 faceIndex = 0; faceIndex < obj->faceCount; faceIndex++)
-    {
-        ObjFace* face = &obj->faces[faceIndex];
-
-        for (u32 cornerIndex = 0; cornerIndex < 3; cornerIndex++)
-        {
-            ObjIndex* corner = &face->corners[cornerIndex];
-
-            u32 vertexIndex = FindVertexIndex(corner, uniqueIndices, obj->vertexCount);
-
-            if (vertexIndex != UNKNOWN_VERTEX_INDEX)
-            {
-                *indexPtr++ = vertexIndex;
-                obj->indexCount++;
-            }
-            else
-            {
-                vertexPtr->position = obj->positions[corner->position];
-
-                if (corner->normal != UNKNOWN_VERTEX_INDEX)
-                {
-                    vertexPtr->normal = obj->normals[corner->normal];
-                }
-                if (corner->uv != UNKNOWN_VERTEX_INDEX)
-                {
-                    vertexPtr->uv = obj->uvs[corner->uv];
-                }
-
-                *indexPtr++                     = obj->vertexCount;
-                uniqueIndices[obj->vertexCount] = *corner;
-
-                obj->vertexCount++;
-                vertexPtr++;
-                obj->indexCount++;
-            }
-        }
-    }
-
-    size_t vertexSize = sizeof(Vertex);
-    size_t indexSize  = sizeof(u32);
-
-    GPUBufferInit(renderer, buffer);
-    GPUBufferVBOAlloc(renderer, buffer, obj->vertexs, vertexSize * obj->vertexCount, vertexSize, GL_STATIC_DRAW);
-    GPUBufferEBOAlloc(renderer, buffer, obj->indices, indexSize * obj->indexCount, indexSize, GL_STATIC_DRAW);
-
-    GPUBufferVertexAttrib(renderer, buffer, 0, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, position));
-    GPUBufferVertexAttrib(renderer, buffer, 1, 3, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, normal));
-    GPUBufferVertexAttrib(renderer, buffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
 }

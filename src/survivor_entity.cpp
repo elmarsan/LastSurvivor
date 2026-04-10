@@ -14,7 +14,7 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     {
     case EntityType_Player:
     {
-        entity->assetID = AssetID_Stickman;
+        entity->assetID = Model_Stickman;
         entity->scale   = glm::vec3{ 1.0f, 1.0f, 1.0f };
         Model* model    = AssetsModelGet(manager->assets, entity->assetID);
         entity->aabb    = model->aabb;
@@ -23,16 +23,16 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     }
     case EntityType_Enemy:
     {
-        u32     min        = AssetID_ZombieFemaleA;
-        u32     max        = AssetID_ZombieMaleA;
-        AssetID assetID    = (AssetID)(rand() % (max + 1 - min) + min);
-        Model*  model      = AssetsModelGet(manager->assets, assetID);
-        u32     jointCount = model->skeleton->jointCount;
+        u32    min        = Model_ZombieMaleA;
+        u32    max        = Model_ZombieFemaleA;
+        u32    assetID    = (u32)(rand() % (max + 1 - min) + min);
+        Model* model      = AssetsModelGet(manager->assets, assetID);
+        u32    jointCount = model->skeleton->jointCount;
 
         entity->assetID = assetID;
         entity->scale   = ZOMBIE_SCALE;
         // TODO: Apply ZOMBIE_SCALE factor to zombie aabb
-        entity->aabb                          = AssetsModelGet(manager->assets, AssetID_Stickman)->aabb;
+        entity->aabb                          = AssetsModelGet(manager->assets, Model_Stickman)->aabb;
         entity->skeleton                      = PushStruct(transientArena, Skeleton);
         entity->skeleton->joints              = PushArray(transientArena, jointCount, Joint);
         entity->skeleton->jointMatrices       = PushArray(transientArena, jointCount, glm::mat4);
@@ -47,9 +47,9 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     }
     case EntityType_Obstacle:
     {
-        entity->assetID = AssetID_Fence;
+        entity->assetID = Model_Fence;
         entity->scale   = glm::vec3{ 1.0f, 1.0f, 1.0f };
-        Model* model    = AssetsModelGet(manager->assets, AssetID_Fence);
+        Model* model    = AssetsModelGet(manager->assets, Model_Fence);
         entity->aabb    = model->aabb;
         break;
     }

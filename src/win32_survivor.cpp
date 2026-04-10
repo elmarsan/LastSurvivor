@@ -20,6 +20,8 @@
 #include "survivor.cpp"
 #endif
 
+#include "platform_core.h"
+
 #define GL_PROC_ADDRESS(name) name = (decltype(name))wglGetProcAddress(#name)
 
 struct Wind32XAudio2
@@ -82,73 +84,6 @@ internal PLATFORM_ERROR_MESSAGE(Win32ErrorMessage)
     if (errorType == PlatformErrorType_Fatal)
     {
         ExitProcess(1);
-    }
-}
-
-internal PLATFORM_LOGF(Win32Log)
-{
-#if BUILD_TYPE_DEBUG
-    va_list args;
-    va_start(args, fmt);
-    vprintf(fmt, args);
-    va_end(args);
-    printf("\n");
-#endif
-}
-
-internal PLATFORM_FILE_READ_ENTIRE(Win32FileReadEntire)
-{
-    FileReadResult result = { 0 };
-
-    FILE* file = fopen(filename, "rb");
-    if (file)
-    {
-        fseek(file, 0, SEEK_END);
-        long size = ftell(file);
-        if (size != -1L)
-        {
-            result.contentSize = (size_t)size;
-            result.content     = malloc(sizeof(u8) * size);
-            fseek(file, 0, SEEK_SET);
-            fread(result.content, 1, result.contentSize, file);
-            fclose(file);
-        }
-        else
-        {
-            Log("Unable to reach the end of the file '%s'", filename);
-        }
-    }
-    else
-    {
-        Log("Unable to open file '%s'", filename);
-    }
-
-    return result;
-}
-
-internal PLATFORM_FILE_FREE(Win32FileFree)
-{
-    if (fileContent)
-    {
-        free(fileContent);
-    }
-}
-
-internal PLATFORM_FILE_WRITE_ENTIRE(Win32FileWriteEntire)
-{
-    FILE* file = fopen(filename, "wb");
-    if (file)
-    {
-        size_t writenCount = fwrite(fileContent, size, 1, file);
-        if (writenCount != 1)
-        {
-            Log("File '%s' was partially written", filename);
-        }
-        fclose(file);
-    }
-    else
-    {
-        Log("Unable to open file '%s'", filename);
     }
 }
 
@@ -706,10 +641,10 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
 
     GameMemory gameMemory                  = {};
     gameMemory.platform.ErrorMessage       = Win32ErrorMessage;
-    gameMemory.platform.Logf               = Win32Log;
-    gameMemory.platform.FileReadEntire     = Win32FileReadEntire;
-    gameMemory.platform.FileFree           = Win32FileFree;
-    gameMemory.platform.FileWriteEntire    = Win32FileWriteEntire;
+    gameMemory.platform.Logf               = LogMsg;
+    gameMemory.platform.FileReadEntire     = FileReadEntire;
+    gameMemory.platform.FileFree           = FileFree;
+    gameMemory.platform.FileWriteEntire    = FileWriteEntire;
     gameMemory.platform.WindowGetDimension = Win32WindowGetDimension;
     gameMemory.platform.AudioClipLoad      = Win32AudioClipLoad;
     gameMemory.platform.AudioClipPlay      = Win32AudioClipPlay;
