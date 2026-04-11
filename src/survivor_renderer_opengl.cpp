@@ -18,7 +18,7 @@ internal void TextureAlloc(Renderer* renderer, Texture* texture, void* imageBuff
 internal void Batch3DFlush(Renderer* renderer);
 internal void Batch2DFlush(Renderer* renderer);
 internal void Batch2DRect(Renderer* renderer, glm::vec2 topLeft, glm::vec2 bottomRight, Texture* texture,
-                          glm::vec2 textureTopLeft, glm::vec2 textureBottomRight, glm::vec4 tintColor = white);
+                          glm::vec2 textureTopLeft, glm::vec2 textureBottomRight, glm::vec4 tintColor = color_white);
 
 void RendererInit(Renderer* renderer, Arena* baseArena, OpenGL* gl, PlatformAPI* platform)
 {
@@ -263,7 +263,7 @@ inline void PushRenderProgramUse(Renderer* renderer, GLuint programId)
     command->program.id = programId;
 }
 
-inline void PushRenderUploadUniformMat4x4(Renderer* renderer, GLuint programId, const char* name, glm::mat4 mat4)
+inline void PushRenderUploadUniformMat4x4(Renderer* renderer, GLuint programId, char* name, glm::mat4 mat4)
 {
     ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
@@ -272,7 +272,7 @@ inline void PushRenderUploadUniformMat4x4(Renderer* renderer, GLuint programId, 
     command->type      = UniformType_Mat4x4;
 }
 
-inline void PushRenderUploadUniformInt(Renderer* renderer, GLuint programId, const char* name, int integer)
+inline void PushRenderUploadUniformInt(Renderer* renderer, GLuint programId, char* name, int integer)
 {
     ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
@@ -281,8 +281,7 @@ inline void PushRenderUploadUniformInt(Renderer* renderer, GLuint programId, con
     command->type      = UniformType_Int;
 }
 
-inline void PushRenderUploadUniformIntArray(Renderer* renderer, GLuint programId, const char* name, int* array,
-                                            int count)
+inline void PushRenderUploadUniformIntArray(Renderer* renderer, GLuint programId, char* name, int* array, int count)
 {
     ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
@@ -292,7 +291,7 @@ inline void PushRenderUploadUniformIntArray(Renderer* renderer, GLuint programId
     command->type         = UniformType_IntArray;
 }
 
-inline void PushRenderUploadUniformVec3(Renderer* renderer, GLuint programId, const char* name, glm::vec3 vec3)
+inline void PushRenderUploadUniformVec3(Renderer* renderer, GLuint programId, char* name, glm::vec3 vec3)
 {
     ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
@@ -301,7 +300,7 @@ inline void PushRenderUploadUniformVec3(Renderer* renderer, GLuint programId, co
     command->type      = UniformType_Vec3;
 }
 
-inline void PushRenderUploadUniformVec4(Renderer* renderer, GLuint programId, const char* name, glm::vec4 vec4)
+inline void PushRenderUploadUniformVec4(Renderer* renderer, GLuint programId, char* name, glm::vec4 vec4)
 {
     ProgramUploadUniform* command = PushRenderCommand(&renderer->commandQueue, ProgramUploadUniform);
     sprintf(command->name, "%s", name);
@@ -399,7 +398,20 @@ internal void Batch2DRect(Renderer* renderer, glm::vec2 position, glm::vec2 size
         Batch2DFlush(renderer);
     }
 
-    u32 textureIndex = TextureQueueAppend(renderer, texture);
+    u32 textureIndex = 0;
+    f32 textureW     = 1.0f;
+    f32 textureH     = 1.0f;
+    f32 textureX     = 1.0f;
+    f32 textureY     = 1.0f;
+
+    if (texture)
+    {
+        textureIndex = TextureQueueAppend(renderer, texture);
+        textureW     = (1.0f / texture->width) * textureSize.x;
+        textureH     = (1.0f / texture->height) * textureSize.y;
+        textureX     = (1.0f / texture->width) * texturePosition.x;
+        textureY     = (1.0f / texture->height) * texturePosition.y;
+    }
 
     u32 rectIndices[] = { 0, 1, 2, 0, 2, 3 };
     for (u32 index = 0; index < RECT_INDEX_COUNT; index++)
@@ -409,11 +421,6 @@ internal void Batch2DRect(Renderer* renderer, glm::vec2 position, glm::vec2 size
 
         batch->indexCount++;
     }
-
-    f32 textureW = (1.0f / texture->width) * textureSize.x;
-    f32 textureH = (1.0f / texture->height) * textureSize.y;
-    f32 textureX = (1.0f / texture->width) * texturePosition.x;
-    f32 textureY = (1.0f / texture->height) * texturePosition.y;
 
     // Top-right
     batch->vertexBufferPtr->position     = { position.x + size.x, position.y, 0.0f };
@@ -449,6 +456,12 @@ void DrawRect(Renderer* renderer, glm::vec2 position, glm::vec2 size, Texture* t
     Batch2DRect(renderer, position, size, texture, texturePosition, textureSize);
 }
 
+void DrawRect(Renderer* renderer, glm::vec2 position, glm::vec2 size, glm::vec4 color)
+{
+    glm::vec2 vec2Zero{ 0.0f, 0.0f };
+    Batch2DRect(renderer, position, size, 0, vec2Zero, vec2Zero, color);
+}
+
 void DrawText(Renderer* renderer, char* text, glm::vec2 position, glm::vec4 color, f32 scale)
 {
     Batch2D* batch = renderer->batch2D;
@@ -463,25 +476,32 @@ void DrawText(Renderer* renderer, char* text, glm::vec2 position, glm::vec4 colo
         Assert(0);
     }
 
-    glm::vec2 rectTopLeft{ 0.0f, 0.0f };
-    rectTopLeft += position;
+    u16   baseline = 0;
+    char* textPtr  = text;
+    while (*text)
+    {
+        TTFGlyph* ttfChar = &renderer->ttfChars[*text++ - TTF_FIRST_GLYPH_OFFSET];
+        baseline          = Max(baseline, ttfChar->y1 - ttfChar->y0);
+    }
+    text = textPtr;
+    position.y += baseline * scale;
 
+    glm::vec2 glyphPos{ position.x, 0.0f };
     while (*text)
     {
         TTFGlyph* ttfChar = &renderer->ttfChars[*text++ - TTF_FIRST_GLYPH_OFFSET];
 
-        rectTopLeft.x += (ttfChar->xoff * scale);
-        rectTopLeft.y = position.y + (ttfChar->yoff * scale);
-        glm::vec2 rectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) * scale,
-                                   ((f32)ttfChar->y1 - (f32)ttfChar->y0) * scale };
+        glyphPos.x += (ttfChar->xoff * scale);
+        glyphPos.y = position.y + (ttfChar->yoff * scale);
+        glm::vec2 glyphSize{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) * scale,
+                             ((f32)ttfChar->y1 - (f32)ttfChar->y0) * scale };
 
-        glm::vec2 subrectTopLeft{ (f32)ttfChar->x0 + ttfChar->s0, (f32)ttfChar->y0 + ttfChar->t0 };
-        glm::vec2 subrectBottomRight{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) - ttfChar->s1,
-                                      ((f32)ttfChar->y1 - (f32)ttfChar->y0) - ttfChar->t1 };
+        glm::vec2 textureSize{ (f32)ttfChar->x0 + ttfChar->s0, (f32)ttfChar->y0 + ttfChar->t0 };
+        glm::vec2 texturePosition{ ((f32)ttfChar->x1 - (f32)ttfChar->x0) - ttfChar->s1,
+                                   ((f32)ttfChar->y1 - (f32)ttfChar->y0) - ttfChar->t1 };
 
-        Batch2DRect(renderer, rectTopLeft, rectBottomRight, &renderer->glyphAtlas, subrectTopLeft, subrectBottomRight,
-                    color);
-        rectTopLeft.x += (ttfChar->xadvance * scale);
+        Batch2DRect(renderer, glyphPos, glyphSize, &renderer->glyphAtlas, textureSize, texturePosition, color);
+        glyphPos.x += (ttfChar->xadvance * scale);
     }
 }
 

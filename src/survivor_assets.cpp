@@ -27,10 +27,10 @@ void AssetsLoad(Assets* assets, u32 id)
         {
             Stream stream = StreamInit((u8*)file.content);
 
-            AssetFileHeader header;
-            StreamRead(&stream, &header, sizeof(header), 1);
+            AssetFileHeader assetHeader;
+            StreamRead(&stream, &assetHeader, sizeof(assetHeader), 1);
 
-            switch (header.type)
+            switch (assetHeader.type)
             {
             case AssetType_Model:
             {

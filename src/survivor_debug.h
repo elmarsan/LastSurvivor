@@ -1,5 +1,7 @@
 #pragma once
 
+#define DEBUG_COORDINATES 0
+
 struct GameState;
 
 struct Debug
@@ -8,4 +10,7 @@ struct Debug
     cell_index selectedCellIndex;
 };
 
-void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform, glm::mat4 viewProj);
+void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform, glm::mat4 viewProj);
+
+// TODO: Mode to build mode
+void BuildExit(GameState* state);

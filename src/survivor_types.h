@@ -83,6 +83,16 @@ typedef double   f64;
         break;                                                                                                         \
     }
 
+#define color_green       glm::vec4{ 0.2f, 1.0f, 0.0f, 1.0f }
+#define color_red         glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f }
+#define color_blue        glm::vec4{ 0.2f, 0.4f, 1.0f, 1.0f }
+#define color_white       glm::vec4{ 1.0f, 1.0f, 1.0f, 1.0f }
+#define color_black       glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f }
+#define color_magenta     glm::vec4{ 1.0f, 0.0f, 1.0f, 1.0f }
+#define color_yellow      glm::vec4{ 1.0f, 1.0f, 0.0f, 1.0f }
+#define color_orange      glm::vec4{ 0.87f, 0.39f, 0.04f, 1.0f }
+#define color_transparent glm::vec4{ 0.0f, 0.0f, 0.0f, 0.0f }
+
 // https://www.redblobgames.com/pathfinding/a-star/implementation.html
 template <typename T, typename priority_t>
 struct PriorityQueue

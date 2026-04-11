@@ -17,14 +17,49 @@ inline b32 ButtonIsDown(GameButtonState button) { return button.isDown; }
 inline b32 ButtonIsUp(GameButtonState button) { return !button.isDown; }
 inline b32 ButtonWasDown(GameButtonState button) { return button.wasDown; }
 
+enum ControllerType
+{
+    ControllerType_Gamepad,
+    ControllerType_Keyboard
+};
+
+// TODO: Rumble
+struct Gamepad
+{
+    glm::vec2 leftStick;
+    glm::vec2 rightStick;
+};
+
+struct Mouse
+{
+    glm::uvec2 pos;
+    glm::uvec2 offset;
+
+    union
+    {
+        struct
+        {
+            GameButtonState left;
+            GameButtonState middle;
+            GameButtonState right;
+        };
+
+        GameButtonState buttons[3];
+    };
+};
+
 struct GameInputController
 {
-    b32 isConnected;
-    b32 isWireless;
-    b32 isAnalog;
+    ControllerType type;
+    b32            isConnected;
+    b32            isWireless;
+    b32            isAnalog;
 
-    glm::vec2 stickLeft;
-    glm::vec2 stickRight;
+    union
+    {
+        Gamepad gamepad;
+        Mouse   mouse;
+    };
 
     union
     {
@@ -51,24 +86,6 @@ struct GameInputController
     };
 };
 
-struct Mouse
-{
-    glm::uvec2 pos;
-    glm::uvec2 offset;
-
-    union
-    {
-        struct
-        {
-            GameButtonState left;
-            GameButtonState middle;
-            GameButtonState right;
-        };
-
-        GameButtonState buttons[3];
-    };
-};
-
 struct DebugInput
 {
     union
@@ -90,8 +107,6 @@ struct DebugInput
 
 struct GameInput
 {
-    Mouse mouse;
-
     union
     {
         struct
@@ -107,6 +122,9 @@ struct GameInput
     DebugInput debug;
 #endif
 };
+
+#define CONTROLLER_KEYBOARD 0
+#define CONTROLLER_GAMEPAD  1
 
 inline GameInputController* GetController(GameInput* gameInput, u32 controllerIndex)
 {
@@ -139,7 +157,7 @@ enum
 #define PLATFORM_ERROR_MESSAGE(name) void name(PlatformErrorType errorType, char* message)
 typedef PLATFORM_ERROR_MESSAGE(PlatformErrorMessage);
 
-#define PLATFORM_LOGF(name) void name(const char* fmt, ...)
+#define PLATFORM_LOGF(name) void name(char* fmt, ...)
 typedef PLATFORM_LOGF(PlatformLog);
 
 #define PLATFORM_FILE_READ_ENTIRE(name) FileReadResult name(char* filename)
@@ -151,7 +169,7 @@ typedef PLATFORM_FILE_FREE(PlatformFileFree);
 #define PLATFORM_FILE_WRITE_ENTIRE(name) void name(char* filename, void* fileContent, size_t size)
 typedef PLATFORM_FILE_WRITE_ENTIRE(PlatformFileWriteEntire);
 
-#define PLATFORM_WINDOW_GET_DIMENSION(name) glm::vec2 name()
+#define PLATFORM_WINDOW_GET_DIMENSION(name) glm::uvec2 name()
 typedef PLATFORM_WINDOW_GET_DIMENSION(PlatformWindowGetDimension);
 
 #define PLATFORM_AUDIO_CLIP_LOAD(name) AudioClip* name(char* filename, AudioClipType type)

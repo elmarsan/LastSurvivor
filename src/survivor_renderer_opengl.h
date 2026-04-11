@@ -197,5 +197,6 @@ void TextureInit(Renderer* renderer, Texture* texture, char* filename);
 void DrawLine(Renderer* renderer, glm::vec3 p0, glm::vec3 p1, glm::vec4 color);
 void DrawRect(Renderer* renderer, glm::vec2 position, glm::vec2 size, Texture* texture, glm::vec2 texturePosition,
               glm::vec2 textureSize);
+void DrawRect(Renderer* renderer, glm::vec2 position, glm::vec2 size, glm::vec4 color);
 // TODO: Font scaling
 void DrawText(Renderer* renderer, char* text, glm::vec2 position, glm::vec4 color, f32 scale = 1.0f);

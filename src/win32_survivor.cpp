@@ -66,7 +66,7 @@ global_variable Win32State gWin32State;
 
 internal PLATFORM_ERROR_MESSAGE(Win32ErrorMessage)
 {
-    const char* caption = "LastSurvivor Warning";
+    char* caption = "LastSurvivor Warning";
 
     UINT mboxType = MB_OK;
     if (errorType == PlatformErrorType_Fatal)
@@ -106,7 +106,7 @@ internal void APIENTRY Win32OpenGLDebugCallback(GLenum source, GLenum type, GLui
     // API_ID_LINE_WIDTH deprecated behavior warning has been generated. Wide lines have been deprecated.
     // glLineWidth set to 2.000000. glLineWidth with width greater than 1.0 will generate GL_INVALID_VALUE error in
     // future versions
-    const char* vendor = (const char*)glGetString(GL_VENDOR);
+    char* vendor = (char*)glGetString(GL_VENDOR);
     if (strcmp(vendor, "Intel") == 0 && id == 7)
     {
         return;
@@ -157,7 +157,7 @@ internal inline f64 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER en
     return (f64)(end.QuadPart - start.QuadPart) / (f64)gWin32State.performanceCounterFreq;
 }
 
-internal inline FILETIME Win32GetFileLastWriteTime(const char* filename)
+internal inline FILETIME Win32GetFileLastWriteTime(char* filename)
 {
     FILETIME result = {};
 
@@ -175,7 +175,7 @@ internal inline FILETIME Win32GetFileLastWriteTime(const char* filename)
 
 // ----------------------------------------------------------------------------
 // DLL hot reloading
-internal Win32GameCode Win32GameCodeLoad(const char* gameDLLFilename, const char* copyDLLFilename)
+internal Win32GameCode Win32GameCodeLoad(char* gameDLLFilename, char* copyDLLFilename)
 {
     Win32GameCode result = {};
 
@@ -235,8 +235,8 @@ internal void Win32XInputInit()
     Log("XInput initializing...");
 
     // Windows 8 (XInput 1.4), DirectX SDK (XInput 1.3), Windows Vista (XInput 9.1.0)
-    const char* library   = "xinput1_4.dll";
-    HMODULE     XInputDLL = LoadLibraryA(library);
+    char*   library   = "xinput1_4.dll";
+    HMODULE XInputDLL = LoadLibraryA(library);
 
     if (!XInputDLL)
     {
@@ -438,7 +438,7 @@ internal void Win32ProcessPendingMessages(Win32State* state)
     Assert(state);
 
     GameInputController* keyboard = &state->gameInput.keyboard;
-    Mouse*               mouse    = &state->gameInput.mouse;
+    Mouse*               mouse    = &keyboard->mouse;
 
     MSG msg;
     while (PeekMessage(&msg, gWin32State.window, 0, 0, PM_REMOVE))
@@ -579,7 +579,7 @@ LRESULT WndProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
             }
         }
 
-        Mouse* mouse = &gWin32State.gameInput.mouse;
+        Mouse* mouse = &gWin32State.gameInput.keyboard.mouse;
         for (u32 mouseButtonIndex = 0; mouseButtonIndex < ArrayCount(mouse->buttons); mouseButtonIndex++)
         {
             mouse->buttons[mouseButtonIndex].isDown  = false;
@@ -841,14 +841,16 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
     }
 
 #if BUILD_TYPE_DEBUG
-    const char*   gameDLLFilename     = "Survivor.dll";
-    const char*   tempGameDLLFilename = "CopySurvivor.dll";
+    char*         gameDLLFilename     = "Survivor.dll";
+    char*         tempGameDLLFilename = "CopySurvivor.dll";
     Win32GameCode game                = Win32GameCodeLoad(gameDLLFilename, tempGameDLLFilename);
 #endif
 
     gWin32State.gameInput.keyboard.isAnalog    = false;
     gWin32State.gameInput.keyboard.isConnected = true;
+    gWin32State.gameInput.keyboard.type        = ControllerType_Keyboard;
     gWin32State.gameInput.gamepad.isAnalog     = true;
+    gWin32State.gameInput.gamepad.type         = ControllerType_Gamepad;
 
     LARGE_INTEGER frameStartTime = Win32GetWallClock();
 
@@ -885,10 +887,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             }
         }
 
-        for (u32 mouseButtonIndex = 0; mouseButtonIndex < ArrayCount(gWin32State.gameInput.mouse.buttons);
-             mouseButtonIndex++)
+        Mouse* mouse = &gWin32State.gameInput.keyboard.mouse;
+        for (u32 mouseButtonIndex = 0; mouseButtonIndex < ArrayCount(mouse->buttons); mouseButtonIndex++)
         {
-            Mouse* mouse                             = &gWin32State.gameInput.mouse;
             mouse->buttons[mouseButtonIndex].wasDown = mouse->buttons[mouseButtonIndex].isDown;
         }
 
@@ -905,7 +906,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         XINPUT_STATE         controllerState;
         DWORD                controllerIndex = 0;
         DWORD                result          = XInputGetState(controllerIndex, &controllerState);
-        GameInputController* gamepad         = &gWin32State.gameInput.gamepad;
+        GameInputController* controller      = &gWin32State.gameInput.gamepad;
 
         if (result == ERROR_SUCCESS)
         {
@@ -915,26 +916,26 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
             SHORT rightStickDeadzone = XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
             BYTE  triggerThreshold   = 45;
 
-            gamepad->back.isDown         = gamepadState.wButtons & XINPUT_GAMEPAD_BACK;
-            gamepad->start.isDown        = gamepadState.wButtons & XINPUT_GAMEPAD_START;
-            gamepad->actionUp.isDown     = gamepadState.wButtons & XINPUT_GAMEPAD_Y;
-            gamepad->actionDown.isDown   = gamepadState.wButtons & XINPUT_GAMEPAD_A;
-            gamepad->actionRight.isDown  = gamepadState.wButtons & XINPUT_GAMEPAD_B;
-            gamepad->actionLeft.isDown   = gamepadState.wButtons & XINPUT_GAMEPAD_X;
-            gamepad->moveUp.isDown       = gamepadState.wButtons & XINPUT_GAMEPAD_DPAD_UP;
-            gamepad->moveDown.isDown     = gamepadState.wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
-            gamepad->moveRight.isDown    = gamepadState.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
-            gamepad->moveLeft.isDown     = gamepadState.wButtons & XINPUT_GAMEPAD_DPAD_LEFT;
-            gamepad->leftTrigger.isDown  = gamepadState.bLeftTrigger >= triggerThreshold;
-            gamepad->rightTrigger.isDown = gamepadState.bRightTrigger >= triggerThreshold;
-            gamepad->stickLeft.x         = Win32GetControllerStick(gamepadState.sThumbLX, leftStickDeadzone);
-            gamepad->stickLeft.y         = Win32GetControllerStick(gamepadState.sThumbLY, leftStickDeadzone);
-            gamepad->stickRight.x        = Win32GetControllerStick(gamepadState.sThumbRX, rightStickDeadzone);
-            gamepad->stickRight.y        = Win32GetControllerStick(gamepadState.sThumbRY, rightStickDeadzone);
+            controller->back.isDown          = gamepadState.wButtons & XINPUT_GAMEPAD_BACK;
+            controller->start.isDown         = gamepadState.wButtons & XINPUT_GAMEPAD_START;
+            controller->actionUp.isDown      = gamepadState.wButtons & XINPUT_GAMEPAD_Y;
+            controller->actionDown.isDown    = gamepadState.wButtons & XINPUT_GAMEPAD_A;
+            controller->actionRight.isDown   = gamepadState.wButtons & XINPUT_GAMEPAD_B;
+            controller->actionLeft.isDown    = gamepadState.wButtons & XINPUT_GAMEPAD_X;
+            controller->moveUp.isDown        = gamepadState.wButtons & XINPUT_GAMEPAD_DPAD_UP;
+            controller->moveDown.isDown      = gamepadState.wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
+            controller->moveRight.isDown     = gamepadState.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
+            controller->moveLeft.isDown      = gamepadState.wButtons & XINPUT_GAMEPAD_DPAD_LEFT;
+            controller->leftTrigger.isDown   = gamepadState.bLeftTrigger >= triggerThreshold;
+            controller->rightTrigger.isDown  = gamepadState.bRightTrigger >= triggerThreshold;
+            controller->gamepad.leftStick.x  = Win32GetControllerStick(gamepadState.sThumbLX, leftStickDeadzone);
+            controller->gamepad.leftStick.y  = Win32GetControllerStick(gamepadState.sThumbLY, leftStickDeadzone);
+            controller->gamepad.rightStick.x = Win32GetControllerStick(gamepadState.sThumbRX, rightStickDeadzone);
+            controller->gamepad.rightStick.y = Win32GetControllerStick(gamepadState.sThumbRY, rightStickDeadzone);
 
-            if (!gamepad->isConnected)
+            if (!controller->isConnected)
             {
-                gamepad->isConnected = true;
+                controller->isConnected = true;
 
                 XINPUT_CAPABILITIES controllerCaps;
                 DWORD getCapsResult = XInputGetCapabilities(controllerIndex, XINPUT_FLAG_GAMEPAD, &controllerCaps);
@@ -942,12 +943,12 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
                 {
                     if (controllerCaps.Flags & XINPUT_CAPS_WIRELESS)
                     {
-                        gamepad->isWireless = true;
+                        controller->isWireless = true;
                         Log("XInput controller 0 connected (wireless)");
                     }
                     else
                     {
-                        gamepad->isWireless = false;
+                        controller->isWireless = false;
                         Log("XInput controller 0 connected (wired)");
                     }
                 }
@@ -959,10 +960,10 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         }
         else if (result == ERROR_DEVICE_NOT_CONNECTED)
         {
-            if (gamepad->isConnected)
+            if (controller->isConnected)
             {
                 Log("XInput controller 0 disconnected");
-                gamepad->isConnected = false;
+                controller->isConnected = false;
             }
         }
         else

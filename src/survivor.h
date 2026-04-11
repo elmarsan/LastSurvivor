@@ -14,16 +14,10 @@
 #include "survivor_entity.h"
 #include "survivor_build.h"
 #include "survivor_weapon.h"
+#include "survivor_ui.h"
+#if BUILD_TYPE_DEBUG
 #include "survivor_debug.h"
-
-global_variable glm::vec4 green{ 0.2f, 1.0f, 0.0f, 1.0f };
-global_variable glm::vec4 red{ 1.0f, 0.0f, 0.0f, 1.0f };
-global_variable glm::vec4 blue{ 0.2f, 0.4f, 1.0f, 1.0f };
-global_variable glm::vec4 white{ 1.0f, 1.0f, 1.0f, 1.0f };
-global_variable glm::vec4 black{ 0.0f, 0.0f, 0.0f, 1.0f };
-global_variable glm::vec4 magenta{ 1.0f, 0.0f, 1.0f, 1.0f };
-global_variable glm::vec4 yellow{ 1.0f, 1.0f, 0.0f, 1.0f };
-global_variable glm::vec4 orange{ 0.87f, 0.39f, 0.04f, 1.0f };
+#endif
 
 enum GameMode
 {
@@ -49,6 +43,7 @@ struct GameState
     GameMode       mode;
     World*         world;
     Renderer*      renderer;
+    UI*            ui;
 
     // Round mode
     u32    roundEnemyCount;

@@ -18,6 +18,7 @@ struct TemporaryMemory
 #define PushStruct(arena, type)       (type*)_ArenaPush(arena, sizeof(type))
 #define PushArray(arena, count, type) (type*)_ArenaPush(arena, (count) * sizeof(type))
 #define PushBlock(arena, size)        _ArenaPush(arena, size)
+#define PushString(arena, count)      (char*)_ArenaPush(arena, count * sizeof(char));
 
 inline void ArenaInit(Arena* arena, size_t size, void* buffer)
 {

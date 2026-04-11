@@ -32,3 +32,11 @@ inline b32 StrEquals(char* a, char* b)
     }
     return *a == *b;
 }
+
+inline char* StrCopy(Arena* arena, char* src)
+{
+    size_t size = 1 + strlen(src);
+    char*  dst  = PushString(arena, size);
+    memcpy(dst, src, size);
+    return dst;
+}
