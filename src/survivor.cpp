@@ -124,9 +124,9 @@ internal void PlayerUpdate(GameState* state, Entity* player, f32 delta, Platform
             {
                 glm::vec3 dir       = SafeNorm(crosshairPoint - player->position);
                 f32       targetYaw = -atan2f(dir.x, -dir.z);
-                f32       deltaYaw  = targetYaw - player->yaw;
+                f32       deltaYaw  = targetYaw - player->rotation.y;
                 deltaYaw            = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi; // Wrap to [-Pi, Pi]
-                player->yaw += deltaYaw * rotationSpeed;
+                player->rotation.y += deltaYaw * rotationSpeed;
             }
 
             // Deceleration
@@ -365,7 +365,7 @@ internal void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, 
         Entity* entityPtr = EntityGet(manager, entityIndex);
         if (entityPtr != entity && entityPtr->type == EntityType_Obstacle)
         {
-            glm::vec3 lookAt{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
+            glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
             lookAt          = SafeNorm(lookAt);
             glm::vec3 start = entity->position;
             glm::vec3 end   = start + (lookAt * 1.5f);
@@ -1018,7 +1018,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 Model*  entityModel = AssetsModelGet(assets, entity->assetID);
 
                 glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, entity->position);
-                glm::mat4 rotate    = glm::rotate(glm::mat4{ 1.0f }, entity->yaw, { 0.0f, 1.0f, 0.0f });
+                glm::mat4 rotate    = glm::mat4_cast(glm::quat(entity->rotation));
                 glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, entity->scale);
                 glm::mat4 model     = translate * rotate * scale;
 

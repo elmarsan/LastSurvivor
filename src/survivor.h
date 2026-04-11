@@ -33,13 +33,6 @@ enum GameMode
     GameMode_Round
 };
 
-struct AnimData
-{
-    f32        animTime;
-    Animation* animation;
-    Skeleton*  skeleton;
-};
-
 struct GameState
 {
     b32   initialized;
@@ -56,8 +49,6 @@ struct GameState
     GameMode       mode;
     World*         world;
     Renderer*      renderer;
-
-    AnimData animData[2];
 
     // Round mode
     u32    roundEnemyCount;

@@ -41,7 +41,7 @@ struct Entity
     glm::vec3       position;
     glm::vec3       velocity;
     glm::vec3       scale;
-    f32             yaw;          // TODO: Replace by v3/quat for rotations?
+    glm::vec3       rotation;
     Entity*         targetEntity; // TODO: Needed? All enemies will follow player
     AABB            aabb;
     u32             flags;
@@ -92,12 +92,12 @@ b32                EntitiesIntersect(Entity* a, Entity* b, AABB* penetration);
 
 inline b32 EntityIsVerticalOriented(Entity* entity)
 {
-    return (entity->yaw == (Pi / 2.0f) || entity->yaw == (3 * Pi / 2.0f));
+    return (entity->rotation.y == (Pi / 2.0f) || entity->rotation.y == (3 * Pi / 2.0f));
 }
 
 inline b32 EntityIsHorizontalOriented(Entity* entity)
 {
-    return (entity->yaw == Pi) || (entity->yaw == (2 * Pi)) || (entity->yaw == 0.0f);
+    return (entity->rotation.y == Pi) || (entity->rotation.y == (2 * Pi)) || (entity->rotation.y == 0.0f);
 }
 
 inline void EntityManagerInit(EntityManager* manager, Arena* arena, Assets* assets)

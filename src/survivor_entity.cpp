@@ -142,7 +142,7 @@ EntityWorldCorners EntityGetWorldCorners(Entity* entity)
 
     for (u32 cornerIndex = 0; cornerIndex < ArrayCount(localCorners); cornerIndex++)
     {
-        glm::vec3 rotatedCorner = glm::rotateY(localCorners[cornerIndex], entity->yaw);
+        glm::vec3 rotatedCorner = glm::rotateY(localCorners[cornerIndex], entity->rotation.y);
 
         worldCorners.arr[cornerIndex] = {
             entity->position.x + rotatedCorner.x, //

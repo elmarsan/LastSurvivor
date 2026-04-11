@@ -219,7 +219,7 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
 
         // Entity rotation
         {
-            glm::vec3 lookAt{ sinf(entity->yaw), 0.0f, cosf(entity->yaw) };
+            glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
             glm::vec3 p0{ entity->position.x, entity->aabb.max.y, entity->position.z };
             glm::vec3 p1 = p0 + (lookAt * 1.5f);
 
@@ -227,7 +227,7 @@ void DebugDraw(Debug* debug, GameInput* input, PlatformAPI* platform)
         }
 
         // Entity AABB
-        DebugDrawAABB(renderer, entity->position, entity->yaw, entity->aabb, red);
+        DebugDrawAABB(renderer, entity->position, entity->rotation.y, entity->aabb, red);
 
         // Entity Y orientation
         if (entity->type == EntityType_Obstacle)

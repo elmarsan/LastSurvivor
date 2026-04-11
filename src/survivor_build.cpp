@@ -45,18 +45,18 @@ void BuildRotateObstacle(Entity* obstacle, b32 counterclockwise)
     // Rotate left
     if (counterclockwise)
     {
-        obstacle->yaw -= -yawStep;
+        obstacle->rotation.y -= -yawStep;
     }
     // Rotate right
     else
     {
-        obstacle->yaw += yawStep;
+        obstacle->rotation.y += yawStep;
     }
 
-    obstacle->yaw = fmodf(obstacle->yaw, 2.0f * Pi);
-    if (obstacle->yaw < 0.0f)
+    obstacle->rotation.y = fmodf(obstacle->rotation.y, 2.0f * Pi);
+    if (obstacle->rotation.y < 0.0f)
     {
-        obstacle->yaw += (2.0f * Pi);
+        obstacle->rotation.y += (2.0f * Pi);
     }
 }
 

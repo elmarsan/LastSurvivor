@@ -1,8 +1,8 @@
 #pragma once
 
-inline size_t GetParentPathLength(const char* path)
+inline size_t GetParentPathLength(char* path)
 {
-    const char* last_slash = strrchr(path, '/');
+    char* last_slash = strrchr(path, '/');
     if (!last_slash)
     {
         return 0;
