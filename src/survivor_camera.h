@@ -8,35 +8,31 @@ struct Camera
     f32       pitch;
     f32       yaw;
     f32       fov;
-    b32       topDownMode;
 };
 
 internal void _CameraUpdateVectors(Camera* camera)
 {
-    if (!camera->topDownMode)
-    {
-        camera->target.x = cosf(Radians(camera->yaw)) * cosf(Radians(camera->pitch));
-        camera->target.y = sinf(Radians(camera->pitch));
-        camera->target.z = sinf(Radians(camera->yaw)) * cosf(Radians(camera->pitch));
-        camera->target   = SafeNorm(camera->target);
 
-        glm::vec3 worldUp{ 0.0f, 1.0f, 0.0f };
-        glm::vec3 right = SafeNorm(glm::cross(camera->target, worldUp));
-        glm::vec3 up    = SafeNorm(glm::cross(right, camera->target));
+    camera->target.x = cosf(Radians(camera->yaw)) * cosf(Radians(camera->pitch));
+    camera->target.y = sinf(Radians(camera->pitch));
+    camera->target.z = sinf(Radians(camera->yaw)) * cosf(Radians(camera->pitch));
+    camera->target   = SafeNorm(camera->target);
 
-        camera->up = up;
-    }
+    glm::vec3 worldUp{ 0.0f, 1.0f, 0.0f };
+    glm::vec3 right = SafeNorm(glm::cross(camera->target, worldUp));
+    glm::vec3 up    = SafeNorm(glm::cross(right, camera->target));
+
+    camera->up = up;
 }
 
 inline void CameraInit(Camera* camera, glm::vec3 position, glm::vec3 target, glm::vec3 up, f32 pitch, f32 yaw, f32 fov)
 {
-    camera->position    = position;
-    camera->target      = target;
-    camera->pitch       = pitch;
-    camera->up          = up;
-    camera->yaw         = yaw;
-    camera->fov         = fov;
-    camera->topDownMode = false;
+    camera->position = position;
+    camera->target   = target;
+    camera->pitch    = pitch;
+    camera->up       = up;
+    camera->yaw      = yaw;
+    camera->fov      = fov;
 
     _CameraUpdateVectors(camera);
 }
@@ -83,26 +79,9 @@ inline void CameraSetYaw(Camera* camera, f32 yaw)
     _CameraUpdateVectors(camera);
 }
 
-// TODO: Make topDown position configurable
-inline glm::vec3 CameraPosition(Camera* camera)
+inline glm::mat4 CameraGetView(Camera* camera) { return glm::lookAt(camera->position, camera->target, camera->up); }
+
+inline glm::mat4 CameraGetProjection(Camera* camera, f32 aspectRatio)
 {
-    return camera->topDownMode ? glm::vec3{ 0.0f, 40.0f, 0.0f } : camera->position;
+    return glm::perspective(Radians(camera->fov), aspectRatio, 0.1f, 100.0f);
 }
-
-inline glm::mat4 CameraView(Camera* camera)
-{
-    glm::vec3 target   = camera->target;
-    glm::vec3 up       = camera->up;
-    glm::vec3 position = CameraPosition(camera);
-    if (camera->topDownMode)
-    {
-        glm::vec3 forward{ 0.0f, 0.0f, -1.0f };
-
-        target = { 0.0f, -1.0f, 0.0f };
-        up     = forward;
-    }
-
-    return glm::lookAt(position, position + target, up);
-}
-
-inline void CameraToggleTopDownMode(Camera* camera) { camera->topDownMode = !camera->topDownMode; }

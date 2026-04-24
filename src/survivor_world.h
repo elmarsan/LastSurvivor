@@ -21,32 +21,32 @@
 
 typedef u32 cell_index;
 
-struct Entity;
-struct EntityManager;
+// struct Entity;
+// struct EntityManager;
 
-struct GridCell
-{
-    Entity* entities[4];
-    u32     entityCount;
-};
+// struct GridCell
+//{
+//     Entity* entities[4];
+//     u32     entityCount;
+// };
 
-struct World
-{
-    GridCell*                     grid;
-    std::vector<cell_index>       nodes;
-    std::vector<std::vector<u32>> edges;
-    u32                           tempNodeCount;
-};
+// struct World
+//{
+//     GridCell*                     grid;
+//     std::vector<cell_index>       nodes;
+//     std::vector<std::vector<u32>> edges;
+//     u32                           tempNodeCount;
+// };
 
 // TODO: Rename this to coordinate space picking. Picking can be done with gamepad.
-glm::vec3               WorldMousePicking(Camera* camera, glm::mat4 projection, glm::uvec2 windowDim, glm::uvec2 mouse);
-b32                     WorldIsPositionInBounds(glm::vec3 position);
-void                    WorldAddEntity(World* world, EntityManager* entityManager, Entity* entity);
-b32                     WorldIsValidEntityPosition(World* world, Entity* entity);
-void                    WorldUpdate(World* world, EntityManager* entityManager);
-void                    WorldComputeStaticNodes(World* world, EntityManager* entityManager);
-std::vector<cell_index> WorldFindBestPath(World* world, EntityManager* entityManager, cell_index start,
-                                          cell_index goal);
+glm::vec3 WorldMousePicking(Camera* camera, glm::uvec2 windowDim, glm::uvec2 mouse);
+// b32                     WorldIsPositionInBounds(glm::vec3 position);
+// void                    WorldAddEntity(World* world, EntityManager* entityManager, Entity* entity);
+// b32                     WorldIsValidEntityPosition(World* world, Entity* entity);
+// void                    WorldUpdate(World* world, EntityManager* entityManager);
+// void                    WorldComputeStaticNodes(World* world, EntityManager* entityManager);
+// std::vector<cell_index> WorldFindBestPath(World* world, EntityManager* entityManager, cell_index start,
+//                                           cell_index goal);
 
 inline cell_index WorldPositionToGridCell(glm::vec3 position)
 {
@@ -72,4 +72,4 @@ inline glm::vec3 WorldGridCellToPosition(cell_index cellIndex)
     return glm::vec3{ x, 0.0f, z };
 }
 
-inline b32 WorldIsValidCellIndex(cell_index cellIndex) { return cellIndex >= 0 && cellIndex < GRID_CELLS; }
+// inline b32 WorldIsValidCellIndex(cell_index cellIndex) { return cellIndex >= 0 && cellIndex < GRID_CELLS; }

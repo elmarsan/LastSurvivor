@@ -4,7 +4,7 @@
 #include "survivor_assets.cpp"
 #include "survivor_entity.cpp"
 #include "survivor_world.cpp"
-#include "survivor_build.cpp"
+// #include "survivor_build.cpp"
 #include "survivor_ui.cpp"
 #if BUILD_TYPE_DEBUG
 #include "survivor_debug.cpp"
@@ -18,7 +18,7 @@
 - (Game): camera
 */
 
-internal void EntityAttack(EntityManager* manager, Entity* entity, World* world, Weapon* weapon, glm::vec3 dir)
+internal void EntityAttack(EntityManager* manager, Entity* entity, Weapon* weapon, glm::vec3 dir)
 {
     if (weapon->type == WeaponType_Hand)
     {
@@ -27,11 +27,14 @@ internal void EntityAttack(EntityManager* manager, Entity* entity, World* world,
         entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
         entity->targetEntity->velocity += dir * weapon->knockbackforce;
         entity->targetEntity->flags |= EntityFlag_InKnockback;
-        entity->targetEntity->health -= weapon->damage;
+        // entity->targetEntity->health -= weapon->damage;
+        entity->targetEntity->health -= weapon->damage * 3;
 
         if (entity->targetEntity->health <= 0)
         {
-            EntityDestroy(manager, entity, world);
+            // EntityDestroy(manager, entity->targetEntity, world);
+            EntityRemove(manager, entity->targetEntity);
+            entity->targetEntity = EntityGet(manager, 0);
         }
     }
     else
@@ -61,7 +64,8 @@ internal void EntityAttack(EntityManager* manager, Entity* entity, World* world,
                     // TODO: Move to update ???
                     if (targetEntity->health <= 0)
                     {
-                        EntityDestroy(manager, targetEntity, world);
+                        EntityRemove(manager, targetEntity);
+                        // EntityDestroy(manager, targetEntity, world);
                     }
 
                     // Note: break stops the projectile trajectory, this way projectile can only impact once.
@@ -73,379 +77,630 @@ internal void EntityAttack(EntityManager* manager, Entity* entity, World* world,
     }
 }
 
-internal void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* platform,
-                           GameInputController* controller, Mouse* mouse, glm::vec3 cameraOffset)
+// internal void PlayerUpdate(GameState* state, Entity* player, f32 delta, PlatformAPI* platform,
+//                            GameInputController* controller, Mouse* mouse, glm::vec3 cameraOffset)
+//{
+//     Assert(player->type == EntityType_Player);
+
+//    glm::uvec2 windowDim  = platform->WindowGetDimension();
+//    Camera*    camera     = state->camera;
+//    glm::mat4  projection = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
+//    glm::mat4  view       = CameraGetView(camera);
+
+//    if (controller->isConnected)
+//    {
+//        if (controller->isAnalog)
+//        {
+//            if (ButtonIsPressed(controller->rightTrigger))
+//            {
+//                platform->AudioClipPlay(state->pistolShot, 0);
+//            }
+//            if (ButtonIsDown(controller->leftTrigger))
+//            {
+//                platform->Logf("Gamepad aiming");
+//            }
+//        }
+//        else
+//        {
+//            glm::vec3 playerDirection{ 0.0f, 0.0f, 0.0f };
+//            glm::vec3 crosshairPoint = WorldMousePicking(camera, windowDim, mouse->pos);
+
+//            if (ButtonIsDown(controller->moveUp))
+//            {
+//                playerDirection.z = -1.0f;
+//            }
+//            if (ButtonIsDown(controller->moveDown))
+//            {
+//                playerDirection.z = 1.0f;
+//            }
+//            if (ButtonIsDown(controller->moveLeft))
+//            {
+//                playerDirection.x = -1.0f;
+//            }
+//            if (ButtonIsDown(controller->moveRight))
+//            {
+//                playerDirection.x = 1.0f;
+//            }
+//            playerDirection = SafeNorm(playerDirection);
+
+//            if (ButtonIsPressed(mouse->left))
+//            {
+//                glm::vec3 dir = SafeNorm(crosshairPoint - player->position);
+//                EntityAttack(state->entityManager, player, &gWeaponPistol, dir);
+//            }
+
+//            // Player rotation
+//            {
+//                glm::vec3 dir       = SafeNorm(crosshairPoint - player->position);
+//                f32       targetYaw = -atan2f(dir.x, -dir.z);
+//                f32       deltaYaw  = targetYaw - player->rotation.y;
+//                deltaYaw            = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi; // Wrap to [-Pi, Pi]
+//                player->rotation.y += deltaYaw * rotationSpeed;
+//            }
+
+//            // Deceleration
+//            f32 playerSpeed = glm::length(player->velocity);
+//            if (playerSpeed > 0.0f)
+//            {
+//                f32 decelerationStep = playerFrictionForce * delta;
+
+//                if (playerSpeed <= decelerationStep)
+//                {
+//                    player->velocity = glm::vec3{ 0.0f, 0.0f, 0.0f };
+//                    player->flags &= ~EntityFlag_InKnockback;
+//                }
+//                else
+//                {
+//                    if (player->flags & EntityFlag_InKnockback)
+//                    {
+//                        decelerationStep *= 2.0f;
+//                    }
+
+//                    player->velocity -= (player->velocity / playerSpeed) * decelerationStep;
+//                }
+//            }
+
+//            // Acceleration
+//            if (!(player->flags & EntityFlag_InKnockback))
+//            {
+//                glm::vec3 acceleration = playerDirection * playerMoveAcceleration;
+//                player->velocity += acceleration * delta;
+//                if (glm::length(player->velocity) > playerMaxSpeed)
+//                {
+//                    player->velocity = SafeNorm(player->velocity) * playerMaxSpeed;
+//                }
+//            }
+
+//            glm::vec3 newPlayerPosition = player->position + (player->velocity * delta);
+//            glm::vec3 correction{ 0.0f, 0.0f, 0.0f };
+//            glm::vec3 totalCorrection{ 0 };
+
+//            AABB playerWorldAABB = AABBToWorld(player->aabb, player->position);
+
+//            // Collision detection
+//            for (u32 entityIndex = 1; entityIndex < state->entityManager->entityCount; entityIndex++)
+//            {
+//                Entity* entity = EntityGet(state->entityManager, entityIndex);
+
+//                AABB intersection;
+//                if (EntitiesIntersect(player, entity, &intersection))
+//                {
+//                    if (player->flags & EntityFlag_InKnockback)
+//                    {
+//                        player->flags &= ~EntityFlag_InKnockback;
+//                    }
+
+//                    glm::vec3 penetration;
+//                    penetration.x = intersection.max.x - intersection.min.x;
+//                    penetration.y = intersection.max.y - intersection.min.y;
+//                    penetration.z = intersection.max.z - intersection.min.z;
+
+//                    // ----------------------------------------------------------------------------
+//                    // Correct using the minimal penetration axis
+//                    if (penetration.x < penetration.z)
+//                    {
+//                        correction.x = penetration.x;
+//                    }
+//                    else
+//                    {
+//                        correction.z = penetration.z;
+//                    }
+//                    // ----------------------------------------------------------------------------
+
+//                    // ----------------------------------------------------------------------------
+//                    // Determine correction axis
+//                    if (newPlayerPosition.x < entity->position.x)
+//                    {
+//                        correction.x = -correction.x;
+//                    }
+//                    if (newPlayerPosition.z < entity->position.z)
+//                    {
+//                        correction.z = -correction.z;
+//                    }
+//                    // ----------------------------------------------------------------------------
+
+//                    // ----------------------------------------------------------------------------
+//                    // Use the greatest penetration to resolve collisions
+//                    if (Abs(correction.x) > Abs(totalCorrection.x))
+//                    {
+//                        totalCorrection.x = correction.x;
+//                    }
+//                    if (Abs(correction.z) > Abs(totalCorrection.z))
+//                    {
+//                        totalCorrection.z = correction.z;
+//                    }
+//                    // ----------------------------------------------------------------------------
+//                }
+//            }
+
+//            // World limit
+//            // Note: Enemies might spawn away the limit.
+//            // This logic does not affect enemies.
+//            //
+//            {
+//                // Left limit
+//                if (newPlayerPosition.x < GRID_LEFT_LIMIT)
+//                {
+//                    newPlayerPosition.x = GRID_LEFT_LIMIT;
+//                }
+//                // Right limit
+//                if (newPlayerPosition.x > GRID_RIGHT_LIMIT)
+//                {
+//                    newPlayerPosition.x = GRID_RIGHT_LIMIT;
+//                }
+//                // Top limit
+//                if (newPlayerPosition.z < GRID_TOP_LIMIT)
+//                {
+//                    newPlayerPosition.z = GRID_TOP_LIMIT;
+//                }
+//                // Bottom limitd
+//                if (newPlayerPosition.z > GRID_BOTTOM_LIMIT)
+//                {
+//                    newPlayerPosition.z = GRID_BOTTOM_LIMIT;
+//                }
+//            }
+
+//            newPlayerPosition += totalCorrection;
+//            player->position = newPlayerPosition;
+//            camera->position = player->position + cameraOffset;
+//        }
+//    }
+//}
+
+internal void UpdateEntity(EntityManager* manager, Entity* entity, PlatformAPI* platform,
+                           GameInputController* controller, Camera* camera, f32 delta)
 {
-    Assert(player->type == EntityType_Player);
+    // TODO: Parameters
+    glm::uvec2 windowDim = platform->WindowGetDimension();
+    Assets*    assets    = manager->assets;
 
-    glm::uvec2 windowDim  = platform->WindowGetDimension();
-    Camera*    camera     = state->camera;
-    glm::mat4  projection = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
-    glm::mat4  view       = CameraView(camera);
+    f32 maxSpeed          = 0.0f;
+    f32 accelerationSpeed = 0.0f;
+    f32 frictionForce     = 0.0f;
 
-    if (controller->isConnected)
+    // Newton's first law (law of inertia)
+    // An object continues with a constant velocity unless a force acts upon it.
+    // f32 damping = 0.972f;
+    f32 damping = 0.972f;
+
+    switch (entity->type)
     {
-        if (controller->isAnalog)
-        {
-            if (ButtonIsPressed(controller->rightTrigger))
-            {
-                platform->AudioClipPlay(state->pistolShot, 0);
-            }
-            if (ButtonIsDown(controller->leftTrigger))
-            {
-                platform->Logf("Gamepad aiming");
-            }
-        }
-        else
-        {
-            glm::vec3 playerDirection{ 0.0f, 0.0f, 0.0f };
-            glm::vec3 crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+    case EntityType_Player:
+    {
+        maxSpeed          = playerMaxSpeed;
+        accelerationSpeed = playerMoveAcceleration;
+        frictionForce     = playerFrictionForce;
 
+        entity->direction = { 0.0f, 0.0f, 0.0f };
+
+        if (controller->type == ControllerType_Keyboard)
+        {
             if (ButtonIsDown(controller->moveUp))
             {
-                playerDirection.z = -1.0f;
+                entity->direction.z = -1.0f;
             }
             if (ButtonIsDown(controller->moveDown))
             {
-                playerDirection.z = 1.0f;
+                entity->direction.z = 1.0f;
             }
             if (ButtonIsDown(controller->moveLeft))
             {
-                playerDirection.x = -1.0f;
+                entity->direction.x = -1.0f;
             }
             if (ButtonIsDown(controller->moveRight))
             {
-                playerDirection.x = 1.0f;
+                entity->direction.x = 1.0f;
             }
-            playerDirection = SafeNorm(playerDirection);
-
-            if (ButtonIsPressed(mouse->left))
-            {
-                glm::vec3 dir = SafeNorm(crosshairPoint - player->position);
-                EntityAttack(state->entityManager, player, state->world, &gWeaponPistol, dir);
-            }
+            entity->direction = SafeNorm(entity->direction);
 
             // Player rotation
             {
-                glm::vec3 dir       = SafeNorm(crosshairPoint - player->position);
-                f32       targetYaw = -atan2f(dir.x, -dir.z);
-                f32       deltaYaw  = targetYaw - player->rotation.y;
-                deltaYaw            = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi; // Wrap to [-Pi, Pi]
-                player->rotation.y += deltaYaw * rotationSpeed;
+                glm::vec3 crosshairPoint = WorldMousePicking(camera, windowDim, controller->mouse.pos);
+                glm::vec3 dir            = SafeNorm(crosshairPoint - entity->position);
+                f32       targetYaw      = -atan2f(dir.x, -dir.z);
+                f32       deltaYaw       = targetYaw - entity->rotation.y;
+                deltaYaw                 = fmodf(deltaYaw + Pi, 2.0f * Pi) - Pi; // Wrap to [-Pi, Pi]
+                entity->rotation.y += deltaYaw * rotationSpeed;
             }
+        }
+        // Gamepad
+        else
+        {
+        }
+        break;
+    }
+    case EntityType_Enemy:
+    {
+        Assert(entity->targetEntity);
 
-            // Deceleration
-            f32 playerSpeed = glm::length(player->velocity);
-            if (playerSpeed > 0.0f)
-            {
-                f32 decelerationStep = frictionForce * delta;
+        maxSpeed          = enemyMaxSpeed;
+        accelerationSpeed = enemyAcceleration;
+        frictionForce     = playerFrictionForce;
 
-                if (playerSpeed <= decelerationStep)
-                {
-                    player->velocity = glm::vec3{ 0.0f, 0.0f, 0.0f };
-                    player->flags &= ~EntityFlag_InKnockback;
-                }
-                else
-                {
-                    if (player->flags & EntityFlag_InKnockback)
-                    {
-                        decelerationStep *= 2.0f;
-                    }
+        entity->direction = SafeNorm(entity->targetEntity->position - entity->position);
+        // entity->direction = { 0.0f, 0.0f, 0.0f };
 
-                    player->velocity -= (player->velocity / playerSpeed) * decelerationStep;
-                }
-            }
+        // Enemy rotation
+        {
+            glm::vec3 direction = entity->targetEntity->position - entity->position;
+            entity->rotation.y  = atan2(direction.x, direction.z);
+        }
 
-            // Acceleration
-            if (!(player->flags & EntityFlag_InKnockback))
-            {
-                glm::vec3 acceleration = playerDirection * moveAcceleration;
-                player->velocity += acceleration * delta;
-                if (glm::length(player->velocity) > maxSpeed)
-                {
-                    player->velocity = SafeNorm(player->velocity) * maxSpeed;
-                }
-            }
+        break;
+    }
+        InvalidDefaultCase;
+    }
 
-            glm::vec3 newPlayerPosition = player->position + (player->velocity * delta);
-            glm::vec3 correction{ 0.0f, 0.0f, 0.0f };
-            glm::vec3 totalCorrection{ 0 };
+    // platform->Logf("Direction: %.2f %.2f %.2f", entity->direction.x, entity->direction.y, entity->direction.z);
 
-            AABB playerWorldAABB = AABBToWorld(player->aabb, player->position);
+    // Update linear position
+    entity->position += (entity->velocity * delta);
 
-            // Collision detection
-            for (u32 entityIndex = 1; entityIndex < state->entityManager->entityCount; entityIndex++)
-            {
-                Entity* entity = EntityGet(state->entityManager, entityIndex);
+    // Acceleration
+    glm::vec3 acceleration = entity->direction * accelerationSpeed;
 
-                AABB intersection;
-                if (EntitiesIntersect(player, entity, &intersection))
-                {
-                    if (player->flags & EntityFlag_InKnockback)
-                    {
-                        player->flags &= ~EntityFlag_InKnockback;
-                    }
+    // Update linear velocity from acceleration
+    entity->velocity += acceleration;
+    f32 speed = glm::length(entity->velocity);
+    if (speed > maxSpeed)
+    {
+        entity->velocity = SafeNorm(entity->velocity) * maxSpeed;
+    }
 
-                    glm::vec3 penetration;
-                    penetration.x = intersection.max.x - intersection.min.x;
-                    penetration.y = intersection.max.y - intersection.min.y;
-                    penetration.z = intersection.max.z - intersection.min.z;
+    // Drag
+    entity->velocity *= damping;
 
-                    // ----------------------------------------------------------------------------
-                    // Correct using the minimal penetration axis
-                    if (penetration.x < penetration.z)
-                    {
-                        correction.x = penetration.x;
-                    }
-                    else
-                    {
-                        correction.z = penetration.z;
-                    }
-                    // ----------------------------------------------------------------------------
-
-                    // ----------------------------------------------------------------------------
-                    // Determine correction axis
-                    if (newPlayerPosition.x < entity->position.x)
-                    {
-                        correction.x = -correction.x;
-                    }
-                    if (newPlayerPosition.z < entity->position.z)
-                    {
-                        correction.z = -correction.z;
-                    }
-                    // ----------------------------------------------------------------------------
-
-                    // ----------------------------------------------------------------------------
-                    // Use the greatest penetration to resolve collisions
-                    if (Abs(correction.x) > Abs(totalCorrection.x))
-                    {
-                        totalCorrection.x = correction.x;
-                    }
-                    if (Abs(correction.z) > Abs(totalCorrection.z))
-                    {
-                        totalCorrection.z = correction.z;
-                    }
-                    // ----------------------------------------------------------------------------
-                }
-            }
-
-            // World limit
-            // Note: Enemies might spawn away the limit.
-            // This logic does not affect enemies.
-            //
-            {
-                // Left limit
-                if (newPlayerPosition.x < GRID_LEFT_LIMIT)
-                {
-                    newPlayerPosition.x = GRID_LEFT_LIMIT;
-                }
-                // Right limit
-                if (newPlayerPosition.x > GRID_RIGHT_LIMIT)
-                {
-                    newPlayerPosition.x = GRID_RIGHT_LIMIT;
-                }
-                // Top limit
-                if (newPlayerPosition.z < GRID_TOP_LIMIT)
-                {
-                    newPlayerPosition.z = GRID_TOP_LIMIT;
-                }
-                // Bottom limitd
-                if (newPlayerPosition.z > GRID_BOTTOM_LIMIT)
-                {
-                    newPlayerPosition.z = GRID_BOTTOM_LIMIT;
-                }
-            }
-
-            newPlayerPosition += totalCorrection;
-            player->position = newPlayerPosition;
-            camera->position = player->position + cameraOffset;
+#if 0
+    // Acceleration
+    {
+        glm::vec3 acceleration = entity->direction * accelerationSpeed;
+        entity->velocity += acceleration * delta;
+        f32 speed = glm::length(entity->velocity);
+        if (speed > maxSpeed)
+        {
+            entity->velocity = SafeNorm(entity->velocity) * maxSpeed;
         }
     }
-}
 
-internal void EnemyUpdate(EntityManager* manager, World* world, Entity* entity, f32 delta)
-{
-    Assert(entity->type == EntityType_Enemy);
-    Assert(entity->targetEntity);
+    entity->velocity *= damping;
+
+    entity->position += (entity->velocity * delta);
+
+    // TODO: Collision detection
+    {
+        //
+    }
+#endif
+
+    if (entity->type == EntityType_Player)
+    {
+        glm::vec3 cameraOffset{ 0.0f, 18.0f, 13.0f };
+        camera->position = entity->position + cameraOffset;
+    }
 
     // Animation
     {
-        if (entity->animation.current)
+        if (entity->type == EntityType_Enemy)
         {
-            Skeleton*  skeleton  = entity->skeleton;
-            Animation* animation = entity->animation.current;
-
-            entity->animation.time += delta;
-            if (entity->animation.time >= animation->duration)
+            // Update current animation
+            if (entity->animation.current)
             {
-                entity->animation.time = 0.0f;
-            }
-            f32 time = entity->animation.time;
+                Skeleton*  skeleton  = entity->skeleton;
+                Animation* animation = entity->animation.current;
 
-            SkeletonApplyAnimation(skeleton, animation, time);
-            SkeletonUpdatePose(skeleton);
-        }
-    }
+                // f32 prevTime    = entity->animation.time;d
+                // f32 currentTime = 0.0f;
+                entity->animation.time += delta;
+                // currentTime = entity->animation.time;
 
-    // Attack
-    {
-        glm::vec3 dir = SafeNorm(entity->velocity);
-        glm::vec2 hitRectMinCorner{ entity->position.x - enemyHitRadius, entity->position.z - enemyHitRadius };
-        glm::vec2 hitRectMaxCorner{ entity->position.x + enemyHitRadius, entity->position.z + enemyHitRadius };
-
-        glm::vec2 targetMinCorner;
-        glm::vec2 targetMaxCorner;
-        targetMinCorner.x = entity->targetEntity->position.x - (entity->scale.x * 0.5f);
-        targetMinCorner.y = entity->targetEntity->position.z - (entity->scale.z * 0.5f);
-        targetMaxCorner.x = entity->targetEntity->position.x + (entity->scale.x * 0.5f);
-        targetMaxCorner.y = entity->targetEntity->position.z + (entity->scale.z * 0.5f);
-
-        b32 overlapsX = hitRectMinCorner.x <= targetMaxCorner.x && hitRectMaxCorner.x >= targetMinCorner.x;
-        b32 overlapsZ = hitRectMinCorner.y <= targetMaxCorner.y && hitRectMaxCorner.y >= targetMinCorner.y;
-        if (overlapsX && overlapsZ)
-        {
-            EntityAttack(manager, entity, world, &gWeaponHand, dir);
-        }
-    }
-
-    //----------------------------------------------------------------------------
-    // Path finding
-    cell_index              enemyCellIndex  = WorldPositionToGridCell(entity->position);
-    cell_index              playerCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
-    std::vector<cell_index> path            = WorldFindBestPath(world, manager, enemyCellIndex, playerCellIndex);
-    glm::vec3               entityDir{ 0.0f, 0.0f, 0.0f };
-
-    if (!path.empty())
-    {
-        glm::vec3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
-        // entityDir                = SafeNorm(targetPosition - entity->position);
-        // entityDir.y              = 0.0f;
-        // entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
-    }
-    // TODO: Break obstacles
-    else
-    {
-        // entityDir   = SafeNormalize(entity->targetEntity->position - entity->position);
-        // entityDir.y = 0.0f;
-    }
-    //----------------------------------------------------------------------------
-
-    //----------------------------------------------------------------------------
-    // Entity acceleration
-    if (!(entity->flags & EntityFlag_InKnockback))
-    {
-        glm::vec3 acceleration = entityDir * enemyAcceleration;
-        entity->velocity += acceleration * delta;
-        // TODO: Use constant speed for enemies???
-        if (glm::length(entity->velocity) > enemyMaxSpeed)
-        {
-            entity->velocity = SafeNorm(entity->velocity) * enemyMaxSpeed;
-        }
-    }
-    else
-    {
-        // Friction force
-        entity->velocity *= 0.70f;
-
-        f32 speed = glm::length(entity->velocity);
-        if (speed <= 0.01f)
-        {
-            entity->velocity = { 0, 0, 0 };
-            entity->flags &= ~EntityFlag_InKnockback;
-        }
-
-        entity->position += entity->velocity * delta;
-    }
-
-    glm::vec3 newEntityPosition = entity->position + (entity->velocity * delta);
-    //----------------------------------------------------------------------------
-
-    // -----------------------------------------------------------
-    // Collision detection
-    glm::vec3 correction{ 0.0f, 0.0f, 0.0f };
-    glm::vec3 totalCorrection{ 0 };
-
-    for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
-    {
-        Entity* entityPtr = EntityGet(manager, entityIndex);
-        if (entityPtr != entity && entityPtr->type == EntityType_Obstacle)
-        {
-            glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
-            lookAt          = SafeNorm(lookAt);
-            glm::vec3 start = entity->position;
-            glm::vec3 end   = start + (lookAt * 1.5f);
-
-            // TODO: Break obstacles
-            // if (AABBSegmentIntersection(EntityWorldAABB(entityPtr), start, end))
-            //{
-            //     Entity* target       = entity->targetEntity;
-            //     entity->targetEntity = entityPtr;
-            //     EntityAttack(manager, entity, world, &gWeaponHand, SafeNormalize(entity->velocity));
-            //     entity->targetEntity = target;
-            //     break;
-            // }
-            // else
-            {
-                AABB intersection;
-                if (EntitiesIntersect(entity, entityPtr, &intersection))
+                // Loop
+                if (entity->animation.time >= animation->duration)
                 {
-                    glm::vec3 penetration;
-                    penetration.x = intersection.max.x - intersection.min.x;
-                    penetration.y = intersection.max.y - intersection.min.y;
-                    penetration.z = intersection.max.z - intersection.min.z;
-
-                    //----------------------------------------------------------------------------
-                    // Correct using the minimal penetration axis
-                    if (penetration.x < penetration.z)
-                    {
-                        correction.x = penetration.x;
-                    }
-                    else
-                    {
-                        correction.z = penetration.z;
-                    }
-                    //----------------------------------------------------------------------------
-
-                    //----------------------------------------------------------------------------
-                    // Determine correction axis
-                    if (newEntityPosition.x < entity->position.x)
-                    {
-                        correction.x = -correction.x;
-                    }
-                    if (newEntityPosition.z > entity->position.z)
-                    {
-                        correction.z = -correction.z;
-                    }
-                    //----------------------------------------------------------------------------
-
-                    //----------------------------------------------------------------------------
-                    // Use the greatest penetration to resolve collisions
-                    if (Abs(correction.x) > Abs(totalCorrection.x))
-                    {
-                        totalCorrection.x = correction.x;
-                    }
-                    if (Abs(correction.z) > Abs(totalCorrection.z))
-                    {
-                        totalCorrection.z = correction.z;
-                    }
-                    //----------------------------------------------------------------------------
+                    entity->animation.time = 0.0f;
                 }
+
+                SkeletonApplyAnimation(skeleton, animation, entity->animation.time);
+                SkeletonUpdatePose(skeleton);
+            }
+
+            else if (!entity->animation.current && glm::length(entity->velocity) > 0.0f)
+            {
+                entity->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleWalk);
+                entity->animation.time    = 0.0f;
             }
         }
     }
-    // -----------------------------------------------------------
-    newEntityPosition += totalCorrection;
-    entity->position = newEntityPosition;
 }
 
-void BuildExit(GameState* state)
-{
-    if (state->buildObstacle)
-    {
-        EntityDestroy(state->entityManager, state->buildObstacle, state->world);
-        state->buildObstacle = 0;
-    }
-}
+// internal void EnemyUpdate(PlatformAPI* platform, EntityManager* manager, World* world, Entity* entity, f32 delta)
+//{
+//     Assets* assets = manager->assets;
+//     Entity* player = EntityGet(manager, 0);
+
+//    Assert(entity->type == EntityType_Enemy);
+//    // TODO: Can be used for destroy fences
+//    Assert(entity->targetEntity);
+
+//    if (entity->flags & EntityFlag_Climbing)
+//    {
+//        entity->rotation.x = Radians(-90.0f);
+//    }
+
+//    // Animation
+//    {
+//        // Update current animation
+//        if (entity->animation.current)
+//        {
+//            Skeleton*  skeleton  = entity->skeleton;
+//            Animation* animation = entity->animation.current;
+
+//            f32 prevTime    = entity->animation.time;
+//            f32 currentTime = 0.0f;
+//            entity->animation.time += delta;
+//            currentTime = entity->animation.time;
+
+//            if (animation->id == Anim_ZombieMaleAttackLeft)
+//            {
+//                if (prevTime < 0.74f && currentTime >= 0.74f)
+//                {
+//                    entity->flags |= EntityFlag_Hitting;
+//                }
+//                if (prevTime < 0.91f && currentTime >= 0.91f)
+//                {
+//                    platform->Logf("End");
+//                    entity->flags &= ~EntityFlag_Hitting;
+//                }
+//            }
+
+//            // End of the animation
+//            if (entity->animation.time >= animation->duration)
+//            {
+//                entity->animation.time    = 0.0f;
+//                entity->animation.current = 0;
+//            }
+
+//            SkeletonApplyAnimation(skeleton, animation, entity->animation.time);
+//            SkeletonUpdatePose(skeleton);
+//        }
+
+//        // Attack animation
+//        // TODO: Randomize attack animation
+//        if (!entity->animation.current)
+//        {
+//            if (entity->flags & EntityFlag_InAttack)
+//            {
+//                u32 attackAnimationId = 0;
+
+//                if (entity->assetID == Model_ZombieMaleA)
+//                {
+//                    attackAnimationId = Anim_ZombieMaleAttackLeft;
+//                }
+//                else if (entity->assetID == Model_ZombieFemaleA)
+//                {
+//                    attackAnimationId = Anim_ZombieFemaleAttackLeft;
+//                }
+//                else
+//                {
+//                    InvalidCodePath;
+//                }
+
+//                entity->animation.current = AssetsAnimationGet(assets, attackAnimationId);
+//                entity->animation.time    = 0.0f;
+//            }
+//            else if (entity->flags & EntityFlag_Idle)
+//            {
+//                u32 idleAnimationId = 0;
+//                if (entity->assetID == Model_ZombieMaleA)
+//                {
+//                    idleAnimationId = Anim_ZombieMaleIdleAlert;
+//                }
+//                else if (entity->assetID == Model_ZombieFemaleA)
+//                {
+//                    idleAnimationId = Anim_ZombieFemaleIdleAlert;
+//                }
+//                else
+//                {
+//                    InvalidCodePath;
+//                }
+
+//                entity->animation.current = AssetsAnimationGet(assets, idleAnimationId);
+//                entity->animation.time    = 0.0f;
+//            }
+//            else if (entity->flags & EntityFlag_Climbing)
+//            {
+//                u32 climbAnimationId = 0;
+//                if (entity->assetID == Model_ZombieMaleA)
+//                {
+//                    climbAnimationId = Anim_ZombieMaleCrawlingForward;
+//                }
+//                else if (entity->assetID == Model_ZombieFemaleA)
+//                {
+//                    climbAnimationId = Anim_ZombieFemaleCrawlingForward;
+//                }
+//                else
+//                {
+//                    InvalidCodePath;
+//                }
+
+//                entity->animation.current = AssetsAnimationGet(assets, climbAnimationId);
+//                entity->animation.time    = 0.0f;
+//            }
+//        }
+//    }
+
+//    // Attack
+//    {
+//        if (!entity->targetEntity)
+//        {
+//            entity->targetEntity = player;
+//        }
+
+//        if (!(entity->flags & EntityFlag_Climbing))
+//        {
+
+//            glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
+//            lookAt = SafeNorm(lookAt);
+//            glm::vec3 start{ entity->position.x, 0.5f, entity->position.z };
+//            glm::vec3 end = start + (lookAt * enemyStrikingRange);
+
+//            AABB worldAABB = AABBToWorld(entity->targetEntity->aabb, entity->targetEntity->position);
+//            if (AABBSegmentIntersection(worldAABB, start, end))
+//            {
+//                entity->flags |= EntityFlag_InAttack;
+
+//                if (entity->flags & EntityFlag_Hitting)
+//                {
+//                    EntityAttack(manager, entity, &gWeaponHand, entity->velocity);
+//                    entity->flags &= ~EntityFlag_Hitting;
+//                }
+//            }
+//            else
+//            {
+//                entity->flags &= ~EntityFlag_InAttack;
+//            }
+//        }
+//    }
+
+//    //----------------------------------------------------------------------------
+//    // Path finding
+//    glm::vec3 entityDir{ 0.0f, 0.0f, 0.0f };
+
+//    if (entity->flags & EntityFlag_Climbing)
+//    {
+//        entityDir.y = 1.0f;
+//    }
+//    else if (player == entity->targetEntity)
+//    {
+//        cell_index              enemyCellIndex  = WorldPositionToGridCell(entity->position);
+//        cell_index              playerCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
+//        std::vector<cell_index> path            = WorldFindBestPath(world, manager, enemyCellIndex, playerCellIndex);
+//        // glm::vec3               entityDir{ 0.0f, 0.0f, 0.0f };
+
+//        if (!path.empty())
+//        {
+//            glm::vec3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
+//            entityDir                = SafeNorm(targetPosition - entity->position);
+//            entityDir.y              = 0.0f;
+//            //  entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
+//        }
+//        // TODO: Break obstacles
+//        else
+//        {
+//            entityDir = SafeNorm(entity->targetEntity->position - entity->position);
+//            //   entityDir.y = 0.0f;
+//        }
+//    }
+//    //----------------------------------------------------------------------------
+
+//    //----------------------------------------------------------------------------
+//    // Entity acceleration
+//    if (!(entity->flags & EntityFlag_InKnockback))
+//    {
+//        f32 accel = enemyAcceleration;
+//        if (entity->flags & EntityFlag_Climbing)
+//        {
+//            accel = 0.1f;
+//        }
+
+//        glm::vec3 acceleration = entityDir * enemyAcceleration;
+//        entity->velocity += acceleration * delta;
+//        // TODO: Use constant speed for enemies???
+//        if (glm::length(entity->velocity) > enemyMaxSpeed)
+//        {
+//            entity->velocity = SafeNorm(entity->velocity) * enemyMaxSpeed;
+//        }
+//    }
+//    else
+//    {
+//        // Friction force
+//        entity->velocity *= 0.70f;
+
+//        f32 speed = glm::length(entity->velocity);
+//        if (speed <= 0.01f)
+//        {
+//            entity->velocity = { 0, 0, 0 };
+//            entity->flags &= ~EntityFlag_InKnockback;
+//        }
+
+//        entity->position += entity->velocity * delta;
+//    }
+
+//    glm::vec3 newEntityPosition = entity->position + (entity->velocity * delta);
+//    //----------------------------------------------------------------------------
+
+//    // -----------------------------------------------------------
+//    // Collision detection
+//    glm::vec3 correction{ 0.0f, 0.0f, 0.0f };
+//    glm::vec3 totalCorrection{ 0 };
+
+//    if (!(entity->flags & EntityFlag_Climbing))
+//    {
+//        // Attack logic
+//        // Note: this is not part of collision detection
+//        for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
+//        {
+//            Entity* entityPtr = EntityGet(manager, entityIndex);
+//            if (entityPtr->type == EntityType_Player)
+//            {
+//                glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
+//                lookAt              = SafeNorm(lookAt);
+//                glm::vec3 start     = entity->position;
+//                start.y             = 0.5f;
+//                glm::vec3 end       = start + (lookAt * enemyStrikingRange);
+//                AABB      worldAABB = AABBToWorld(entityPtr->aabb, entityPtr->position);
+
+//                if (AABBSegmentIntersection(worldAABB, start, end))
+//                {
+//                    newEntityPosition = entity->position;
+
+//                    if (!(entity->flags & EntityFlag_InAttack))
+//                    {
+//                        entity->targetEntity = entityPtr;
+//                    }
+//                }
+//            }
+//            else if (entityPtr->type == EntityType_Obstacle)
+//            {
+//                glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
+//                lookAt              = SafeNorm(lookAt);
+//                glm::vec3 start     = entity->position;
+//                start.y             = 0.5f;
+//                glm::vec3 end       = start + (lookAt * enemyJumpRange);
+//                AABB      worldAABB = AABBToWorld(entityPtr->aabb, entityPtr->position);
+
+//                if (AABBSegmentIntersection(worldAABB, start, end))
+//                {
+//                    newEntityPosition = entity->position;
+//                    // entity->flags |= EntityFlag_Idle;
+//                    entity->flags |= EntityFlag_Climbing;
+//                }
+//            }
+//        }
+//    }
+
+//    newEntityPosition += totalCorrection;
+//    entity->position = newEntityPosition;
+//}
 
 internal void LoadAssets(Assets* assets)
 {
@@ -467,6 +722,8 @@ internal void LoadAssets(Assets* assets)
     AssetsLoad(assets, Anim_ZombieMaleWalk);
     AssetsLoad(assets, Anim_ZombieMaleWalkAgressive);
     AssetsLoad(assets, Anim_ZombieMaleWalkLimp);
+    AssetsLoad(assets, Anim_ZombieMaleCrawlingForward);
+    AssetsLoad(assets, Anim_ZombieMaleCrawlingIdle);
 
     AssetsLoad(assets, Anim_ZombieFemaleAttackLeft);
     AssetsLoad(assets, Anim_ZombieFemaleAttackRight);
@@ -478,6 +735,8 @@ internal void LoadAssets(Assets* assets)
     AssetsLoad(assets, Anim_ZombieFemaleWalk);
     AssetsLoad(assets, Anim_ZombieFemaleWalkAgressive);
     AssetsLoad(assets, Anim_ZombieFemaleWalkLimp);
+    AssetsLoad(assets, Anim_ZombieFemaleCrawlingForward);
+    AssetsLoad(assets, Anim_ZombieFemaleCrawlingIdle);
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -501,32 +760,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         ArenaInit(arena, (size_t)memory->permanentStorageSize - sizeof(GameState),
                   (u8*)memory->permanentStorage + sizeof(GameState));
 
-        state->program               = PushStruct(arena, Program);
-        state->programSkinned        = PushStruct(arena, Program);
-        state->camera                = PushStruct(arena, Camera);
-        state->planeBuffer           = PushStruct(arena, GPUBuffer);
-        state->world                 = PushStruct(arena, World);
-        state->world->grid           = PushArray(arena, GRID_CELLS, GridCell);
-        state->entityManager         = PushStruct(arena, EntityManager);
-        state->renderer              = PushStruct(arena, Renderer);
-        state->assets                = PushStruct(arena, Assets);
-        state->ui                    = PushStruct(arena, UI);
-        state->mode                  = GameMode_Round;
-        state->roundMaxEnemy         = 1;
-        state->roundCount            = 1;
-        state->roundSpawnIntervalSec = 0.3;
-        state->roundLastSpawnTime    = 0;
-        state->roundEnemyCount       = 0;
-        state->buildObstacle         = 0;
-        state->buildModeDurationSec  = 10;
-        state->buildModeBeginTime    = 0;
+        state->program        = PushStruct(arena, Program);
+        state->programSkinned = PushStruct(arena, Program);
+        state->camera         = PushStruct(arena, Camera);
+        state->planeBuffer    = PushStruct(arena, GPUBuffer);
+        state->entityManager  = PushStruct(arena, EntityManager);
+        state->renderer       = PushStruct(arena, Renderer);
+        state->assets         = PushStruct(arena, Assets);
+        state->ui             = PushStruct(arena, UI);
+        state->mode           = GameMode_Play;
 #ifdef BUILD_TYPE_DEBUG
         state->debug                    = PushStruct(arena, Debug);
         state->debug->state             = state;
         state->debug->selectedCellIndex = CELL_EMPTY;
 #endif
-
-        memset(state->world->grid, 0, sizeof(GridCell) * GRID_CELLS);
 
         Renderer* renderer = state->renderer;
         Assets*   assets   = state->assets;
@@ -591,7 +838,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                    { 0.0f, 1.0f, 0.0f },   // Up
                    -68.0f,                 // Pitch
                    -90.0f,                 // Yaw
-                   45.0f                   // Fov
+                   55.0f                   // Fov
         );
 
         state->pistolShot      = platform->AudioClipLoad("../data/pistol.wav", AudioClipType_Sfx);
@@ -603,9 +850,60 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         LoadAssets(assets);
 
-        EntitySpawn(state->entityManager, EntityType_Player, { 0.0f, 0.0f, 0.0f });
-        Entity* fence0 = EntitySpawn(state->entityManager, EntityType_Obstacle, { 0.0f, 0.0f, -2.0f });
-        BuildPlaceObstacle(state->world, state->entityManager, fence0);
+        Entity* player      = EntitySpawn(state->entityManager, EntityType_Player, { 0.0f, 0.0f, 0.0f });
+        Entity* enemy       = EntitySpawn(state->entityManager, EntityType_Enemy, { 0.0f, 0.0f, -15.0f });
+        enemy->targetEntity = player;
+
+#if 0
+        EntityManager* manager    = state->entityManager;
+        Model*         fenceModel = AssetsModelGet(assets, Model_Fence);
+
+        f32 fenceWidth = fenceModel->aabb.max.x - fenceModel->aabb.min.x;
+        f32 fenceDepth = fenceModel->aabb.max.z - fenceModel->aabb.min.z;
+
+        u32 fenceSideCount = 5;
+
+        f32 startX = (fenceWidth * fenceSideCount * -0.5f) + fenceWidth * 0.5f;
+        f32 startZ = (fenceWidth * fenceSideCount * -0.5f) + fenceWidth * 0.5f;
+
+        // Top
+        f32 x = startX;
+        f32 z = startZ;
+        for (u32 i = 0; i < fenceSideCount; i++)
+        {
+            EntitySpawn(manager, EntityType_Obstacle, { x, 0.0f, z });
+            x += fenceWidth;
+        }
+
+        // Left
+        x -= fenceWidth * 0.5f;
+        z = startZ + fenceWidth * 0.5f;
+        for (u32 i = 0; i < fenceSideCount; i++)
+        {
+            Entity* fence = EntitySpawn(manager, EntityType_Obstacle, { x, 0.0f, z });
+            BuildRotateObstacle(fence, true);
+            z += fenceWidth;
+        }
+
+        // Right
+        x = startX - fenceWidth * 0.5f;
+        z = startZ + fenceWidth * 0.5f;
+        for (u32 i = 0; i < fenceSideCount; i++)
+        {
+            Entity* fence = EntitySpawn(manager, EntityType_Obstacle, { x, 0.0f, z });
+            BuildRotateObstacle(fence, true);
+            z += fenceWidth;
+        }
+
+        // Bottom
+        x = startX;
+        z -= fenceWidth * 0.5f;
+        for (u32 i = 0; i < fenceSideCount; i++)
+        {
+            EntitySpawn(manager, EntityType_Obstacle, { x, 0.0f, z });
+            x += fenceWidth;
+        }
+#endif
 
 #if 0
         for (u32 i = 0; i < 20; i++)
@@ -621,7 +919,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
 #endif
 
-        WorldComputeStaticNodes(state->world, state->entityManager);
+        // WorldComputeStaticNodes(state->world, state->entityManager);
     }
     // ----------------------------------------------------------------------------
 
@@ -631,11 +929,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     EntityManager* entityManager = state->entityManager;
     Entity*        player        = EntityGet(entityManager, 0);
     Camera*        camera        = state->camera;
-    glm::mat4      projection    = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
-    glm::mat4      view          = CameraView(camera);
-    World*         world         = state->world;
     Assets*        assets        = state->assets;
     UI*            ui            = state->ui;
+
+    // xxx
+    camera->target = player->position;
 
     // TODO: Assign controller to player
     // for (u32 controllerIndex = 0; controllerIndex < ArrayCount(input->controllers); controllerIndex++)
@@ -644,14 +942,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     //}
 
     GameInputController* controller = GetController(input, CONTROLLER_KEYBOARD);
-
-#if 1
-    glm::vec3 cameraOffset{ 0.0f, 16.0f, 5.0f };
-    CameraSetPitch(camera, -68.0f);
-#else
-    glm::vec3 cameraOffset{ 0.0f, 4.0f, 8.0f };
-    CameraSetPitch(camera, -26.0f);
-#endif
 
     if (player->health <= 0)
     {
@@ -668,144 +958,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         if (ButtonIsPressed(controller->start))
         {
             // TODO: game mode transitions
-            state->mode = GameMode_Round;
-        }
-        break;
-    }
-    case GameMode_Build:
-    {
-#if BUILD_TYPE_DEBUG
-        // Destroy entity
-        {
-            if (ButtonIsPressed(mouse->middle))
-            {
-                glm::vec3  crosshairPoint = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-                cell_index crosshairCell  = WorldPositionToGridCell(crosshairPoint);
-
-                for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
-                {
-                    Entity* entity = EntityGet(entityManager, entityIndex);
-                    if (entity->type != EntityType_Obstacle)
-                    {
-                        continue;
-                    }
-
-                    EntityCellCorners cellCorners = EntityGetCellCorners(entity);
-                    u32               beginRow    = CELL_ROW(cellCorners.bottomRight);
-                    u32               endRow      = CELL_ROW(cellCorners.topRight);
-                    u32               beginCol    = CELL_COL(cellCorners.bottomLeft);
-                    u32               endCol      = CELL_COL(cellCorners.bottomRight);
-
-                    for (u32 row = beginRow; row <= endRow; row++)
-                    {
-                        for (u32 col = beginCol; col <= endCol; col++)
-                        {
-                            if (crosshairCell == CELL_INDEX(row, col))
-                            {
-                                platform->Logf("Entity at cell %d removed", CELL_INDEX(row, col));
-                                EntityDestroy(entityManager, entity, world);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-#endif
-
-        // Start timer
-        if (state->buildModeBeginTime == 0)
-        {
-            state->buildModeBeginTime = time(0);
-        }
-        else
-        {
-            int elapsedSeconds = (int)difftime(time(0), state->buildModeBeginTime);
-
-            if (elapsedSeconds >= (int)state->buildModeDurationSec)
-            {
-                // Set round mode stuff
-                EntityManagerFreeTransient(entityManager);
-                // TODO: game mode transitions
-                state->mode = GameMode_Round;
-                // state->roundMaxEnemy *= 2;
-                state->roundCount++;
-                // state->roundSpawnIntervalSec = 0.3;
-                state->roundLastSpawnTime = 0;
-                state->roundEnemyCount    = 0;
-
-                // Clean up build mode stuff
-                state->buildModeBeginTime = 0;
-                state->buildObstacle      = 0;
-
-                break;
-            }
-        }
-
-        // Spawn obstacle
-        if (!state->buildObstacle && ButtonIsPressed(mouse->left))
-        {
-            // TODO: Move this logic to `ObstacleSpawn` function
-            glm::vec3 position = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-
-            state->buildObstacle = EntitySpawn(entityManager, EntityType_Obstacle, position);
-            state->buildObstacle->flags |= EntityFlag_Positioning;
-        }
-        else if (state->buildObstacle)
-        {
-            // Place object if valid position
-            if (ButtonIsPressed(mouse->left))
-            {
-                if (BuildIsObstacleValidPosition(world, entityManager, state->buildObstacle))
-                {
-                    BuildPlaceObstacle(state->world, entityManager, state->buildObstacle);
-                    WorldComputeStaticNodes(world, entityManager);
-                    state->buildObstacle->flags &= ~(EntityFlag_Positioning);
-                    state->buildObstacle = 0;
-                    EntitiesRemoveFlag(entityManager, EntityFlag_Snapping);
-                }
-                else
-                {
-                    platform->Logf("Invalid obstacle position");
-                }
-            }
-            // Cancel placing
-            else if (ButtonIsPressed(mouse->right))
-            {
-                BuildExit(state);
-            }
-            // Drag, rotate and snap obstacle
-            else
-            {
-                BuildDragObstacle(state->buildObstacle, camera, projection, windowDim, mouse->pos);
-
-                if (ButtonIsPressed(input->keyboard.moveLeft))
-                {
-                    BuildRotateObstacle(state->buildObstacle, true);
-                }
-                else if (ButtonIsPressed(input->keyboard.moveRight))
-                {
-                    BuildRotateObstacle(state->buildObstacle, false);
-                }
-
-                if (BuildIsObstacleValidPosition(world, entityManager, state->buildObstacle))
-                {
-                    state->buildObstacle->flags &= ~EntityFlag_InvalidPosition;
-                    SnapCandidate snapCandidate = BuildFindSnapCandidate(world, state->buildObstacle);
-                    if (snapCandidate.entity)
-                    {
-                        BuildSnapObstacles(world, state->buildObstacle, &snapCandidate);
-                        state->buildObstacle->flags |= EntityFlag_Snapping;
-                    }
-                    else
-                    {
-                        state->buildObstacle->flags &= ~EntityFlag_Snapping;
-                    }
-                }
-                else
-                {
-                    state->buildObstacle->flags |= EntityFlag_InvalidPosition;
-                }
-            }
+            state->mode = GameMode_Play;
         }
         break;
     }
@@ -815,11 +968,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             EntityManagerFreeTransient(entityManager);
             // TODO: game mode transitions
-            state->mode = GameMode_Round;
+            state->mode = GameMode_Play;
         }
         break;
     }
-    case GameMode_Round:
+    case GameMode_Play:
     {
         if (ButtonIsPressed(controller->start))
         {
@@ -827,58 +980,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             state->mode = GameMode_Pause;
         }
 
-        if (state->roundLastSpawnTime == 0)
-        {
-            Assert(state->roundEnemyCount == 0);
-            state->roundLastSpawnTime = time(0);
-            state->roundEnemyCount++;
-
-            Entity* enemy       = EntitySpawn(entityManager, EntityType_Enemy, { -2.0f, 0.0f, -8.0f });
-            enemy->targetEntity = player;
-        }
-        else if (state->roundEnemyCount < state->roundMaxEnemy)
-        {
-            time_t now = time(0);
-
-            f64 seconds = difftime(now, state->roundLastSpawnTime);
-            if (seconds > state->roundSpawnIntervalSec)
-            {
-                state->roundLastSpawnTime = now;
-                state->roundEnemyCount++;
-
-                Entity* enemy       = EntitySpawn(entityManager, EntityType_Enemy, { -2.0f, 0.0f, -8.0f });
-                enemy->targetEntity = player;
-            }
-        }
-
-        if (state->roundEnemyCount == state->roundMaxEnemy)
-        {
-            u32 enemyCount = 0;
-            for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
-            {
-                Entity* entity = EntityGet(entityManager, entityIndex);
-                if (entity->type == EntityType_Enemy)
-                {
-                    enemyCount++;
-                }
-            }
-            if (enemyCount == 0)
-            {
-                // TODO: game mode transitions
-                state->mode = GameMode_Build;
-            }
-        }
-
-        WorldUpdate(world, entityManager);
-        PlayerUpdate(state, player, delta, platform, controller, mouse, cameraOffset);
-
         for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
         {
             Entity* entity = EntityGet(entityManager, entityIndex);
-            if (entity->type == EntityType_Enemy)
-            {
-                EnemyUpdate(entityManager, world, entity, delta);
-            }
+            UpdateEntity(entityManager, entity, platform, controller, camera, delta);
         }
 
         break;
@@ -888,8 +993,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // ----------------------------------------------------------------------------
     // Draw
-    Renderer* renderer = state->renderer;
-    RendererFrameBegin(renderer, projection * view);
+    glm::mat4 projection = CameraGetProjection(camera, (f32)windowDim.x / (f32)windowDim.y);
+    glm::mat4 view       = CameraGetView(camera);
+    glm::mat4 viewProj   = projection * view;
+    Renderer* renderer   = state->renderer;
+    RendererFrameBegin(renderer, viewProj);
     PushRenderCommand(&renderer->commandQueue, FramebufferClear);
 
 #ifdef BUILD_TYPE_DEBUG
@@ -898,35 +1006,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     switch (state->mode)
     {
-    case GameMode_Build: // TODO: Build mode draw calls
-    {
-        //      UI_BeginFrame(ui, controller);
-        //      {
-        //          UI_Node* rootContainer   = UI_BeginNode(ui, "root_container");
-        //          rootContainer->width     = UI_FIXED(windowDim.x);
-        //          rootContainer->height    = UI_FIXED(windowDim.y);
-        //          rootContainer->bgColor   = color_blue;
-        //          rootContainer->bgColor.w = 0.5f;
-        //          rootContainer->padding   = { 10.0f, 10.0f, 0.0f, 0.0f };
-        //          {
-        //              UI_Node* buildMenu   = UI_BeginNode(ui, "build_menu");
-        //              buildMenu->width     = UI_FIT();
-        //              buildMenu->height    = UI_FIT();
-        //              buildMenu->bgColor   = color_red;
-        //              buildMenu->bgColor.w = 0.3f;
-        //              {
-        //                  UI_Text(ui, "Shop", color_white, 0.7f);
-        //              }
-        //              UI_EndNode(ui);
-        //          }
-        //          UI_EndNode(ui);
-        //      }
-        //      UI_EndFrame(ui);
-
-        //      break;
-        __fallthrough;
-    }
-    case GameMode_Round:
+    case GameMode_Play:
     {
         Texture* crosshairAtlas = AssetsTextureGet(assets, Texture_Crosshair);
         Texture* zombieTexture  = AssetsTextureGet(assets, Texture_Zombie);
@@ -949,12 +1029,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             gl->ActiveTexture(GL_TEXTURE1);
             gl->BindTexture(GL_TEXTURE_2D, zombieTexture->id);
 
-            glm::mat4 viewProj = projection * view;
-
             // Floor
             {
                 glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 0.0f, 0.0f, 0.0f });
-                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 20.0f });
+                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 50.0f });
                 glm::mat4 model     = translate * scale;
 
                 PushRenderProgramUse(renderer, state->program->id);
@@ -1082,7 +1160,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                         if (optionIndex == 0)
                         {
                             // TODO: game mode transitions
-                            state->mode = GameMode_Round;
+                            state->mode = GameMode_Play;
                         }
                     }
                 }

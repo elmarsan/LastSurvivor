@@ -14,7 +14,7 @@ void AssetsLoad(Assets* assets, u32 id)
     char* assetFilename = assetFilenames[id];
     platform->Logf("Loading asset '%s'", assetFilename);
 
-    if (id == Texture_Zombie || id == Texture_Crosshair || id == Texture_Fence)
+    if (id >= Texture_Zombie && id <= Texture_ChainlinkFence)
     {
         u32 textureId               = id - Texture_Zombie;
         assets->textures[textureId] = PushStruct(arena, Texture);
@@ -115,6 +115,7 @@ void AssetsLoad(Assets* assets, u32 id)
                 StreamRead(&stream, &header, sizeof(header), 1);
 
                 strcpy(animation->name, header.name);
+                animation->id           = animationId;
                 animation->duration     = header.duration;
                 animation->channelCount = header.channelCount;
                 animation->samplerCount = header.samplerCount;
@@ -158,7 +159,7 @@ void AssetsLoad(Assets* assets, u32 id)
 
 Model* AssetsModelGet(Assets* assets, u32 id)
 {
-    Assert(id >= 0 && id <= Model_Fence);
+    Assert(id >= 0 && id <= MODEL_COUNT - 1);
     return assets->models[id];
 }
 

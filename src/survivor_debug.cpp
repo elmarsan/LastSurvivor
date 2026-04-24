@@ -98,49 +98,25 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
 {
     GameState*     state         = debug->state;
     Renderer*      renderer      = state->renderer;
-    World*         world         = state->world;
     glm::uvec2     windowDim     = platform->WindowGetDimension();
-    Camera*        camera        = state->camera;
-    glm::mat4      projection    = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
-    glm::mat4      view          = CameraView(camera);
     EntityManager* entityManager = state->entityManager;
     Entity*        player        = &entityManager->entities[0];
     Mouse*         mouse         = &input->keyboard.mouse;
     Assets*        assets        = state->assets;
 
     // Mouse picking grid cell
+#if DEBUG_SELECTED_GRID_CELL
     if (ButtonIsPressed(mouse->middle))
     {
-        glm::vec3 mousePoint     = WorldMousePicking(camera, projection, windowDim, mouse->pos);
+        glm::vec3 mousePoint     = WorldMousePicking(state->camera, windowDim, mouse->pos);
         debug->selectedCellIndex = WorldPositionToGridCell(mousePoint);
     }
-    // Change from build to round and vice versa
-    if (ButtonIsPressed(input->debug.f1))
-    {
-        if (state->mode != GameMode_Build)
-        {
-            // TODO: game mode transitions
-            state->mode                 = GameMode_Build;
-            state->buildModeDurationSec = 2000;
-        }
-        else
-        {
-            // TODO: game mode transitions
-            state->mode                 = GameMode_Round;
-            state->buildModeDurationSec = 10;
-            BuildExit(state);
-        }
-    }
-    // Switch camera type
-    if (ButtonIsPressed(input->debug.f2))
-    {
-        CameraToggleTopDownMode(camera);
-    }
+#endif
 
     // Debug animations
     if (ButtonIsPressed(input->debug.f3))
     {
-        Entity* enemy = EntityGet(entityManager, 2);
+        Entity* enemy = EntityGet(entityManager, 1);
 
         enemy->animation.time = 0.0f;
         if (enemy->animation.current)
@@ -154,13 +130,17 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
                 // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleAttackLeft);
                 // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleRunning);
                 // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleWalkLimp);
-                enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleSlowWalk);
+
+                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleCrawlingIdle);
+                enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleCrawlingForward);
             }
             else if (enemy->assetID == Model_ZombieFemaleA)
             {
-                enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleWalk);
+                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleWalk);
                 // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleAttackLeft);
                 // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleIdle);
+                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleCrawlingIdle);
+                enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleCrawlingForward);
             }
             else
             {
@@ -178,26 +158,25 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
 #endif
 
     // Debug selected grid cell
+#if DEBUG_SELECTED_GRID_CELL
     if (debug->selectedCellIndex != CELL_EMPTY)
     {
-        u32  row = CELL_ROW(debug->selectedCellIndex);
-        u32  col = CELL_COL(debug->selectedCellIndex);
-        char debugSelectedCellBuffer[64];
+        u32       row      = CELL_ROW(debug->selectedCellIndex);
+        u32       col      = CELL_COL(debug->selectedCellIndex);
+        glm::vec3 worldPos = WorldGridCellToPosition(debug->selectedCellIndex);
+        char      debugSelectedCellBuffer[64];
+        char      debugSelectedCellCoords[64];
         sprintf(debugSelectedCellBuffer, "%d(%d,%d)", debug->selectedCellIndex, row, col);
-        f32       scale    = 0.7f;
-        glm::vec2 textSize = UI_GetTextSize(state->ui, debugSelectedCellBuffer, scale);
-        DrawText(renderer, debugSelectedCellBuffer, { windowDim.x - textSize.x, 8.0f }, color_white, scale);
+        sprintf(debugSelectedCellCoords, "(%.2f,%.2f)", worldPos.x, worldPos.z);
+        f32       scale         = 0.7f;
+        glm::vec2 gridTextSize  = UI_GetTextSize(state->ui, debugSelectedCellBuffer, scale);
+        glm::vec2 coordTextSize = UI_GetTextSize(state->ui, debugSelectedCellCoords, scale);
+        f32       marginTop     = 8.0f;
+        DrawText(renderer, debugSelectedCellBuffer, { windowDim.x - gridTextSize.x, marginTop }, color_white, scale);
+        DrawText(renderer, debugSelectedCellCoords,
+                 { windowDim.x - coordTextSize.x, marginTop * 1.5f + gridTextSize.y }, color_white, scale);
     }
-
-    // Build timer
-    if (state->mode == GameMode_Build)
-    {
-        char timerBuf[10];
-        int  elapsedSeconds   = (int)difftime(time(0), state->buildModeBeginTime);
-        int  remainingSeconds = (int)state->buildModeDurationSec - elapsedSeconds;
-        sprintf(timerBuf, "%d", remainingSeconds);
-        DrawText(renderer, timerBuf, { 0.0f, 0.0f }, color_red, 0.8f);
-    }
+#endif
 
     // Debug grid
     {
@@ -220,83 +199,66 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
         }
 
         // Debug selected cell
+#if DEBUG_SELECTED_GRID_CELL
         if (debug->selectedCellIndex != CELL_EMPTY)
         {
             DebugDrawGridCell(renderer, debug->selectedCellIndex, color_magenta);
         }
-
-        // Debug graph
-        {
-            // Nodes and edges
-            for (u32 nodeIndex = 0; nodeIndex < world->nodes.size(); nodeIndex++)
-            {
-                cell_index nodeCell = world->nodes[nodeIndex];
-
-                if (nodeCell != CELL_EMPTY)
-                {
-                    glm::vec3 nodePos = WorldGridCellToPosition(nodeCell);
-                    DebugDrawGridCell(renderer, nodeCell, color_green);
-
-// Select cell edges
-#if 1
-                    if (debug->selectedCellIndex != CELL_EMPTY)
-                    {
-                        if (debug->selectedCellIndex == nodeCell)
-                        {
-                            for (auto edgeIndex : world->edges[nodeIndex])
-                            {
-                                cell_index dstCell    = world->nodes[edgeIndex];
-                                glm::vec3  dstNodePos = WorldGridCellToPosition(dstCell);
-                                nodePos.y             = 0.1f;
-                                dstNodePos.y          = 0.1f;
-                                DrawLine(renderer, nodePos, dstNodePos, color_magenta);
-                            }
-                        }
-                    }
 #endif
-// All edges
-#if 0
-                        for (auto edgeIndex : world->edges[nodeIndex])
-                        {
-                            cell_index dstCell    = world->nodes[edgeIndex];
-                            glm::vec3         dstNodePos = WorldGridCellToPosition(dstCell);
-                            nodePos.y             = 0.1f;
-                            dstNodePos.y          = 0.1f;                            
-							DrawLine(renderer, nodePos, dstNodePos, color_magenta);
-                        }
-#endif
-                }
-            }
 
-            // Occupied cells
-            for (cell_index cellIndex = 0; cellIndex < GRID_CELLS; cellIndex++)
-            {
-                if (world->grid[cellIndex].entityCount > 0)
-                {
-                    DebugDrawGridCell(renderer, cellIndex, color_blue);
-                }
-            }
+        //        // Debug graph
+        //        {
+        //            // Nodes and edges
+        //            for (u32 nodeIndex = 0; nodeIndex < world->nodes.size(); nodeIndex++)
+        //            {
+        //                cell_index nodeCell = world->nodes[nodeIndex];
 
-            cell_index playerCellIndex = WorldPositionToGridCell(player->position);
-            cell_index nodeIndex       = 468;
+        //                if (nodeCell != CELL_EMPTY)
+        //                {
+        //                    glm::vec3 nodePos = WorldGridCellToPosition(nodeCell);
+        //                    DebugDrawGridCell(renderer, nodeCell, color_green);
 
-            glm::vec3 playerCellCenter = WorldGridCellToPosition(playerCellIndex);
-            glm::vec3 nodeCenter       = WorldGridCellToPosition(nodeIndex);
+        //// Select cell edges
+        // #if 1
+        //                     if (debug->selectedCellIndex != CELL_EMPTY)
+        //                     {
+        //                         if (debug->selectedCellIndex == nodeCell)
+        //                         {
+        //                             for (auto edgeIndex : world->edges[nodeIndex])
+        //                             {
+        //                                 cell_index dstCell    = world->nodes[edgeIndex];
+        //                                 glm::vec3  dstNodePos = WorldGridCellToPosition(dstCell);
+        //                                 nodePos.y             = 0.1f;
+        //                                 dstNodePos.y          = 0.1f;
+        //                                 DrawLine(renderer, nodePos, dstNodePos, color_magenta);
+        //                             }
+        //                         }
+        //                     }
+        // #endif
+        //// All edges
+        // #if 0
+        //                         for (auto edgeIndex : world->edges[nodeIndex])
+        //                         {
+        //                             cell_index dstCell    = world->nodes[edgeIndex];
+        //                             glm::vec3         dstNodePos = WorldGridCellToPosition(dstCell);
+        //                             nodePos.y             = 0.1f;
+        //                             dstNodePos.y          = 0.1f;
+        //							DrawLine(renderer, nodePos, dstNodePos, color_magenta);
+        //                         }
+        // #endif
+        //                 }
+        //             }
 
-            DrawLine(renderer, playerCellCenter, nodeCenter, color_red);
-        }
+        //            // Occupied cells
+        //            for (cell_index cellIndex = 0; cellIndex < GRID_CELLS; cellIndex++)
+        //            {
+        //                if (world->grid[cellIndex].entityCount > 0)
+        //                {
+        //                    // DebugDrawGridCell(renderer, cellIndex, color_blue);
+        //                }
+        //            }
+        //        }
     }
-
-    // Shooting
-    //  {
-    //      if (ButtonIsDown(mouse->left))
-    //      {
-    //          glm::vec3 end = WorldMousePicking(camera, projection, windowDim, mouse->pos);
-
-    //          // DebugDrawLine(state->debug, opengl, player->position, end, color_green);
-    //          DrawLine(renderer, player->position, end, color_green);
-    //      }
-    //  }
 
     // Debug entities
     for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
@@ -313,54 +275,32 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
         }
 
         // Entity AABB
+#if DEBUG_AABB
         DebugDrawAABB(renderer, entity->position, entity->rotation.y, entity->aabb, color_red);
+#endif
 
         // Entity Y orientation
-        if (entity->type == EntityType_Obstacle)
+        if (entity->type == EntityType_Enemy || entity->type == EntityType_Player)
         {
-            // Snap points
-#if 1
-            if (state->mode == GameMode_Build)
-            {
-                EntityWorldCorners worldCorners = EntityGetWorldCorners(entity);
-                for (u32 cornerIndex = 0; cornerIndex < ArrayCount(worldCorners.arr); cornerIndex++)
-                {
-                    glm::vec3 snapPoint = worldCorners.arr[cornerIndex];
-                    snapPoint.y         = 0.0f;
+            glm::vec4 color = entity->type == EntityType_Enemy ? color_red : color_blue;
 
-                    DebugDrawPlane(renderer, snapPoint, { CELL_SIZE, 0.0f, CELL_SIZE }, color_yellow);
-                }
-            }
-#endif
-        }
-        else if (entity->type == EntityType_Enemy)
-        {
-            // Enemy hitbox
-            DebugDrawCircle(renderer, entity->position, enemyHitRadius, color_red);
+            // f32 radius = enemyHitRadius;
+            f32 radius = capsuleRadius;
 
-#if 1
-            // Path finding
-            {
-                WorldUpdate(world, entityManager);
+            glm::vec3 start = { entity->position.x, 0.0f, entity->position.z };
+            glm::vec3 end   = { entity->position.x, 2.2f, entity->position.z };
 
-                cell_index              startCell = WorldPositionToGridCell(entity->position);
-                cell_index              dstCell   = WorldPositionToGridCell(entity->targetEntity->position);
-                std::vector<cell_index> path      = WorldFindBestPath(world, state->entityManager, startCell, dstCell);
-                if (!path.empty())
-                {
-                    for (u32 i = 0; i < path.size() - 1; i++)
-                    {
-                        glm::vec3 start = WorldGridCellToPosition(path[i]);
-                        glm::vec3 end   = WorldGridCellToPosition(path[i + 1]);
+            DebugDrawCircle(renderer, start, radius, color);
+            DebugDrawCircle(renderer, end, radius, color);
 
-                        start.y = 0.01f;
-                        end.y   = 0.01f;
-
-                        DrawLine(renderer, start, end, color_yellow);
-                    }
-                }
-            }
-#endif
+            // Left
+            DrawLine(renderer, { start.x - radius, 0.0f, start.z }, { start.x - radius, 2.0f, start.z }, color);
+            // Right
+            DrawLine(renderer, { start.x + radius, 0.0f, start.z }, { start.x + radius, 2.0f, start.z }, color);
+            // Top
+            DrawLine(renderer, { start.x, 0.0f, start.z - radius }, { start.x, 2.0f, start.z - radius }, color);
+            // Bottom
+            DrawLine(renderer, { start.x, 0.0f, start.z + radius }, { start.x, 2.0f, start.z + radius }, color);
         }
     }
 }

@@ -411,8 +411,8 @@ void ObjComputeGPUBuffers(Obj* obj)
 
 Obj ObjParse(char* filename, PlatformAPI* platform, Arena* arena)
 {
-    platform->Logf("------------------------------------------------------------");
-    platform->Logf("Reading .obj file: '%s'", filename);
+    // platform->Logf("------------------------------------------------------------");
+    // platform->Logf("Reading .obj file: '%s'", filename);
 
     Obj result = { 0 };
 
@@ -426,11 +426,11 @@ Obj ObjParse(char* filename, PlatformAPI* platform, Arena* arena)
         result.faces     = PushArray(arena, result.faceCount, ObjFace);
         result.materials = PushArray(arena, result.materialCount, ObjMaterial);
 
-        platform->Logf("Vertex   count: %d", result.positionCount);
-        platform->Logf("Normal   count: %d", result.normalCount);
-        platform->Logf("UV       count: %d", result.uvCount);
-        platform->Logf("Face     count: %d", result.faceCount);
-        platform->Logf("Material count: %d", result.materialCount);
+        // platform->Logf("Vertex   count: %d", result.positionCount);
+        // platform->Logf("Normal   count: %d", result.normalCount);
+        // platform->Logf("UV       count: %d", result.uvCount);
+        // platform->Logf("Face     count: %d", result.faceCount);
+        // platform->Logf("Material count: %d", result.materialCount);
 
         u8* beginCursor   = (u8*)objFile.content;
         u8* cursor        = beginCursor;
@@ -565,7 +565,7 @@ Obj ObjParse(char* filename, PlatformAPI* platform, Arena* arena)
     {
         platform->Logf("Not found");
     }
-    platform->Logf("------------------------------------------------------------");
+    // platform->Logf("------------------------------------------------------------");
 
     ObjComputeGPUBuffers(&result);
 

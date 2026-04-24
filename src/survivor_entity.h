@@ -3,15 +3,18 @@
 #define MAX_ENTITY_COUNT 128
 
 // TODO: Tweak values
-global_variable f32 maxSpeed          = 8.3f;
-global_variable f32 frictionForce     = 20.0f;
-global_variable f32 moveAcceleration  = 40.0f;
-global_variable f32 knockbackForce    = 17.0f;
-global_variable f32 rotationSpeed     = 0.05f;
-global_variable f32 enemyHitRadius    = 0.75f;
-global_variable f32 enemyMaxSpeed     = 1.0f;
-global_variable f32 enemyAcceleration = 10.0f;
-global_variable s32 maxHealth         = 100;
+global_variable f32 playerMaxSpeed         = 8.3f;
+global_variable f32 playerFrictionForce    = 20.0f;
+global_variable f32 playerMoveAcceleration = 40.0f;
+global_variable f32 knockbackForce         = 17.0f;
+global_variable f32 rotationSpeed          = 0.05f;
+global_variable f32 enemyHitRadius         = 0.75f;
+global_variable f32 enemyMaxSpeed          = 1.0f;
+global_variable f32 enemyAcceleration      = 20.0f;
+global_variable s32 maxHealth              = 100;
+global_variable f32 enemyStrikingRange     = 0.5f;
+global_variable f32 enemyJumpRange         = 0.2f;
+global_variable f32 capsuleRadius          = 0.8f;
 
 enum EntityType
 {
@@ -26,7 +29,11 @@ enum EntityFlag
     EntityFlag_InKnockback     = (1 << 0),
     EntityFlag_Positioning     = (1 << 1),
     EntityFlag_Snapping        = (1 << 2),
-    EntityFlag_InvalidPosition = (1 << 3)
+    EntityFlag_InvalidPosition = (1 << 3),
+    EntityFlag_InAttack        = (1 << 4),
+    EntityFlag_Hitting         = (1 << 5),
+    EntityFlag_Idle            = (1 << 6),
+    EntityFlag_Climbing        = (1 << 7),
 };
 
 struct ActiveAnimation
@@ -42,6 +49,7 @@ struct Entity
     glm::vec3       velocity;
     glm::vec3       scale;
     glm::vec3       rotation;
+    glm::vec3       direction;
     Entity*         targetEntity; // TODO: Needed? All enemies will follow player
     AABB            aabb;
     u32             flags;
@@ -128,7 +136,7 @@ inline void EntityManagerFreeTransient(EntityManager* manager)
 
 inline Entity* EntityGet(EntityManager* manager, u32 index) { return &manager->entities[index]; }
 Entity*        EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position);
-void           EntityDestroy(EntityManager* manager, Entity* entity, World* world);
+// void           EntityDestroy(EntityManager* manager, Entity* entity, World* world);
 
 inline void EntitiesRemoveFlag(EntityManager* manager, u32 flag)
 {

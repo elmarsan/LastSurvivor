@@ -20,6 +20,13 @@ struct Rect
     f32 w, h;
 };
 
+struct Cylinder
+{
+    glm::vec3 start;
+    glm::vec3 end;
+    f32       radius;
+};
+
 // TODO: Fix 0.0f axis direction
 // https://tavianator.com/2022/ray_box_boundary.html#fast-branchless-raybounding-box-intersections-part-3-boundaries
 inline b32 AABBRayIntersection(AABB aabb, Ray ray)
@@ -157,4 +164,9 @@ inline AABB AABBExpandXZ(AABB aabb, f32 radius)
 inline b32 RectIntersection(Rect a, Rect b)
 {
     return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+}
+
+inline b32 LineSegmentCylinder(glm::vec3 segP0, glm::vec3 segP1, Cylinder cylinder)
+{
+    //
 }

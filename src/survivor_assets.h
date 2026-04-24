@@ -6,10 +6,14 @@ enum
     Model_ZombieFemaleA,
     Model_Stickman,
     Model_Fence,
+    Model_ChainlinkFence,
 
     Texture_Zombie,
     Texture_Crosshair,
     Texture_Fence,
+    Texture_ChainlinkFence,
+
+    // Anim_First,
 
     Anim_ZombieMaleAttackLeft,
     Anim_ZombieMaleAttackRight,
@@ -21,6 +25,8 @@ enum
     Anim_ZombieMaleWalk,
     Anim_ZombieMaleWalkAgressive,
     Anim_ZombieMaleWalkLimp,
+    Anim_ZombieMaleCrawlingForward,
+    Anim_ZombieMaleCrawlingIdle,
 
     Anim_ZombieFemaleAttackLeft,
     Anim_ZombieFemaleAttackRight,
@@ -32,6 +38,8 @@ enum
     Anim_ZombieFemaleWalk,
     Anim_ZombieFemaleWalkAgressive,
     Anim_ZombieFemaleWalkLimp,
+    Anim_ZombieFemaleCrawlingForward,
+    Anim_ZombieFemaleCrawlingIdle,
 
     AssetCount
 };
@@ -42,11 +50,13 @@ char* assetFilenames[AssetCount] = {
     "../data/zombie_Female_A.svv",
     "../data/stickman.svv",
     "../data/fence.svv",
+    ".../data/chainlink_fence.svv",
 
     // Textures
     "../data/zombie_diffuse.svv",
     "../data/crosshairs.svv",
     "../data/fence_diffuse.svv",
+    "../data/chainlink_fence_diffuse.svv",
 
     // Zombie male animations
     "../data/zombie_male_attack_left.svv",
@@ -59,6 +69,8 @@ char* assetFilenames[AssetCount] = {
     "../data/zombie_male_walk.svv",
     "../data/zombie_male_walk_agressive.svv",
     "../data/zombie_male_walk_limp.svv",
+    "../data/zombie_male_crawling_forward.svv",
+    "../data/zombie_male_crawling_idle.svv",
 
     // Zombie female animations
     "../data/zombie_female_attack_left.svv",
@@ -71,11 +83,13 @@ char* assetFilenames[AssetCount] = {
     "../data/zombie_female_walk.svv",
     "../data/zombie_female_walk_agressive.svv",
     "../data/zombie_female_walk_limp.svv",
+    "../data/zombie_female_crawling_forward.svv",
+    "../data/zombie_female_crawling_idle.svv",
 };
 
-#define MODEL_COUNT              4
+#define MODEL_COUNT              5
 #define TEXTURE_COUNT            3
-#define ANIMATION_COUNT          20
+#define ANIMATION_COUNT          24
 #define JOINT_MAX_CHILDREN_COUNT 4
 #define ZOMBIE_SCALE             glm::vec3{ 0.015f, 0.015f, 0.015f }
 
@@ -122,6 +136,7 @@ struct AnimationSampler
 
 struct Animation
 {
+    u32               id;
     char              name[256];
     f32               duration;
     u32               channelCount;

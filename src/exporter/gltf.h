@@ -109,8 +109,8 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
 {
     GLTFModel result;
 
-    platform->Logf("------------------------------------------------------------");
-    platform->Logf("Reading .gltf file: '%s'", gltfFilename);
+    // platform->Logf("------------------------------------------------------------");
+    // platform->Logf("Reading .gltf file: '%s'", gltfFilename);
 
     FileReadResult gltfFile = platform->FileReadEntire(gltfFilename);
     FileReadResult binFile  = { 0 };
@@ -139,7 +139,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
             memcpy(binFilename, gltfFilename, directoryLen);
             strcpy(binFilename + directoryLen, buffer->uri);
 
-            platform->Logf("Reading .bin file: '%s'", binFilename);
+            // platform->Logf("Reading .bin file: '%s'", binFilename);
 
             binFile = platform->FileReadEntire(binFilename);
             if (!binFile.content)
@@ -426,7 +426,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
         {
             if (cgltfData->materials_count > 0)
             {
-                platform->Logf("Material count %zu", cgltfData->materials_count);
+                // platform->Logf("Material count %zu", cgltfData->materials_count);
 
                 result.materials.resize(cgltfData->materials_count);
                 for (cgltf_size materialIndex = 0; materialIndex < cgltfData->materials_count; materialIndex++)
@@ -455,7 +455,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
         {
             if (cgltfData->textures_count > 0)
             {
-                platform->Logf("Texture  count %zu", cgltfData->textures_count);
+                // platform->Logf("Texture  count %zu", cgltfData->textures_count);
 
                 result.textures.resize(cgltfData->textures_count);
                 for (cgltf_size textureIndex = 0; textureIndex < cgltfData->textures_count; textureIndex++)
@@ -467,7 +467,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                     memcpy(textureFilename, gltfFilename, directoryLen);
                     strcpy(textureFilename + directoryLen, cgltfTexture->image->uri);
 
-                    platform->Logf("Texture %zu '%s'", textureIndex, textureFilename);
+                    // platform->Logf("Texture %zu '%s'", textureIndex, textureFilename);
                 }
             }
         }
@@ -478,7 +478,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
         Assert(0);
     }
 
-    platform->Logf("------------------------------------------------------------");
+    // platform->Logf("------------------------------------------------------------");
     platform->FileFree(gltfFile.content);
     if (binFile.content)
     {
@@ -492,8 +492,8 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
 {
     std::vector<GLTFAnimation> result;
 
-    platform->Logf("------------------------------------------------------------");
-    platform->Logf("Reading .gltf animations: '%s'", gltfFilename);
+    // platform->Logf("------------------------------------------------------------");
+    // platform->Logf("Reading .gltf animations: '%s'", gltfFilename);
 
     FileReadResult gltfFile = platform->FileReadEntire(gltfFilename);
     FileReadResult binFile  = { 0 };
@@ -522,7 +522,7 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
             memcpy(binFilename, gltfFilename, directoryLen);
             strcpy(binFilename + directoryLen, buffer->uri);
 
-            platform->Logf("Reading .bin file: '%s'", binFilename);
+            // platform->Logf("Reading .bin file: '%s'", binFilename);
 
             binFile = platform->FileReadEntire(binFilename);
             if (!binFile.content)
@@ -654,7 +654,7 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
         Assert(0);
     }
 
-    platform->Logf("------------------------------------------------------------");
+    // platform->Logf("------------------------------------------------------------");
     platform->FileFree(gltfFile.content);
     if (binFile.content)
     {

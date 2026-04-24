@@ -17,11 +17,13 @@ Export exports[AssetCount] = {
     { "ZombieFemale_A_joined.gltf", assetFilenames[Model_ZombieFemaleA] },
     { "stickman.obj", assetFilenames[Model_Stickman] },
     { "fence.obj", assetFilenames[Model_Fence] },
+    { "chainlink_fence.gltf", assetFilenames[Model_ChainlinkFence] },
 
     // Textures
     { "zcolors.png", assetFilenames[Texture_Zombie] },
     { "crosshairs.png", assetFilenames[Texture_Crosshair] },
     { "WoodPlanksOld0242_7_S.jpg", assetFilenames[Texture_Fence] },
+    { "M_Fencing_baseColor.png", assetFilenames[Texture_ChainlinkFence] },
 
     // Zombie male animations
     { "ZombieMale@attack_left_70f.gltf", assetFilenames[Anim_ZombieMaleAttackLeft] },
@@ -34,6 +36,8 @@ Export exports[AssetCount] = {
     { "ZombieMale@walk_64f.gltf", assetFilenames[Anim_ZombieMaleWalk] },
     { "ZombieMale@walk_agressive_64f.gltf", assetFilenames[Anim_ZombieMaleWalkAgressive] },
     { "ZombieMale@walk_limp_60f.gltf", assetFilenames[Anim_ZombieMaleWalkLimp] },
+    { "ZombieMale@crawling_forward_90f.gltf", assetFilenames[Anim_ZombieMaleCrawlingForward] },
+    { "ZombieMale@crawling_idle_220f.gltf", assetFilenames[Anim_ZombieMaleCrawlingIdle] },
 
     // Zombie female animations
     { "ZombieFemale@attack_left_70f.gltf", assetFilenames[Anim_ZombieFemaleAttackLeft] },
@@ -46,6 +50,8 @@ Export exports[AssetCount] = {
     { "ZombieFemale@walk_64f.gltf", assetFilenames[Anim_ZombieFemaleWalk] },
     { "ZombieFemale@walk_agressive_64f.gltf", assetFilenames[Anim_ZombieFemaleWalkAgressive] },
     { "ZombieFemale@walk_limp_60f.gltf", assetFilenames[Anim_ZombieFemaleWalkLimp] },
+    { "ZombieFemale@crawling_forward_90f.gltf", assetFilenames[Anim_ZombieFemaleCrawlingForward] },
+    { "ZombieFemale@crawling_idle_220f.gltf", assetFilenames[Anim_ZombieFemaleCrawlingIdle] },
 };
 
 void ExportModel(PlatformAPI* platform, Arena* arena, char* filename, Vertex* vertexs, u32* indices, u32 vertexCount,
@@ -121,6 +127,8 @@ int main(int argc, char** argv)
         char*   extension          = GetFilenameExtension(exportAsset->inputFilename);
         char    assetFilepath[256] = "../data/original/";
         strcat(assetFilepath, exportAsset->inputFilename);
+
+        platform.Logf("Exporting '%s' from '%s'", exportAsset->outputFilename, exportAsset->inputFilename);
 
         // Export animation
         if (exportIndex >= MODEL_COUNT + TEXTURE_COUNT)
@@ -203,6 +211,7 @@ int main(int argc, char** argv)
             }
             else
             {
+                platform.Logf("Invalid file extension: '%s'", extension);
                 InvalidCodePath;
             }
         }

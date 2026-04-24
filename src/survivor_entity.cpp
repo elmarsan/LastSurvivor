@@ -5,10 +5,11 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     // Arena* arena          = &manager->arena;
     Arena* transientArena = &manager->transientArena;
 
-    Entity* entity   = &manager->entities[manager->entityCount++];
-    entity->type     = type;
-    entity->health   = maxHealth;
-    entity->position = position;
+    Entity* entity    = &manager->entities[manager->entityCount++];
+    entity->type      = type;
+    entity->health    = maxHealth;
+    entity->position  = position;
+    entity->direction = { 0.0f, 0.0f, 0.0f };
 
     switch (entity->type)
     {
@@ -48,7 +49,7 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     case EntityType_Obstacle:
     {
         entity->assetID = Model_Fence;
-        entity->scale   = glm::vec3{ 1.0f, 1.0f, 1.0f };
+        entity->scale   = glm::vec3{ 1.0f, 3.0f, 1.0f };
         Model* model    = AssetsModelGet(manager->assets, Model_Fence);
         entity->aabb    = model->aabb;
         break;
@@ -58,48 +59,48 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     return entity;
 }
 
-internal void WorldRemoveEntity(World* world, Entity* entity)
-{
-    if (entity->type == EntityType_Obstacle)
-    {
-        EntityCellCorners cells = EntityGetCellCorners(entity);
+// internal void WorldRemoveEntity(World* world, Entity* entity)
+//{
+//     if (entity->type == EntityType_Obstacle)
+//     {
+//         EntityCellCorners cells = EntityGetCellCorners(entity);
 
-        // Corners
-        {
-            for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.arr); cellIndex++)
-            {
-                cell_index cornerCellIndex = cells.arr[cellIndex];
-                GridCell*  cell            = &world->grid[cornerCellIndex];
+//        // Corners
+//        {
+//            for (u32 cellIndex = 0; cellIndex < ArrayCount(cells.arr); cellIndex++)
+//            {
+//                cell_index cornerCellIndex = cells.arr[cellIndex];
+//                GridCell*  cell            = &world->grid[cornerCellIndex];
 
-                for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cell->entities); entityPtrIndex++)
-                {
-                    if (cell->entities[entityPtrIndex] == entity)
-                    {
-                        cell->entities[entityPtrIndex] = 0;
-                        cell->entityCount--;
-                        break;
-                    }
-                }
-            }
-        }
+//                for (u32 entityPtrIndex = 0; entityPtrIndex < ArrayCount(cell->entities); entityPtrIndex++)
+//                {
+//                    if (cell->entities[entityPtrIndex] == entity)
+//                    {
+//                        cell->entities[entityPtrIndex] = 0;
+//                        cell->entityCount--;
+//                        break;
+//                    }
+//                }
+//            }
+//        }
 
-        // Occupied cells
-        {
-            u32 beginRow = CELL_ROW(cells.bottomRight);
-            u32 endRow   = CELL_ROW(cells.topRight);
-            u32 beginCol = CELL_COL(cells.bottomLeft);
-            u32 endCol   = CELL_COL(cells.bottomRight);
+//        // Occupied cells
+//        {
+//            u32 beginRow = CELL_ROW(cells.bottomRight);
+//            u32 endRow   = CELL_ROW(cells.topRight);
+//            u32 beginCol = CELL_COL(cells.bottomLeft);
+//            u32 endCol   = CELL_COL(cells.bottomRight);
 
-            for (u32 row = beginRow; row <= endRow; row++)
-            {
-                for (u32 col = beginCol; col <= endCol; col++)
-                {
-                    world->grid[CELL_INDEX(row, col)].entityCount--;
-                }
-            }
-        }
-    }
-}
+//            for (u32 row = beginRow; row <= endRow; row++)
+//            {
+//                for (u32 col = beginCol; col <= endCol; col++)
+//                {
+//                    world->grid[CELL_INDEX(row, col)].entityCount--;
+//                }
+//            }
+//        }
+//    }
+//}
 
 internal void EntityRemove(EntityManager* manager, Entity* entity)
 {
@@ -122,11 +123,11 @@ internal void EntityRemove(EntityManager* manager, Entity* entity)
     manager->entityCount--;
 }
 
-void EntityDestroy(EntityManager* manager, Entity* entity, World* world)
-{
-    WorldRemoveEntity(world, entity);
-    EntityRemove(manager, entity);
-}
+// void EntityDestroy(EntityManager* manager, Entity* entity, World* world)
+//{
+//     WorldRemoveEntity(world, entity);
+//     EntityRemove(manager, entity);
+// }
 
 EntityWorldCorners EntityGetWorldCorners(Entity* entity)
 {
