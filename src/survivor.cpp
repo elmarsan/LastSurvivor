@@ -18,6 +18,59 @@
 - (Game): camera
 */
 
+internal void Shoot(AmmoRound* ammoRound, AmmoRoundType type, glm::vec3 position, glm::vec3 direction)
+{
+    Particle* particle = &ammoRound->particle;
+
+    ammoRound->type = type;
+
+    particle->position   = position;
+    particle->forceAccum = glm::vec3{ 0.0f, 0.0f, 0.0f };
+
+    switch (ammoRound->type)
+    {
+    case PISTOL:
+    {
+        f32 speed          = 35.0f; // 35m/s
+        particle->velocity = direction * speed;
+
+        f32 speed = glm::length(particle->velocity);
+        if (speed != 0.0f)
+        {
+            particle->velocity.x = (particle->velocity.x / speed) * speed;
+            particle->velocity.y = (particle->velocity.y / speed) * speed;
+            particle->velocity.z = (particle->velocity.z / speed) * speed;
+        }
+
+        Particle_SetMass(particle, 2.0f); // 2.0kg
+        // particle->velocity     = glm::vec3{ 0.0f, 0.0f, -35.0f };
+        particle->acceleration = glm::vec3{ 0.0f, -1.0f, 0.0f };
+        particle->damping      = 0.99f;
+        break;
+    }
+    case ARTILLERY:
+    {
+        Particle_SetMass(particle, 200.0f); // 200.0kg
+        particle->velocity     = glm::vec3{ 0.0f, 30.0f, -40.0f };
+        particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
+        particle->damping      = 0.99f;
+        break;
+    }
+    case GRENADE:
+    {
+        Particle_SetMass(particle, 1.0f); // 1.0kg
+        particle->velocity = glm::vec3{ 0.0f, 3.0f, -1.0f };
+        // particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
+        particle->acceleration = GRAVITY;
+        particle->damping      = 0.8f;
+
+        break;
+    }
+
+        InvalidDefaultCase;
+    }
+}
+
 internal void EntityAttack(EntityManager* manager, Entity* entity, Weapon* weapon, glm::vec3 dir)
 {
     if (weapon->type == WeaponType_Hand)
@@ -764,6 +817,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->programSkinned = PushStruct(arena, Program);
         state->camera         = PushStruct(arena, Camera);
         state->planeBuffer    = PushStruct(arena, GPUBuffer);
+        state->cubeBuffer     = PushStruct(arena, GPUBuffer);
         state->entityManager  = PushStruct(arena, EntityManager);
         state->renderer       = PushStruct(arena, Renderer);
         state->assets         = PushStruct(arena, Assets);
@@ -829,6 +883,18 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             GPUBufferVertexAttrib(renderer, state->planeBuffer, 2, 2, GL_FLOAT, vertexSize, offsetof(Vertex, uv));
         }
 
+        // Cube
+        {
+            size_t vertexSize = sizeof(f32) * 8;
+
+            GPUBufferInit(renderer, state->cubeBuffer);
+            GPUBufferVBOAlloc(renderer, state->cubeBuffer, cubeVertexs, sizeof(cubeVertexs), vertexSize,
+                              GL_STATIC_DRAW);
+            GPUBufferVertexAttrib(renderer, state->cubeBuffer, 0, 3, GL_FLOAT, vertexSize, offsetof(Vertex, position));
+            GPUBufferVertexAttrib(renderer, state->cubeBuffer, 1, 3, GL_FLOAT, vertexSize, offsetof(Vertex, normal));
+            GPUBufferVertexAttrib(renderer, state->cubeBuffer, 2, 2, GL_FLOAT, vertexSize, offsetof(Vertex, uv));
+        }
+
         // Font loading
         RendererTTFLoad(state->renderer, "../data/november/novem___.ttf");
 
@@ -850,9 +916,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         LoadAssets(assets);
 
-        Entity* player      = EntitySpawn(state->entityManager, EntityType_Player, { 0.0f, 0.0f, 0.0f });
-        Entity* enemy       = EntitySpawn(state->entityManager, EntityType_Enemy, { 0.0f, 0.0f, -15.0f });
-        enemy->targetEntity = player;
+        Entity* player = EntitySpawn(state->entityManager, EntityType_Player, { 0.0f, 0.0f, 0.0f });
+        // Entity* enemy       = EntitySpawn(state->entityManager, EntityType_Enemy, { 0.0f, 0.0f, -15.0f });
+        // enemy->targetEntity = player;
 
 #if 0
         EntityManager* manager    = state->entityManager;
@@ -989,6 +1055,40 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         break;
     }
     }
+
+    AmmoRound* ammoRound = &state->ammoRound;
+
+    // Ballistic test
+    {
+        // Shoot
+        if (ammoRound->type == UNKNOWN)
+        {
+            glm::vec3 position{ player->position.x, 1.5f, player->position.z };
+            glm::vec3 direction{ sinf(player->rotation.y), 0.0f, cosf(player->rotation.y) };
+
+            if (ButtonIsPressed(input->debug.f1))
+            {
+                platform->Logf("Shooting....");
+                Shoot(ammoRound, PISTOL, position, direction);
+            }
+            else if (ButtonIsPressed(input->debug.f2))
+            {
+                platform->Logf("Shooting....");
+                Shoot(ammoRound, GRENADE, position, direction);
+            }
+        }
+
+        // Update
+        Particle_Integrate(&ammoRound->particle, delta);
+        if (ammoRound->type != UNKNOWN &&
+            (ammoRound->particle.position.z < -50.0f || ammoRound->particle.position.z > 50.0f ||
+             ammoRound->particle.position.y < 0.0f))
+        {
+            platform->Logf("Ammo round destroyed");
+            ammoRound->type = UNKNOWN;
+        }
+    }
+
     // ----------------------------------------------------------------------------
 
     // ----------------------------------------------------------------------------
@@ -1040,6 +1140,20 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
                 PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 0.5f });
                 PushRenderDrawBuffer(renderer, state->planeBuffer);
+            }
+
+            // Shoot
+            {
+                if (ammoRound->type != UNKNOWN)
+                {
+                    glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, ammoRound->particle.position);
+                    glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.15f });
+                    glm::mat4 model     = translate * scale;
+
+                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                    PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_red);
+                    PushRenderDrawBuffer(renderer, state->cubeBuffer);
+                }
             }
 
             // Entities
