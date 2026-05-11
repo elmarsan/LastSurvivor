@@ -22,8 +22,8 @@ internal void Shoot(AmmoRound* ammoRound, AmmoRoundType type, glm::vec3 position
 {
     Particle* particle = &ammoRound->particle;
 
-    ammoRound->type = type;
-
+    direction            = SafeNorm(direction);
+    ammoRound->type      = type;
     particle->position   = position;
     particle->forceAccum = glm::vec3{ 0.0f, 0.0f, 0.0f };
 
@@ -31,37 +31,30 @@ internal void Shoot(AmmoRound* ammoRound, AmmoRoundType type, glm::vec3 position
     {
     case PISTOL:
     {
-        f32 speed          = 35.0f; // 35m/s
-        particle->velocity = direction * speed;
-
-        f32 speed = glm::length(particle->velocity);
-        if (speed != 0.0f)
-        {
-            particle->velocity.x = (particle->velocity.x / speed) * speed;
-            particle->velocity.y = (particle->velocity.y / speed) * speed;
-            particle->velocity.z = (particle->velocity.z / speed) * speed;
-        }
+        f32 speed = 35.0f; // 35m/s
 
         Particle_SetMass(particle, 2.0f); // 2.0kg
-        // particle->velocity     = glm::vec3{ 0.0f, 0.0f, -35.0f };
-        particle->acceleration = glm::vec3{ 0.0f, -1.0f, 0.0f };
+        particle->velocity     = direction * speed;
+        particle->acceleration = GRAVITY;
         particle->damping      = 0.99f;
         break;
     }
-    case ARTILLERY:
-    {
-        Particle_SetMass(particle, 200.0f); // 200.0kg
-        particle->velocity     = glm::vec3{ 0.0f, 30.0f, -40.0f };
-        particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
-        particle->damping      = 0.99f;
-        break;
-    }
+    // case ARTILLERY:
+    //{
+    //     Particle_SetMass(particle, 200.0f); // 200.0kg
+    //     particle->velocity     = glm::vec3{ 0.0f, 30.0f, -40.0f };
+    //     particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
+    //     particle->damping      = 0.99f;
+    //     break;
+    // }
     case GRENADE:
     {
+        f32 speed = 10.0f; // 10m/s
+
         Particle_SetMass(particle, 1.0f); // 1.0kg
-        particle->velocity = glm::vec3{ 0.0f, 3.0f, -1.0f };
-        // particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
-        particle->acceleration = GRAVITY;
+        particle->velocity     = direction * speed;
+        particle->velocity.y   = 10.0f;
+        particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
         particle->damping      = 0.8f;
 
         break;
