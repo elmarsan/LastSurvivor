@@ -18,7 +18,7 @@ void UI_Init(UI* ui, Arena* arena, Renderer* renderer, PlatformAPI* platform)
     ui->gamepadSelectedNodeIndex = -1;
 }
 
-void UI_BeginFrame(UI* ui, GameInputController* controller)
+void UI_BeginFrame(UI* ui, GameController* controller)
 {
     ArenaClear(&ui->transientArena);
     ui->controller = controller;

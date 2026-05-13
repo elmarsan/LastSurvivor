@@ -12,3 +12,4 @@ SortIncludes: false
 SpacesInContainerLiterals: true
 Cpp11BracedListStyle: false
 AlwaysBreakTemplateDeclarations: Yes
+AllowShortLoopsOnASingleLine: true

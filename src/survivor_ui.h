@@ -86,22 +86,22 @@ struct UI_Node
 
 struct UI
 {
-    Arena                cacheArena;
-    Arena                transientArena;
-    Renderer*            renderer;
-    PlatformAPI*         platform;
-    UI_Node*             root;
-    UI_Node*             current;
-    UI_Node*             prevFrameRoot;
-    GameInputController* controller;
-    UI_Node*             navNodes[MAX_WIDGETS];
-    s32                  navCount;
-    s32                  gamepadSelectedNodeIndex;
-    b32                  gamepadLeftStickUntouched;
+    Arena           cacheArena;
+    Arena           transientArena;
+    Renderer*       renderer;
+    PlatformAPI*    platform;
+    UI_Node*        root;
+    UI_Node*        current;
+    UI_Node*        prevFrameRoot;
+    GameController* controller;
+    UI_Node*        navNodes[MAX_WIDGETS];
+    s32             navCount;
+    s32             gamepadSelectedNodeIndex;
+    b32             gamepadLeftStickUntouched;
 };
 
 void      UI_Init(UI* ui, Arena* arena, Renderer* renderer, PlatformAPI* platform);
-void      UI_BeginFrame(UI* ui, GameInputController* controller);
+void      UI_BeginFrame(UI* ui, GameController* controller);
 void      UI_EndFrame(UI* ui);
 UI_Node*  UI_BeginNode(UI* ui, char* id);
 void      UI_EndNode(UI* ui);

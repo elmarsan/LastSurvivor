@@ -5,11 +5,11 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     // Arena* arena          = &manager->arena;
     Arena* transientArena = &manager->transientArena;
 
-    Entity* entity    = &manager->entities[manager->entityCount++];
-    entity->type      = type;
-    entity->health    = maxHealth;
-    entity->position  = position;
-    entity->direction = { 0.0f, 0.0f, 0.0f };
+    Entity* entity   = &manager->entities[manager->entityCount++];
+    entity->type     = type;
+    entity->health   = maxHealth;
+    entity->position = position;
+    entity->forward  = { 0.0f, 0.0f, 0.0f };
 
     switch (entity->type)
     {

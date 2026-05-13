@@ -23,6 +23,13 @@ enum ControllerType
     ControllerType_Keyboard
 };
 
+#define CONTROLLER_KEYBOARD  0
+#define CONTROLLER_GAMEPAD   1
+#define CONTROLLER_COUNT     2
+#define CONTROLLER_BTN_COUNT 12
+#define MOUSE_BTN_COUNT      3
+#define DEBUG_BTN_COUNT      6
+
 // TODO: Rumble
 struct Gamepad
 {
@@ -33,7 +40,7 @@ struct Gamepad
 struct Mouse
 {
     glm::uvec2 pos;
-    glm::uvec2 offset;
+    glm::ivec2 offset;
 
     union
     {
@@ -44,16 +51,17 @@ struct Mouse
             GameButtonState right;
         };
 
-        GameButtonState buttons[3];
+        GameButtonState buttons[MOUSE_BTN_COUNT];
     };
 };
 
-struct GameInputController
+struct GameController
 {
     ControllerType type;
     b32            isConnected;
     b32            isWireless;
     b32            isAnalog;
+    f32            lastTick;
 
     union
     {
@@ -82,7 +90,7 @@ struct GameInputController
             GameButtonState start;
         };
 
-        GameButtonState buttons[12];
+        GameButtonState buttons[CONTROLLER_BTN_COUNT];
     };
 };
 
@@ -92,16 +100,15 @@ struct DebugInput
     {
         struct
         {
-            GameButtonState f0;
             GameButtonState f1;
             GameButtonState f2;
             GameButtonState f3;
             GameButtonState f4;
             GameButtonState f5;
-            GameButtonState space;
+            GameButtonState f6;
         };
 
-        GameButtonState fkeys[7];
+        GameButtonState fkeys[DEBUG_BTN_COUNT];
     };
 };
 
@@ -111,11 +118,11 @@ struct GameInput
     {
         struct
         {
-            GameInputController keyboard;
-            GameInputController gamepad;
+            GameController keyboard;
+            GameController gamepad;
         };
 
-        GameInputController controllers[2];
+        GameController controllers[CONTROLLER_COUNT];
     };
 
 #if BUILD_TYPE_DEBUG
@@ -123,10 +130,7 @@ struct GameInput
 #endif
 };
 
-#define CONTROLLER_KEYBOARD 0
-#define CONTROLLER_GAMEPAD  1
-
-inline GameInputController* GetController(GameInput* gameInput, u32 controllerIndex)
+inline GameController* GetController(GameInput* gameInput, u32 controllerIndex)
 {
     Assert(controllerIndex >= 0 && controllerIndex <= ArrayCount(gameInput->controllers));
     return &gameInput->controllers[controllerIndex];
@@ -184,6 +188,12 @@ typedef PLATFORM_AUDIO_CLIP_PLAY(PlatformAudioClipPlay);
 #define PLATFORM_AUDIO_SET_VOLUME(name) void name(f32 db, AudioClipType type)
 typedef PLATFORM_AUDIO_SET_VOLUME(PlatformAudioSetVolume);
 
+#define PLATFORM_CURSOR_SHOW(name) void name()
+typedef PLATFORM_CURSOR_SHOW(PlatformCursorShow);
+
+#define PLATFORM_CURSOR_HIDE(name) void name()
+typedef PLATFORM_CURSOR_HIDE(PlatformCursorHide);
+
 struct PlatformAPI
 {
     PlatformErrorMessage*       ErrorMessage;
@@ -196,6 +206,8 @@ struct PlatformAPI
     PlatformAudioClipFree*      AudioClipFree;
     PlatformAudioClipPlay*      AudioClipPlay;
     PlatformAudioSetVolume*     AudioSetVolume;
+    PlatformCursorShow*         CursorShow;
+    PlatformCursorHide*         CursorHide;
 };
 
 struct GameMemory

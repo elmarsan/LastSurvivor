@@ -49,7 +49,8 @@ struct Entity
     glm::vec3       velocity;
     glm::vec3       scale;
     glm::vec3       rotation;
-    glm::vec3       direction;
+    glm::vec3       forward;
+    glm::vec3       wishDir;
     Entity*         targetEntity; // TODO: Needed? All enemies will follow player
     AABB            aabb;
     u32             flags;

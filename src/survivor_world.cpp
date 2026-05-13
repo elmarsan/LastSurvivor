@@ -5,40 +5,40 @@
 // cellIndex); internal void WorldPopTempNodes(World* world); internal b32  WorldIsCellValidForEntity(World* world,
 // cell_index cellIndex, Entity* entity);
 
-glm::vec3 WorldMousePicking(Camera* camera, glm::uvec2 windowDim, glm::uvec2 mouse)
-{
-    f32 screenWidth  = (f32)windowDim.x;
-    f32 screenHeight = (f32)windowDim.y;
-    f32 mouseX       = (f32)mouse.x;
-    f32 mouseY       = (f32)mouse.y;
+// glm::vec3 WorldMousePicking(Camera* camera, glm::uvec2 windowDim, glm::uvec2 mouse)
+//{
+//     f32 screenWidth  = (f32)windowDim.x;
+//     f32 screenHeight = (f32)windowDim.y;
+//     f32 mouseX       = (f32)mouse.x;
+//     f32 mouseY       = (f32)mouse.y;
 
-    glm::mat4 inverseProjection = glm::inverse(CameraGetProjection(camera, (f32)windowDim.x / (f32)windowDim.y));
-    glm::mat4 inverseView       = glm::inverse(CameraGetView(camera));
+//    glm::mat4 inverseProjection = glm::inverse(CameraGetProjection(camera, (f32)windowDim.x / (f32)windowDim.y));
+//    glm::mat4 inverseView       = glm::inverse(CameraGetView(camera));
 
-    // Viewport -> NDC
-    glm::vec3 rayNdc;
-    rayNdc.x = (2.0f * mouseX) / screenWidth - 1.0f;
-    rayNdc.y = 1.0f - (2.0f * mouseY) / screenHeight;
+//    // Viewport -> NDC
+//    glm::vec3 rayNdc;
+//    rayNdc.x = (2.0f * mouseX) / screenWidth - 1.0f;
+//    rayNdc.y = 1.0f - (2.0f * mouseY) / screenHeight;
 
-    // NDC -> Clip
-    glm::vec4 rayClip{ rayNdc.x, rayNdc.y, -1.0f, 1.0f };
+//    // NDC -> Clip
+//    glm::vec4 rayClip{ rayNdc.x, rayNdc.y, -1.0f, 1.0f };
 
-    // Clip -> View
-    glm::vec4 rayView = inverseProjection * rayClip;
-    rayView.z         = -1.0f;
-    rayView.w         = 0;
+//    // Clip -> View
+//    glm::vec4 rayView = inverseProjection * rayClip;
+//    rayView.z         = -1.0f;
+//    rayView.w         = 0;
 
-    // View -> World
-    glm::vec4 rayWorld4 = inverseView * rayView;
-    glm::vec3 rayWorld{ rayWorld4.x, rayWorld4.y, rayWorld4.z };
-    rayWorld = SafeNorm(rayWorld);
+//    // View -> World
+//    glm::vec4 rayWorld4 = inverseView * rayView;
+//    glm::vec3 rayWorld{ rayWorld4.x, rayWorld4.y, rayWorld4.z };
+//    rayWorld = SafeNorm(rayWorld);
 
-    // Intersection with world plane
-    f32       t     = -(camera->position.y / rayWorld.y);
-    glm::vec3 point = camera->position + rayWorld * t;
+//    // Intersection with world plane
+//    f32       t     = -(camera->position.y / rayWorld.y);
+//    glm::vec3 point = camera->position + rayWorld * t;
 
-    return point;
-}
+//    return point;
+//}
 
 // b32 WorldIsPositionInBounds(glm::vec3 position)
 //{

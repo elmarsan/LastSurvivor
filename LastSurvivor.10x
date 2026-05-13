@@ -10,6 +10,7 @@
 		<IsFolder>false</IsFolder>
 		<UseVisualStudioEnvBat>true</UseVisualStudioEnvBat>
 		<CaptureExeOutput>true</CaptureExeOutput>
+		<AllowAutoErrorUnderlining>true</AllowAutoErrorUnderlining>
 		<Configurations>
 			<Configuration>Debug</Configuration>
 			<Configuration>Release</Configuration>
@@ -36,6 +37,7 @@
 				<BuildFileCommand></BuildFileCommand>
 				<CleanCommand>build_clean.bat</CleanCommand>
 				<BuildWorkingDirectory></BuildWorkingDirectory>
+				<FileSyntaxCheckCommand></FileSyntaxCheckCommand>
 				<CancelBuild></CancelBuild>
 				<Exe>.\build\LastSurvivorDebugX64</Exe>
 				<Args></Args>
@@ -58,6 +60,7 @@
 				<BuildFileCommand></BuildFileCommand>
 				<CleanCommand>build_clean.bat</CleanCommand>
 				<BuildWorkingDirectory></BuildWorkingDirectory>
+				<FileSyntaxCheckCommand></FileSyntaxCheckCommand>
 				<CancelBuild></CancelBuild>
 				<Exe>.\build\LastSurvivorReleaseX64</Exe>
 				<Args></Args>
@@ -85,6 +88,7 @@
 				<Name>x64</Name>
 				<Defines></Defines>
 			</Platform>
+			<TerminalDirectory></TerminalDirectory>
 		</ConfigProperties>
 		<Children></Children>
 	</Workspace>

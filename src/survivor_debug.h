@@ -1,8 +1,7 @@
 #pragma once
 
-#define DEBUG_COORDINATES        0
-#define DEBUG_SELECTED_GRID_CELL 1
-#define DEBUG_AABB               0
+#define DEBUG_COORDINATES 0
+#define DEBUG_AABB        0
 
 struct GameState;
 

@@ -8,11 +8,9 @@
 #include "survivor_opengl.h"
 #include "survivor_platform.h"
 #include "survivor_renderer_opengl.h"
-#include "survivor_camera.h"
 #include "survivor_assets.h"
 #include "survivor_world.h"
 #include "survivor_entity.h"
-// #include "survivor_build.h"
 #include "survivor_weapon.h"
 #include "survivor_ui.h"
 #if BUILD_TYPE_DEBUG
@@ -109,7 +107,6 @@ struct GameState
     AudioClip*     backgroundMusic;
     Program*       program;
     Program*       programSkinned;
-    Camera*        camera;
     EntityManager* entityManager;
     GameMode       mode;
     Renderer*      renderer;

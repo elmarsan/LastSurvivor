@@ -39,7 +39,7 @@ typedef u32 cell_index;
 // };
 
 // TODO: Rename this to coordinate space picking. Picking can be done with gamepad.
-glm::vec3 WorldMousePicking(Camera* camera, glm::uvec2 windowDim, glm::uvec2 mouse);
+// glm::vec3 WorldMousePicking(Camera* camera, glm::uvec2 windowDim, glm::uvec2 mouse);
 // b32                     WorldIsPositionInBounds(glm::vec3 position);
 // void                    WorldAddEntity(World* world, EntityManager* entityManager, Entity* entity);
 // b32                     WorldIsValidEntityPosition(World* world, Entity* entity);

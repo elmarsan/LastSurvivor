@@ -104,12 +104,16 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
     Mouse*         mouse         = &input->keyboard.mouse;
     Assets*        assets        = state->assets;
 
-    // Mouse picking grid cell
-#if DEBUG_SELECTED_GRID_CELL
-    if (ButtonIsPressed(mouse->middle))
+#if 1
+    // Debug hide cursor
+    if (ButtonIsPressed(input->debug.f1))
     {
-        glm::vec3 mousePoint     = WorldMousePicking(state->camera, windowDim, mouse->pos);
-        debug->selectedCellIndex = WorldPositionToGridCell(mousePoint);
+        platform->CursorHide();
+    }
+    // Debug show cursor
+    if (ButtonIsPressed(input->debug.f2))
+    {
+        platform->CursorShow();
     }
 #endif
 
@@ -157,27 +161,6 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
     DrawText(renderer, coordBuffer, { 0.0f, 8.0f }, color_white, scale);
 #endif
 
-    // Debug selected grid cell
-#if DEBUG_SELECTED_GRID_CELL
-    if (debug->selectedCellIndex != CELL_EMPTY)
-    {
-        u32       row      = CELL_ROW(debug->selectedCellIndex);
-        u32       col      = CELL_COL(debug->selectedCellIndex);
-        glm::vec3 worldPos = WorldGridCellToPosition(debug->selectedCellIndex);
-        char      debugSelectedCellBuffer[64];
-        char      debugSelectedCellCoords[64];
-        sprintf(debugSelectedCellBuffer, "%d(%d,%d)", debug->selectedCellIndex, row, col);
-        sprintf(debugSelectedCellCoords, "(%.2f,%.2f)", worldPos.x, worldPos.z);
-        f32       scale         = 0.7f;
-        glm::vec2 gridTextSize  = UI_GetTextSize(state->ui, debugSelectedCellBuffer, scale);
-        glm::vec2 coordTextSize = UI_GetTextSize(state->ui, debugSelectedCellCoords, scale);
-        f32       marginTop     = 8.0f;
-        DrawText(renderer, debugSelectedCellBuffer, { windowDim.x - gridTextSize.x, marginTop }, color_white, scale);
-        DrawText(renderer, debugSelectedCellCoords,
-                 { windowDim.x - coordTextSize.x, marginTop * 1.5f + gridTextSize.y }, color_white, scale);
-    }
-#endif
-
     // Debug grid
     {
         f32 y = 0.01f;
@@ -197,14 +180,6 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
         {
             DrawLine(renderer, { (f32)minCol, y, (f32)row }, { (f32)maxCol, y, (f32)row }, color_black);
         }
-
-        // Debug selected cell
-#if DEBUG_SELECTED_GRID_CELL
-        if (debug->selectedCellIndex != CELL_EMPTY)
-        {
-            DebugDrawGridCell(renderer, debug->selectedCellIndex, color_magenta);
-        }
-#endif
 
         //        // Debug graph
         //        {
@@ -267,11 +242,14 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
 
         // Entity rotation
         {
-            glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
-            glm::vec3 p0{ entity->position.x, entity->aabb.max.y, entity->position.z };
-            glm::vec3 p1 = p0 + (lookAt * 1.5f);
+            if (entity->type == EntityType_Enemy)
+            {
+                glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
+                glm::vec3 p0{ entity->position.x, entity->aabb.max.y, entity->position.z };
+                glm::vec3 p1 = p0 + (lookAt * 1.5f);
 
-            DrawLine(renderer, p0, p1, color_blue);
+                DrawLine(renderer, p0, p1, color_blue);
+            }
         }
 
         // Entity AABB
@@ -280,7 +258,8 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
 #endif
 
         // Entity Y orientation
-        if (entity->type == EntityType_Enemy || entity->type == EntityType_Player)
+        // if (entity->type == EntityType_Enemy || entity->type == EntityType_Player)
+        if (entity->type == EntityType_Enemy)
         {
             glm::vec4 color = entity->type == EntityType_Enemy ? color_red : color_blue;
 
