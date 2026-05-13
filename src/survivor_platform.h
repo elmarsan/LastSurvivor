@@ -176,6 +176,12 @@ typedef PLATFORM_FILE_WRITE_ENTIRE(PlatformFileWriteEntire);
 #define PLATFORM_WINDOW_GET_DIMENSION(name) glm::uvec2 name()
 typedef PLATFORM_WINDOW_GET_DIMENSION(PlatformWindowGetDimension);
 
+#define PLATFORM_WINDOW_SET_FULLSCREEN(name) void name()
+typedef PLATFORM_WINDOW_SET_FULLSCREEN(PlatformWindowSetFullscreen);
+
+#define PLATFORM_WINDOW_SET_WINDOWED(name) void name()
+typedef PLATFORM_WINDOW_SET_WINDOWED(PlatformWindowSetWindowed);
+
 #define PLATFORM_AUDIO_CLIP_LOAD(name) AudioClip* name(char* filename, AudioClipType type)
 typedef PLATFORM_AUDIO_CLIP_LOAD(PlatformAudioClipLoad);
 
@@ -196,18 +202,20 @@ typedef PLATFORM_CURSOR_HIDE(PlatformCursorHide);
 
 struct PlatformAPI
 {
-    PlatformErrorMessage*       ErrorMessage;
-    PlatformLog*                Logf;
-    PlatformFileReadEntire*     FileReadEntire;
-    PlatformFileFree*           FileFree;
-    PlatformFileWriteEntire*    FileWriteEntire;
-    PlatformWindowGetDimension* WindowGetDimension;
-    PlatformAudioClipLoad*      AudioClipLoad;
-    PlatformAudioClipFree*      AudioClipFree;
-    PlatformAudioClipPlay*      AudioClipPlay;
-    PlatformAudioSetVolume*     AudioSetVolume;
-    PlatformCursorShow*         CursorShow;
-    PlatformCursorHide*         CursorHide;
+    PlatformErrorMessage*        ErrorMessage;
+    PlatformLog*                 Logf;
+    PlatformFileReadEntire*      FileReadEntire;
+    PlatformFileFree*            FileFree;
+    PlatformFileWriteEntire*     FileWriteEntire;
+    PlatformWindowGetDimension*  WindowGetDimension;
+    PlatformWindowSetFullscreen* WindowSetFullscreen;
+    PlatformWindowSetWindowed*   WindowSetWindowed;
+    PlatformAudioClipLoad*       AudioClipLoad;
+    PlatformAudioClipFree*       AudioClipFree;
+    PlatformAudioClipPlay*       AudioClipPlay;
+    PlatformAudioSetVolume*      AudioSetVolume;
+    PlatformCursorShow*          CursorShow;
+    PlatformCursorHide*          CursorHide;
 };
 
 struct GameMemory

@@ -54,6 +54,8 @@ struct Win32State
     GameInput     gameInput;
     Wind32XAudio2 xaudio2;
     LARGE_INTEGER beginTime;
+    b32           isFullscreen;
+    RECT          windowedRect;
 };
 
 struct Win32GameCode
@@ -98,6 +100,52 @@ internal PLATFORM_WINDOW_GET_DIMENSION(Win32WindowGetDimension)
     result.y = (u32)(rect.bottom - rect.top);
 
     return result;
+}
+
+internal PLATFORM_WINDOW_SET_FULLSCREEN(Win32WindowSetFullscreen)
+{
+    gWin32State.isFullscreen = true;
+    GetWindowRect(gWin32State.window, &gWin32State.windowedRect);
+
+    LONG_PTR style = GetWindowLongPtr(gWin32State.window, GWL_STYLE);
+    style &= ~WS_OVERLAPPEDWINDOW;
+    SetWindowLongPtr(gWin32State.window, GWL_STYLE, style);
+
+    SetWindowPos(gWin32State.window, HWND_TOP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
+                 SWP_SHOWWINDOW);
+}
+
+internal PLATFORM_WINDOW_SET_WINDOWED(Win32WindowSetWindowed)
+{
+    gWin32State.isFullscreen = false;
+
+    LONG_PTR style = GetWindowLongPtr(gWin32State.window, GWL_STYLE);
+    style |= WS_OVERLAPPEDWINDOW;
+    SetWindowLongPtr(gWin32State.window, GWL_STYLE, style);
+
+    int width;
+    int height;
+    int x;
+    int y;
+
+    // First time on windowed mode
+    if (IsRectEmpty(&gWin32State.windowedRect))
+    {
+        width  = 1280;
+        height = 720;
+        x      = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
+        y      = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
+    }
+    // Restore previous windowed mode settings
+    else
+    {
+        width  = gWin32State.windowedRect.right - gWin32State.windowedRect.left;
+        height = gWin32State.windowedRect.bottom - gWin32State.windowedRect.top;
+        x      = gWin32State.windowedRect.left;
+        y      = gWin32State.windowedRect.top;
+    }
+
+    SetWindowPos(gWin32State.window, 0, x, y, width, height, SWP_SHOWWINDOW);
 }
 
 internal void APIENTRY Win32OpenGLDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
@@ -537,6 +585,19 @@ internal void Win32ProcessPendingMessages(Win32State* state)
                     Log("ALT+F4 pressed, closing game...");
                     state->running = false;
                 }
+                if (vkCode == VK_F11 && !wasDown)
+                {
+                    // Exit fullscreen
+                    if (state->isFullscreen)
+                    {
+                        Win32WindowSetWindowed();
+                    }
+                    // Enter fullscreen
+                    else
+                    {
+                        Win32WindowSetFullscreen();
+                    }
+                }
 #if BUILD_TYPE_DEBUG
                 DebugInput* debug = &state->gameInput.debug;
 
@@ -691,19 +752,21 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
     Win32XInputInit();
     Win32XAudio2Init(&gWin32State);
 
-    GameMemory gameMemory                  = {};
-    gameMemory.platform.ErrorMessage       = Win32ErrorMessage;
-    gameMemory.platform.Logf               = LogMsg;
-    gameMemory.platform.FileReadEntire     = FileReadEntire;
-    gameMemory.platform.FileFree           = FileFree;
-    gameMemory.platform.FileWriteEntire    = FileWriteEntire;
-    gameMemory.platform.WindowGetDimension = Win32WindowGetDimension;
-    gameMemory.platform.AudioClipLoad      = Win32AudioClipLoad;
-    gameMemory.platform.AudioClipPlay      = Win32AudioClipPlay;
-    gameMemory.platform.AudioClipFree      = Win32AudioClipFree;
-    gameMemory.platform.AudioSetVolume     = Win32AudioSetVolume;
-    gameMemory.platform.CursorShow         = Win32CursorShow;
-    gameMemory.platform.CursorHide         = Win32CursorHide;
+    GameMemory gameMemory                   = {};
+    gameMemory.platform.ErrorMessage        = Win32ErrorMessage;
+    gameMemory.platform.Logf                = LogMsg;
+    gameMemory.platform.FileReadEntire      = FileReadEntire;
+    gameMemory.platform.FileFree            = FileFree;
+    gameMemory.platform.FileWriteEntire     = FileWriteEntire;
+    gameMemory.platform.WindowGetDimension  = Win32WindowGetDimension;
+    gameMemory.platform.AudioClipLoad       = Win32AudioClipLoad;
+    gameMemory.platform.AudioClipPlay       = Win32AudioClipPlay;
+    gameMemory.platform.AudioClipFree       = Win32AudioClipFree;
+    gameMemory.platform.AudioSetVolume      = Win32AudioSetVolume;
+    gameMemory.platform.CursorShow          = Win32CursorShow;
+    gameMemory.platform.CursorHide          = Win32CursorHide;
+    gameMemory.platform.WindowSetFullscreen = Win32WindowSetFullscreen;
+    gameMemory.platform.WindowSetWindowed   = Win32WindowSetWindowed;
 
     gameMemory.permanentStorageSize = Gigabytes(1);
     gameMemory.permanentStorage =

@@ -787,6 +787,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             // TODO: game mode transitions
             state->mode = GameMode_Play;
+            platform->CursorHide();
         }
         break;
     }
@@ -806,6 +807,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         {
             // TODO: game mode transitions
             state->mode = GameMode_Pause;
+
+            if (controller == keyboard)
+            {
+                platform->CursorShow();
+            }
         }
 
         UpdatePlayer(player, controller);
