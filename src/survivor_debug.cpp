@@ -106,12 +106,12 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
 
 #if 1
     // Debug hide cursor
-    if (ButtonIsPressed(input->debug.f1))
+    if (ButtonIsPressed(input->debug.f4))
     {
         platform->CursorHide();
     }
     // Debug show cursor
-    if (ButtonIsPressed(input->debug.f2))
+    if (ButtonIsPressed(input->debug.f5))
     {
         platform->CursorShow();
     }

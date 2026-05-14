@@ -40,7 +40,7 @@ struct Gamepad
 struct Mouse
 {
     glm::uvec2 pos;
-    glm::ivec2 offset;
+    glm::ivec2 delta;
 
     union
     {

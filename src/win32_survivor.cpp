@@ -2,6 +2,7 @@
 #include <xinput.h>
 #define XAUDIO2_HELPER_FUNCTIONS
 #include <xaudio2.h>
+#include <hidusage.h>
 #include <gl/glcorearb.h>
 #include <gl/GL.h>
 #include <gl/wglext.h>
@@ -102,6 +103,24 @@ internal PLATFORM_WINDOW_GET_DIMENSION(Win32WindowGetDimension)
     return result;
 }
 
+internal void Win32ClipCursor()
+{
+    RECT rect;
+    GetClientRect(gWin32State.window, &rect);
+
+    POINT topLeft     = { rect.left, rect.top };
+    POINT bottomRight = { rect.right, rect.bottom };
+    ClientToScreen(gWin32State.window, &topLeft);
+    ClientToScreen(gWin32State.window, &bottomRight);
+
+    rect.left   = topLeft.x;
+    rect.top    = topLeft.y;
+    rect.right  = bottomRight.x;
+    rect.bottom = bottomRight.y;
+
+    ClipCursor(&rect);
+}
+
 internal PLATFORM_WINDOW_SET_FULLSCREEN(Win32WindowSetFullscreen)
 {
     gWin32State.isFullscreen = true;
@@ -113,6 +132,8 @@ internal PLATFORM_WINDOW_SET_FULLSCREEN(Win32WindowSetFullscreen)
 
     SetWindowPos(gWin32State.window, HWND_TOP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
                  SWP_SHOWWINDOW);
+
+    Win32ClipCursor();
 }
 
 internal PLATFORM_WINDOW_SET_WINDOWED(Win32WindowSetWindowed)
@@ -146,6 +167,7 @@ internal PLATFORM_WINDOW_SET_WINDOWED(Win32WindowSetWindowed)
     }
 
     SetWindowPos(gWin32State.window, 0, x, y, width, height, SWP_SHOWWINDOW);
+    Win32ClipCursor();
 }
 
 internal void APIENTRY Win32OpenGLDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
@@ -348,7 +370,7 @@ internal inline void Win32UpdateControllerLastTick(GameController* controller, L
             }
         }
 
-        if (controller->mouse.offset.x != 0.0f || controller->mouse.offset.x != 0.0f)
+        if (controller->mouse.delta.x > 0.0f || controller->mouse.delta.x > 0.0f)
         {
             controller->lastTick = currentTick;
             return;
@@ -537,7 +559,6 @@ internal void Win32ProcessPendingMessages(Win32State* state)
     Assert(state);
 
     GameController* keyboard = &state->gameInput.keyboard;
-    Mouse*          mouse    = &keyboard->mouse;
 
     MSG msg;
     while (PeekMessage(&msg, gWin32State.window, 0, 0, PM_REMOVE))
@@ -637,27 +658,6 @@ internal void Win32ProcessPendingMessages(Win32State* state)
         }
         }
     }
-
-    // Handle mouse input
-    {
-        POINT point;
-        GetCursorPos(&point);
-        ScreenToClient(state->window, &point);
-
-        u32 newMouseX = (u32)point.x;
-        u32 newMouseY = (u32)point.y;
-        s32 offsetX   = (s32)newMouseX - (s32)mouse->pos.x;
-        s32 offsetY   = (s32)mouse->pos.y - (s32)newMouseY;
-
-        mouse->pos.x    = newMouseX;
-        mouse->pos.y    = newMouseY;
-        mouse->offset.x = offsetX;
-        mouse->offset.y = offsetY;
-
-        Win32UpdateGameButtonState(&mouse->left, GetKeyState(VK_LBUTTON) & (1 << 15));
-        Win32UpdateGameButtonState(&mouse->middle, GetKeyState(VK_MBUTTON) & (1 << 15));
-        Win32UpdateGameButtonState(&mouse->right, GetKeyState(VK_RBUTTON) & (1 << 15));
-    }
 }
 
 LRESULT WndProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -704,6 +704,33 @@ LRESULT WndProc(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_SETFOCUS:
     {
         gWin32State.paused = false;
+        break;
+    }
+    case WM_INPUT:
+    {
+        // https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-rawmouse
+        RAWINPUT raw;
+        UINT     size = sizeof(raw);
+
+        GetRawInputData((HRAWINPUT)lParam, RID_INPUT, &raw, &size, sizeof(RAWINPUTHEADER));
+        if (raw.header.dwType == RIM_TYPEMOUSE)
+        {
+            POINT win32MousePos;
+            GetCursorPos(&win32MousePos);
+            ScreenToClient(gWin32State.window, &win32MousePos);
+
+            Mouse*    mouse    = &gWin32State.gameInput.keyboard.mouse;
+            RAWMOUSE* winMouse = &raw.data.mouse;
+
+            mouse->delta.x = winMouse->lLastX;
+            mouse->delta.y = -winMouse->lLastY;
+            mouse->pos.x   = (u32)win32MousePos.x;
+            mouse->pos.y   = (u32)win32MousePos.y;
+
+            Win32UpdateGameButtonState(&mouse->left, GetKeyState(VK_LBUTTON) & (1 << 15));
+            Win32UpdateGameButtonState(&mouse->middle, GetKeyState(VK_MBUTTON) & (1 << 15));
+            Win32UpdateGameButtonState(&mouse->right, GetKeyState(VK_RBUTTON) & (1 << 15));
+        }
         break;
     }
     default:
@@ -963,11 +990,27 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
     Win32GameCode game                = Win32GameCodeLoad(gameDLLFilename, tempGameDLLFilename);
 #endif
 
+    // Setup controllers
     gWin32State.gameInput.keyboard.isAnalog    = false;
     gWin32State.gameInput.keyboard.isConnected = true;
     gWin32State.gameInput.keyboard.type        = ControllerType_Keyboard;
     gWin32State.gameInput.gamepad.isAnalog     = true;
     gWin32State.gameInput.gamepad.type         = ControllerType_Gamepad;
+
+    // Register RAWINPUTDEVICE to receive raw mouse input via WM_INPUT
+    RAWINPUTDEVICE rid{};
+    // rid.usUsagePage = HID_USAGE_PAGE_GAME;
+    rid.usUsagePage = HID_USAGE_PAGE_GENERIC;
+    rid.usUsage     = HID_USAGE_GENERIC_MOUSE;
+    rid.dwFlags     = 0;
+    rid.hwndTarget  = gWin32State.window;
+    RegisterRawInputDevices(&rid, 1, sizeof(rid));
+
+    Win32ClipCursor();
+
+#if BUILD_TYPE_RELEASE
+    Win32WindowSetFullscreen();
+#endif
 
     LARGE_INTEGER frameStartTime = Win32GetWallClock();
 
@@ -1009,6 +1052,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         {
             mouse->buttons[mouseButtonIndex].wasDown = mouse->buttons[mouseButtonIndex].isDown;
         }
+        mouse->delta.x = 0;
+        mouse->delta.y = 0;
 
 #if BUILD_TYPE_DEBUG
         for (u32 debugBtnIndex = 0; debugBtnIndex < ArrayCount(gWin32State.gameInput.debug.fkeys); debugBtnIndex++)

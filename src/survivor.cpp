@@ -453,8 +453,8 @@ internal void UpdatePlayer(Entity* player, GameController* controller)
     {
         local_persist f32 mouseSensitivity = 0.1f;
 
-        xOffset = (f32)controller->mouse.offset.x * mouseSensitivity;
-        yOffset = (f32)controller->mouse.offset.y * mouseSensitivity;
+        xOffset = (f32)controller->mouse.delta.x * mouseSensitivity;
+        yOffset = (f32)controller->mouse.delta.y * mouseSensitivity;
     }
     else /* Gamepad */
     {
@@ -756,6 +756,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // ----------------------------------------------------------------------------
     // Update
+    b32 closeGame = false;
+
     glm::uvec2     windowDim     = platform->WindowGetDimension();
     EntityManager* entityManager = state->entityManager;
     Entity*        player        = EntityGet(entityManager, 0);
@@ -783,11 +785,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
     case GameMode_Pause:
     {
+        if (controller == keyboard)
+        {
+            platform->CursorShow();
+        }
+
         if (ButtonIsPressed(controller->start))
         {
             // TODO: game mode transitions
             state->mode = GameMode_Play;
-            platform->CursorHide();
         }
         break;
     }
@@ -803,15 +809,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
     case GameMode_Play:
     {
+        platform->CursorHide();
+
         if (ButtonIsPressed(controller->start))
         {
             // TODO: game mode transitions
             state->mode = GameMode_Pause;
-
-            if (controller == keyboard)
-            {
-                platform->CursorShow();
-            }
         }
 
         UpdatePlayer(player, controller);
@@ -832,6 +835,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             glm::vec3 position{ player->position.x, 1.5f, player->position.z };
             glm::vec3 direction{ sinf(player->rotation.y), 0.0f, cosf(player->rotation.y) };
 
+#if BUILD_TYPE_DEBUG
+
             if (ButtonIsPressed(input->debug.f1))
             {
                 platform->Logf("Shooting....");
@@ -842,6 +847,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 platform->Logf("Shooting....");
                 Shoot(ammoRound, GRENADE, position, direction);
             }
+#endif
         }
 
         // Update
@@ -1025,6 +1031,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             {
                 f32 scale = 0.5f;
 
+                enum
+                {
+                    Btn_Continue,
+                    Btn_Restart,
+                    Btn_Settings,
+                    Btn_Quit
+                };
                 char* options[] = { "Continue", "Restart", "Settings", "Quit" };
 
                 glm::vec2 maxTextSize{ 0.0f, 0.0f };
@@ -1047,10 +1060,26 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     {
                         platform->Logf("%s", options[optionIndex]);
 
-                        if (optionIndex == 0)
+                        switch (optionIndex)
                         {
-                            // TODO: game mode transitions
+                        case Btn_Continue:
+                        {
                             state->mode = GameMode_Play;
+                            break;
+                        }
+                        case Btn_Restart:
+                        {
+                            break;
+                        }
+                        case Btn_Settings:
+                        {
+                            break;
+                        }
+                        case Btn_Quit:
+                        {
+                            closeGame = true;
+                            break;
+                        }
                         }
                     }
                 }
@@ -1063,5 +1092,5 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
 
     RendererFrameEnd(state->renderer);
-    return 0;
+    return closeGame;
 }
