@@ -20,7 +20,6 @@ enum EntityType
 {
     EntityType_Player,
     EntityType_Enemy,
-    EntityType_Obstacle,
     EntityType_Count
 };
 
@@ -55,7 +54,7 @@ struct Entity
     AABB            aabb;
     u32             flags;
     s32             health;
-    u32             assetID;
+    Asset           assetID;
     Skeleton*       skeleton;
     ActiveAnimation animation;
 };

@@ -3,8 +3,6 @@
 #include "survivor_debug_geometry.cpp"
 #include "survivor_assets.cpp"
 #include "survivor_entity.cpp"
-#include "survivor_world.cpp"
-// #include "survivor_build.cpp"
 #include "survivor_ui.cpp"
 #if BUILD_TYPE_DEBUG
 #include "survivor_debug.cpp"
@@ -13,280 +11,8 @@
 // TODO
 /*
 - (Audio) Make easy to tweak volumes (ignore db conversion)
-- (Game): gamepad controller
 - (Game): game mode transitions
 */
-
-// internal void EnemyUpdate(PlatformAPI* platform, EntityManager* manager, World* world, Entity* entity, f32 delta)
-//{
-//     Assets* assets = manager->assets;
-//     Entity* player = EntityGet(manager, 0);
-
-//    Assert(entity->type == EntityType_Enemy);
-//    // TODO: Can be used for destroy fences
-//    Assert(entity->targetEntity);
-
-//    if (entity->flags & EntityFlag_Climbing)
-//    {
-//        entity->rotation.x = Radians(-90.0f);
-//    }
-
-//    // Animation
-//    {
-//        // Update current animation
-//        if (entity->animation.current)
-//        {
-//            Skeleton*  skeleton  = entity->skeleton;
-//            Animation* animation = entity->animation.current;
-
-//            f32 prevTime    = entity->animation.time;
-//            f32 currentTime = 0.0f;
-//            entity->animation.time += delta;
-//            currentTime = entity->animation.time;
-
-//            if (animation->id == Anim_ZombieMaleAttackLeft)
-//            {
-//                if (prevTime < 0.74f && currentTime >= 0.74f)
-//                {
-//                    entity->flags |= EntityFlag_Hitting;
-//                }
-//                if (prevTime < 0.91f && currentTime >= 0.91f)
-//                {
-//                    platform->Logf("End");
-//                    entity->flags &= ~EntityFlag_Hitting;
-//                }
-//            }
-
-//            // End of the animation
-//            if (entity->animation.time >= animation->duration)
-//            {
-//                entity->animation.time    = 0.0f;
-//                entity->animation.current = 0;
-//            }
-
-//            SkeletonApplyAnimation(skeleton, animation, entity->animation.time);
-//            SkeletonUpdatePose(skeleton);
-//        }
-
-//        // Attack animation
-//        // TODO: Randomize attack animation
-//        if (!entity->animation.current)
-//        {
-//            if (entity->flags & EntityFlag_InAttack)
-//            {
-//                u32 attackAnimationId = 0;
-
-//                if (entity->assetID == Model_ZombieMaleA)
-//                {
-//                    attackAnimationId = Anim_ZombieMaleAttackLeft;
-//                }
-//                else if (entity->assetID == Model_ZombieFemaleA)
-//                {
-//                    attackAnimationId = Anim_ZombieFemaleAttackLeft;
-//                }
-//                else
-//                {
-//                    InvalidCodePath;
-//                }
-
-//                entity->animation.current = AssetsAnimationGet(assets, attackAnimationId);
-//                entity->animation.time    = 0.0f;
-//            }
-//            else if (entity->flags & EntityFlag_Idle)
-//            {
-//                u32 idleAnimationId = 0;
-//                if (entity->assetID == Model_ZombieMaleA)
-//                {
-//                    idleAnimationId = Anim_ZombieMaleIdleAlert;
-//                }
-//                else if (entity->assetID == Model_ZombieFemaleA)
-//                {
-//                    idleAnimationId = Anim_ZombieFemaleIdleAlert;
-//                }
-//                else
-//                {
-//                    InvalidCodePath;
-//                }
-
-//                entity->animation.current = AssetsAnimationGet(assets, idleAnimationId);
-//                entity->animation.time    = 0.0f;
-//            }
-//            else if (entity->flags & EntityFlag_Climbing)
-//            {
-//                u32 climbAnimationId = 0;
-//                if (entity->assetID == Model_ZombieMaleA)
-//                {
-//                    climbAnimationId = Anim_ZombieMaleCrawlingForward;
-//                }
-//                else if (entity->assetID == Model_ZombieFemaleA)
-//                {
-//                    climbAnimationId = Anim_ZombieFemaleCrawlingForward;
-//                }
-//                else
-//                {
-//                    InvalidCodePath;
-//                }
-
-//                entity->animation.current = AssetsAnimationGet(assets, climbAnimationId);
-//                entity->animation.time    = 0.0f;
-//            }
-//        }
-//    }
-
-//    // Attack
-//    {
-//        if (!entity->targetEntity)
-//        {
-//            entity->targetEntity = player;
-//        }
-
-//        if (!(entity->flags & EntityFlag_Climbing))
-//        {
-
-//            glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
-//            lookAt = SafeNorm(lookAt);
-//            glm::vec3 start{ entity->position.x, 0.5f, entity->position.z };
-//            glm::vec3 end = start + (lookAt * enemyStrikingRange);
-
-//            AABB worldAABB = AABBToWorld(entity->targetEntity->aabb, entity->targetEntity->position);
-//            if (AABBSegmentIntersection(worldAABB, start, end))
-//            {
-//                entity->flags |= EntityFlag_InAttack;
-
-//                if (entity->flags & EntityFlag_Hitting)
-//                {
-//                    EntityAttack(manager, entity, &gWeaponHand, entity->velocity);
-//                    entity->flags &= ~EntityFlag_Hitting;
-//                }
-//            }
-//            else
-//            {
-//                entity->flags &= ~EntityFlag_InAttack;
-//            }
-//        }
-//    }
-
-//    //----------------------------------------------------------------------------
-//    // Path finding
-//    glm::vec3 entityDir{ 0.0f, 0.0f, 0.0f };
-
-//    if (entity->flags & EntityFlag_Climbing)
-//    {
-//        entityDir.y = 1.0f;
-//    }
-//    else if (player == entity->targetEntity)
-//    {
-//        cell_index              enemyCellIndex  = WorldPositionToGridCell(entity->position);
-//        cell_index              playerCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
-//        std::vector<cell_index> path            = WorldFindBestPath(world, manager, enemyCellIndex,
-//        playerCellIndex);
-//        // glm::vec3               entityDir{ 0.0f, 0.0f, 0.0f };
-
-//        if (!path.empty())
-//        {
-//            glm::vec3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
-//            entityDir                = SafeNorm(targetPosition - entity->position);
-//            entityDir.y              = 0.0f;
-//            //  entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
-//        }
-//        // TODO: Break obstacles
-//        else
-//        {
-//            entityDir = SafeNorm(entity->targetEntity->position - entity->position);
-//            //   entityDir.y = 0.0f;
-//        }
-//    }
-//    //----------------------------------------------------------------------------
-
-//    //----------------------------------------------------------------------------
-//    // Entity acceleration
-//    if (!(entity->flags & EntityFlag_InKnockback))
-//    {
-//        f32 accel = enemyAcceleration;
-//        if (entity->flags & EntityFlag_Climbing)
-//        {
-//            accel = 0.1f;
-//        }
-
-//        glm::vec3 acceleration = entityDir * enemyAcceleration;
-//        entity->velocity += acceleration * delta;
-//        // TODO: Use constant speed for enemies???
-//        if (glm::length(entity->velocity) > enemyMaxSpeed)
-//        {
-//            entity->velocity = SafeNorm(entity->velocity) * enemyMaxSpeed;
-//        }
-//    }
-//    else
-//    {
-//        // Friction force
-//        entity->velocity *= 0.70f;
-
-//        f32 speed = glm::length(entity->velocity);
-//        if (speed <= 0.01f)
-//        {
-//            entity->velocity = { 0, 0, 0 };
-//            entity->flags &= ~EntityFlag_InKnockback;
-//        }
-
-//        entity->position += entity->velocity * delta;
-//    }
-
-//    glm::vec3 newEntityPosition = entity->position + (entity->velocity * delta);
-//    //----------------------------------------------------------------------------
-
-//    // -----------------------------------------------------------
-//    // Collision detection
-//    glm::vec3 correction{ 0.0f, 0.0f, 0.0f };
-//    glm::vec3 totalCorrection{ 0 };
-
-//    if (!(entity->flags & EntityFlag_Climbing))
-//    {
-//        // Attack logic
-//        // Note: this is not part of collision detection
-//        for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
-//        {
-//            Entity* entityPtr = EntityGet(manager, entityIndex);
-//            if (entityPtr->type == EntityType_Player)
-//            {
-//                glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
-//                lookAt              = SafeNorm(lookAt);
-//                glm::vec3 start     = entity->position;
-//                start.y             = 0.5f;
-//                glm::vec3 end       = start + (lookAt * enemyStrikingRange);
-//                AABB      worldAABB = AABBToWorld(entityPtr->aabb, entityPtr->position);
-
-//                if (AABBSegmentIntersection(worldAABB, start, end))
-//                {
-//                    newEntityPosition = entity->position;
-
-//                    if (!(entity->flags & EntityFlag_InAttack))
-//                    {
-//                        entity->targetEntity = entityPtr;
-//                    }
-//                }
-//            }
-//            else if (entityPtr->type == EntityType_Obstacle)
-//            {
-//                glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
-//                lookAt              = SafeNorm(lookAt);
-//                glm::vec3 start     = entity->position;
-//                start.y             = 0.5f;
-//                glm::vec3 end       = start + (lookAt * enemyJumpRange);
-//                AABB      worldAABB = AABBToWorld(entityPtr->aabb, entityPtr->position);
-
-//                if (AABBSegmentIntersection(worldAABB, start, end))
-//                {
-//                    newEntityPosition = entity->position;
-//                    // entity->flags |= EntityFlag_Idle;
-//                    entity->flags |= EntityFlag_Climbing;
-//                }
-//            }
-//        }
-//    }
-
-//    newEntityPosition += totalCorrection;
-//    entity->position = newEntityPosition;
-//}
 
 internal void Shoot(AmmoRound* ammoRound, AmmoRoundType type, glm::vec3 position, glm::vec3 direction)
 {
@@ -579,13 +305,20 @@ internal void UpdateEnemies(EntityManager* manager, Assets* assets, f32 delta)
 
 internal void LoadAssets(Assets* assets)
 {
-    AssetsLoad(assets, Texture_Zombie);
-    AssetsLoad(assets, Texture_Crosshair);
-    AssetsLoad(assets, Texture_Fence);
-    AssetsLoad(assets, Model_Fence);
-    AssetsLoad(assets, Model_ZombieFemaleA);
     AssetsLoad(assets, Model_ZombieMaleA);
-    AssetsLoad(assets, Model_Stickman);
+    AssetsLoad(assets, Model_ZombieFemaleA);
+
+    AssetsLoad(assets, Model_Building_0);
+    AssetsLoad(assets, Model_Building_1);
+    AssetsLoad(assets, Model_Building_2);
+    AssetsLoad(assets, Model_Building_3);
+    AssetsLoad(assets, Model_Building_4);
+    AssetsLoad(assets, Model_Building_5);
+    AssetsLoad(assets, Model_Building_6);
+    AssetsLoad(assets, Model_Building_7);
+    AssetsLoad(assets, Model_Building_9);
+
+    AssetsLoad(assets, Texture_Crosshair);
 
     AssetsLoad(assets, Anim_ZombieMaleAttackLeft);
     AssetsLoad(assets, Anim_ZombieMaleAttackRight);
@@ -612,6 +345,62 @@ internal void LoadAssets(Assets* assets)
     AssetsLoad(assets, Anim_ZombieFemaleWalkLimp);
     AssetsLoad(assets, Anim_ZombieFemaleCrawlingForward);
     AssetsLoad(assets, Anim_ZombieFemaleCrawlingIdle);
+}
+
+internal void DrawModel(Assets* assets, Asset asset, GLuint programId, glm::mat4 viewProj, glm::vec3 position,
+                        glm::quat rotation)
+{
+    Renderer* renderer = assets->renderer;
+    OpenGL*   gl       = renderer->gl;
+    Model*    model    = AssetsModelGet(assets, asset);
+
+    // World matrix
+    position.y            = model->localTranslation.y;
+    glm::mat4 translation = glm::translate(glm::mat4{ 1.0f }, position);
+    glm::mat4 rotationMat = glm::mat4_cast(rotation);
+    glm::mat4 worldMatrix = translation * rotationMat;
+    // glm::mat4 worldMatrix = translation;
+
+    u32 textureIndex = 1;
+
+    PushRenderProgramUse(renderer, programId);
+
+    // Model local matrix
+    // glm::mat4 modelTranslation    = glm::translate(glm::mat4{ 1.0f }, model->localTranslation);
+    // glm::mat4 modelTranslation    = glm::translate(glm::mat4{ 1.0f }, position);
+    // glm::mat4 modelRotation       = glm::mat4_cast(model->localRotation);
+    // glm::mat4 modelScale          = glm::scale(glm::mat4{ 1.0f }, model->localScale);
+    // glm::mat4 modelLocalTransform = modelTranslation * modelRotation * modelScale;
+
+    for (u32 meshIndex = 0; meshIndex < model->meshCount; meshIndex++)
+    {
+        Mesh*     mesh      = model->meshes + meshIndex;
+        Material* material  = model->materials + mesh->materialIndex;
+        Texture*  baseColor = model->textures + material->baseColorIndex;
+
+        // Mesh local matrix
+        // glm::mat4 meshTranslation    = glm::translate(glm::mat4{ 1.0f }, mesh->localTranslation);
+        // glm::mat4 meshRotation       = glm::mat4_cast(mesh->localRotation);
+        // glm::mat4 meshScale          = glm::scale(glm::mat4{ 1.0f }, mesh->localScale);
+        // glm::mat4 meshLocalTransform = meshTranslation * meshRotation * meshScale;
+
+        // glm::mat4 localTransform = modelLocalTransform * meshLocalTransform;
+
+        // glm::mat4 modelMat = worldMatrix * localTransform;
+
+        glm::mat4 modelMat = worldMatrix;
+
+        gl->ActiveTexture(GL_TEXTURE0 + textureIndex);
+        gl->BindTexture(GL_TEXTURE_2D, baseColor->id);
+
+        PushRenderUploadUniformInt(renderer, programId, "hasDiffuse", 1);
+        PushRenderUploadUniformInt(renderer, programId, "diffuseMap", textureIndex);
+        PushRenderUploadUniformMat4x4(renderer, programId, "mvp", viewProj * modelMat);
+
+        PushRenderDrawBuffer(renderer, mesh->gpuBuffer);
+
+        textureIndex++;
+    }
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -645,9 +434,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->ui             = PushStruct(arena, UI);
         state->mode           = GameMode_Play;
 #ifdef BUILD_TYPE_DEBUG
-        state->debug                    = PushStruct(arena, Debug);
-        state->debug->state             = state;
-        state->debug->selectedCellIndex = CELL_EMPTY;
+        state->debug        = PushStruct(arena, Debug);
+        state->debug->state = state;
 #endif
 
         Renderer* renderer = state->renderer;
@@ -866,10 +654,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     // ----------------------------------------------------------------------------
     // Draw
     glm::mat4 projection = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
-    glm::vec3 cameraEye  = player->position + glm::vec3{ 0.0f, 1.5f, 0.0f };
+    glm::vec3 cameraEye  = player->position + glm::vec3{ 0.0f, 2.2f, 0.0f };
     glm::mat4 view       = glm::lookAt(cameraEye, cameraEye + player->forward, { 0.0f, 1.0f, 0.0f });
-
-    // glm::lookAt()
 
     glm::mat4 viewProj = projection * view;
     Renderer* renderer = state->renderer;
@@ -885,8 +671,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     case GameMode_Play:
     {
         Texture* crosshairAtlas = AssetsTextureGet(assets, Texture_Crosshair);
-        Texture* zombieTexture  = AssetsTextureGet(assets, Texture_Zombie);
-        Texture* fenceTexture   = AssetsTextureGet(assets, Texture_Fence);
 
         // 2D
         {
@@ -901,10 +685,90 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // 3D
         {
+            Texture* zombieTexture = AssetsModelGet(assets, Model_ZombieMaleA)->textures;
+
             gl->ActiveTexture(GL_TEXTURE0);
-            gl->BindTexture(GL_TEXTURE_2D, fenceTexture->id);
-            gl->ActiveTexture(GL_TEXTURE1);
             gl->BindTexture(GL_TEXTURE_2D, zombieTexture->id);
+
+            // Building
+            {
+#if 0
+                // Model* model = AssetsModelGet(assets, Model_JapaneseStore);
+                Model* model = AssetsModelGet(assets, Model_Building_9);
+
+                glm::vec3 position{ 0.0f, 0.0f, -10.0f };
+                glm::mat4 baseModelMat = glm::translate(glm::mat4{ 1.0f }, position);
+
+                u32 textureIndex = 1;
+
+                PushRenderProgramUse(renderer, state->program->id);
+
+                glm::mat4 modelTranslation    = glm::translate(glm::mat4{ 1.0f }, model->localTranslation);
+                glm::mat4 modelRotation       = glm::mat4_cast(model->localRotation);
+                glm::mat4 modelScale          = glm::scale(glm::mat4{ 1.0f }, model->localScale);
+                glm::mat4 modelLocalTransform = modelTranslation * modelRotation * modelScale;
+
+                for (u32 meshIndex = 0; meshIndex < model->meshCount; meshIndex++)
+                {
+                    Mesh*     mesh      = model->meshes + meshIndex;
+                    Material* material  = model->materials + mesh->materialIndex;
+                    Texture*  baseColor = model->textures + material->baseColorIndex;
+
+                    glm::mat4 meshTranslation    = glm::translate(glm::mat4{ 1.0f }, mesh->localTranslation);
+                    glm::mat4 meshRotation       = glm::mat4_cast(mesh->localRotation);
+                    glm::mat4 meshScale          = glm::scale(glm::mat4{ 1.0f }, mesh->localScale);
+                    glm::mat4 meshLocalTransform = meshTranslation * meshRotation * meshScale;
+
+                    glm::mat4 localTransform = modelLocalTransform * meshLocalTransform;
+
+                    glm::mat4 modelMat = baseModelMat * localTransform;
+
+                    gl->ActiveTexture(GL_TEXTURE0 + textureIndex);
+                    gl->BindTexture(GL_TEXTURE_2D, baseColor->id);
+
+                    PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
+                    PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", textureIndex);
+                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * modelMat);
+
+                    PushRenderDrawBuffer(renderer, mesh->gpuBuffer);
+
+                    textureIndex++;
+                }
+#endif
+
+                // <Vector (-67.9289, -82.6967, 9.9961)>
+                // <Quaternion (w=-0.0000, x=0.0000, y=-0.7071, z=0.7071)>
+
+                std::vector<glm::vec3> positions{
+                    glm::vec3 { 0.0f, 0.0f, 9.33f },
+                    glm::vec3{36.20f, 0.0f, 11.11f},
+                };
+                std::vector<glm::quat> rotations{
+                    glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
+                    glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
+                };
+                std::vector<Asset> assetIds{ Model_Building_5, Model_Building_6 };
+
+                for (u32 i = 0; i < positions.size(); i++)
+                {
+                    glm::vec3 eulerDegrees(90.0f, 0.0f, 180.0f);
+                    glm::quat rotation = glm::quat(glm::radians(eulerDegrees));
+                    DrawModel(assets, assetIds[i], state->program->id, viewProj, positions[i], rotation);
+                }
+
+                //              Asset     modelId = Model_Building_5;
+                //              Model*    model   = AssetsModelGet(assets, modelId);
+                //              glm::vec3 position{ 0.0f, 0.0f, -6.0f };
+                //              glm::vec3 eulerDegrees(90.0f, 0.0f, 180.0f);
+                //              glm::quat rotation = glm::quat(glm::radians(eulerDegrees));
+
+                //              DrawModel(assets, modelId, state->program->id, viewProj, position, rotation);
+
+                //{
+                //    DrawModel(assets, Model_ZombieMaleA, state->program->id, viewProj, { 0.0f, 0.0f, 5.0 },
+                //              glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f });
+                //}
+            }
 
             // Floor
             {
@@ -915,7 +779,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 PushRenderProgramUse(renderer, state->program->id);
                 PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
                 PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 0.5f });
+                PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 1.0f });
                 PushRenderDrawBuffer(renderer, state->planeBuffer);
             }
 
@@ -935,7 +799,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
             // Entities
             {
-                for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
+                for (u32 entityIndex = 1; entityIndex < entityManager->entityCount; entityIndex++)
                 {
                     Entity* entity      = &entityManager->entities[entityIndex];
                     Model*  entityModel = AssetsModelGet(assets, entity->assetID);
@@ -945,42 +809,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, entity->scale);
                     glm::mat4 model     = translate * rotate * scale;
 
-                    // if (entity->type == EntityType_Player)
-                    //{
-                    //     continue;
-                    // }
-
-                    if (entity->type == EntityType_Obstacle)
-                    {
-                        glm::vec4 tintColor = color_white;
-
-                        if (entity->flags & (EntityFlag_InvalidPosition))
-                        {
-                            tintColor = color_red;
-                        }
-                        else if (entity->flags & (EntityFlag_Positioning | EntityFlag_Snapping))
-                        {
-                            tintColor = color_green;
-                        }
-
-                        PushRenderProgramUse(renderer, state->program->id);
-                        PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
-                        PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 0);
-                        PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                        PushRenderDrawBuffer(renderer, entityModel->gpuBuffer);
-                    }
-                    else if (entity->type == EntityType_Player)
-                    {
-                        // PushRenderProgramUse(renderer, state->program->id);
-                        // PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
-                        // PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                        // PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_green);
-                        // PushRenderDrawBuffer(renderer, entityModel->gpuBuffer);
-                    }
-                    else if (entity->type == EntityType_Enemy)
+                    if (entity->type == EntityType_Enemy)
                     {
                         PushRenderProgramUse(renderer, state->programSkinned->id);
-                        PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 1);
+                        PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 0);
 
                         Skeleton* skeleton = entity->skeleton;
 
@@ -1004,7 +836,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                         }
 
                         PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "mvp", viewProj * model);
-                        PushRenderDrawBuffer(renderer, entityModel->gpuBuffer);
+                        PushRenderDrawBuffer(renderer, entityModel->meshes->gpuBuffer);
                     }
                     else
                     {

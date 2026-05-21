@@ -25,7 +25,7 @@ echo Building DLL...
 set linker_options=-incremental:no /PDB:Survivor_%unix_epoch%.pdb -EXPORT:GameUpdateAndRender
 cl %compiler_options% /LD %includes% ..\src\survivor.cpp /FoSurvivor %preprocessor% /link %linker_options%
 
-:: echo Building exporter
-:: cl %compiler_options% %includes% ..\src\exporter\win32_survivor_exporter.cpp /FoExporter %preprocessor%
+echo Building exporter
+cl %compiler_options% %includes% ..\src\exporter\win32_survivor_exporter.cpp /FoExporter %preprocessor%
 
 popd

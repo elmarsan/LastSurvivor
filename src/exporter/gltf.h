@@ -3,6 +3,15 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
+
+#define DEBUG_TEXTURES 0
+#if DEBUG_TEXTURES
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+#endif
+
 #define EMPTY -1
 
 // Limitations
@@ -49,12 +58,13 @@ struct GLTFAnimation
 
 struct GLTFMaterial
 {
-    int albedoTextureIndex;
+    int baseColorIndex;
 };
 
 struct GLTFTexture
 {
-    char path[256];
+    char            name[64];
+    std::vector<u8> data;
 };
 
 struct GLTFMeshPrimitive
@@ -79,6 +89,7 @@ struct GLTFNode
     glm::vec3        translation;
     glm::quat        rotation;
     glm::vec3        scale;
+    glm::mat4        transform;
 };
 
 struct GLTFSkeleton
@@ -102,22 +113,22 @@ struct GLTFModel
 
 GLTFModel                  GLTFParse(char* gltfFilename, PlatformAPI* platform);
 std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* platform);
-Skeleton*                  GLTFConvertSkeleton(GLTFModel* model, Arena* arena);
+Skeleton*                  ExtractGLTFSkeleton(GLTFModel* model, Arena* arena);
 Animation*                 GLTFConvertAnimation(GLTFModel* model, GLTFAnimation* animation, Arena* arena);
 
 GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
 {
     GLTFModel result;
 
-    // platform->Logf("------------------------------------------------------------");
-    // platform->Logf("Reading .gltf file: '%s'", gltfFilename);
+    // Log("------------------------------------------------------------");
+    // Log("Reading .gltf file: '%s'", gltfFilename);
 
     FileReadResult gltfFile = platform->FileReadEntire(gltfFilename);
     FileReadResult binFile  = { 0 };
 
     if (!gltfFile.content)
     {
-        platform->Logf("Unable to parse .gltf file '%s' not found", gltfFilename);
+        Log("Unable to parse .gltf file '%s' not found", gltfFilename);
         Assert(0);
     }
 
@@ -128,9 +139,23 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
     if (cgltfResult == cgltf_result_success)
     {
         size_t directoryLen = GetParentPathLength(gltfFilename);
+        char*  extension    = GetFilenameExtension(gltfFilename);
 
         // Parse buffers
-        if (cgltfData->buffers_count > 0)
+        if (StrEquals(extension, "glb"))
+        {
+            cgltfResult = cgltf_load_buffers(&options, cgltfData, gltfFilename);
+            if (cgltfResult != cgltf_result_success)
+            {
+                Log("Failed to load .glb buffers '%s'", gltfFilename);
+                Assert(0);
+            }
+
+            // cgltf_buffer* buffer = &cgltfData->buffers[0];
+            // buffer->data = gltfFile.content;
+            // buffer->size = gltfFile.contentSize;
+        }
+        else if (cgltfData->buffers_count > 0) /* .gltf */
         {
             Assert(cgltfData->buffers_count == 1);
             cgltf_buffer* buffer = &cgltfData->buffers[0];
@@ -139,12 +164,12 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
             memcpy(binFilename, gltfFilename, directoryLen);
             strcpy(binFilename + directoryLen, buffer->uri);
 
-            // platform->Logf("Reading .bin file: '%s'", binFilename);
+            // Log("Reading .bin file: '%s'", binFilename);
 
             binFile = platform->FileReadEntire(binFilename);
             if (!binFile.content)
             {
-                platform->Logf("Unable to parse .bin file '%s'", binFilename);
+                Log("Unable to parse .bin file '%s'", binFilename);
                 Assert(0);
             }
             else
@@ -157,14 +182,14 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
         cgltfResult = cgltf_validate(cgltfData);
         if (cgltfResult != cgltf_result_success)
         {
-            platform->Logf("Invalid gltf '%s'", gltfFilename);
+            Log("Invalid gltf '%s'", gltfFilename);
             Assert(0);
         }
 
         cgltf_scene* scene = cgltfData->scene;
         if (cgltfData->scenes_count > 1)
         {
-            platform->Logf("More than one scene %zu", cgltfData->scenes_count);
+            Log("More than one scene %zu", cgltfData->scenes_count);
             assert(0);
         }
 
@@ -196,7 +221,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                 }
 
                 glm::vec3 translation{ 0.0f, 0.0f, 0.0f };
-                glm::quat rotation{ 1.0f, 0.0f, 0.0f, 0.0f };
+                glm::quat rotation{ 0.0f, 0.0f, 0.0f, 0.0f };
                 glm::vec3 scale{ 1.0f, 1.0f, 1.0f };
 
                 if (cgltfNode->has_translation)
@@ -216,14 +241,20 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                 }
                 if (cgltfNode->has_matrix)
                 {
-                    glm::mat4 baseLocalTransform;
-                    memcpy(&baseLocalTransform[0][0], cgltfNode->matrix, 16 * sizeof(f32));
+                    glm::mat4 localTransform;
+                    memcpy(&localTransform[0][0], cgltfNode->matrix, 16 * sizeof(f32));
 
                     glm::vec3 skew;
                     glm::vec4 perspective;
 
-                    glm::decompose(baseLocalTransform, scale, rotation, translation, skew, perspective);
+                    glm::decompose(localTransform, scale, rotation, translation, skew, perspective);
+
+                    node.transform = localTransform;
                 }
+
+                node.translation = translation;
+                node.rotation    = rotation;
+                node.scale       = scale;
 
                 node.inverseBindMatrix = glm::mat4{ 1.0f };
 
@@ -314,7 +345,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                         }
                         default:
                         {
-                            platform->Logf("Unsupported primitive attribute: %s", cgltfAttribute->name);
+                            Log("Unsupported primitive attribute: %s", cgltfAttribute->name);
                             break;
                         }
                         }
@@ -388,7 +419,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
             {
                 if (cgltfData->skins_count > 1)
                 {
-                    platform->Logf("Model has %zu skins, only first one is processed", cgltfData->skins_count);
+                    Log("Model has %zu skins, only first one is processed", cgltfData->skins_count);
                 }
 
                 cgltf_skin*   cgltfSkin = &cgltfData->skins[0];
@@ -426,7 +457,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
         {
             if (cgltfData->materials_count > 0)
             {
-                // platform->Logf("Material count %zu", cgltfData->materials_count);
+                Log("Material count %zu", cgltfData->materials_count);
 
                 result.materials.resize(cgltfData->materials_count);
                 for (cgltf_size materialIndex = 0; materialIndex < cgltfData->materials_count; materialIndex++)
@@ -440,12 +471,12 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                         {
                             cgltf_texture* baseColor = cgltfMaterial->pbr_metallic_roughness.base_color_texture.texture;
                             cgltf_size     textureIndex = cgltf_texture_index(cgltfData, baseColor);
-                            material.albedoTextureIndex = (int)textureIndex;
+                            material.baseColorIndex     = (int)textureIndex;
                         }
                     }
                     else
                     {
-                        platform->Logf("Unsupported material, index %zu", materialIndex);
+                        Log("Unsupported material, index %zu", materialIndex);
                     }
                 }
             }
@@ -455,30 +486,86 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
         {
             if (cgltfData->textures_count > 0)
             {
-                // platform->Logf("Texture  count %zu", cgltfData->textures_count);
+                Log("Texture count %zu", cgltfData->textures_count);
 
                 result.textures.resize(cgltfData->textures_count);
                 for (cgltf_size textureIndex = 0; textureIndex < cgltfData->textures_count; textureIndex++)
                 {
                     cgltf_texture* cgltfTexture = &cgltfData->textures[textureIndex];
-                    Assert(cgltfTexture->image && cgltfTexture->image->uri);
+                    Assert(cgltfTexture->image);
 
-                    char textureFilename[256];
-                    memcpy(textureFilename, gltfFilename, directoryLen);
-                    strcpy(textureFilename + directoryLen, cgltfTexture->image->uri);
+                    GLTFTexture& texture = result.textures[textureIndex];
 
-                    // platform->Logf("Texture %zu '%s'", textureIndex, textureFilename);
+                    // .gltf
+                    if (cgltfTexture->image->uri)
+                    {
+                        char textureFilename[256];
+                        memcpy(textureFilename, gltfFilename, directoryLen);
+                        strcpy(textureFilename + directoryLen, cgltfTexture->image->uri);
+
+                        Log("Loading texture %zu '%s'", textureIndex, textureFilename);
+
+                        FileReadResult textureFile = platform->FileReadEntire(textureFilename);
+                        if (textureFile.content)
+                        {
+                            texture.data.resize(textureFile.contentSize);
+                            memcpy(texture.data.data(), textureFile.content, textureFile.contentSize);
+                            platform->FileFree(textureFile.content);
+                        }
+                        else
+                        {
+                            Assert(0);
+                        }
+                    }
+                    else if (cgltfTexture->image->buffer_view) /* .glb */
+                    {
+                        Log("Loading texture %s", cgltfTexture->image->name);
+
+                        cgltf_buffer_view* view   = cgltfTexture->image->buffer_view;
+                        cgltf_buffer*      buffer = view->buffer;
+
+                        u8*    data = (u8*)buffer->data + view->offset;
+                        size_t size = view->size;
+
+#if DEBUG_TEXTURES
+                        int width;
+                        int height;
+                        int channelCount;
+                        u8* imageData = stbi_load_from_memory(data, (int)size, &width, &height, &channelCount, 0);
+                        if (imageData)
+                        {
+                            int ok =
+                                stbi_write_png(cgltfTexture->image->name, width, height, channelCount, imageData, 0);
+                            if (!ok)
+                            {
+                                Assert(0);
+                            }
+                        }
+                        else
+                        {
+                            Assert(0);
+                        }
+#endif
+                        strcpy(texture.name, cgltfTexture->image->name);
+                        texture.data.resize(size);
+                        memcpy(texture.data.data(), data, size);
+                    }
+                    else
+                    {
+                        // Unsupported texture source
+                        InvalidCodePath;
+                    }
                 }
             }
         }
     }
     else
     {
-        platform->Logf("Unable to parse gltf '%s'", gltfFilename);
+        Log("Unable to parse gltf '%s'", gltfFilename);
         Assert(0);
     }
 
-    // platform->Logf("------------------------------------------------------------");
+    // Log("------------------------------------------------------------");
     platform->FileFree(gltfFile.content);
     if (binFile.content)
     {
@@ -492,15 +579,15 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
 {
     std::vector<GLTFAnimation> result;
 
-    // platform->Logf("------------------------------------------------------------");
-    // platform->Logf("Reading .gltf animations: '%s'", gltfFilename);
+    // Log("------------------------------------------------------------");
+    // Log("Reading .gltf animations: '%s'", gltfFilename);
 
     FileReadResult gltfFile = platform->FileReadEntire(gltfFilename);
     FileReadResult binFile  = { 0 };
 
     if (!gltfFile.content)
     {
-        platform->Logf("Unable to parse .gltf file '%s' not found", gltfFilename);
+        Log("Unable to parse .gltf file '%s' not found", gltfFilename);
         Assert(0);
     }
 
@@ -522,12 +609,12 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
             memcpy(binFilename, gltfFilename, directoryLen);
             strcpy(binFilename + directoryLen, buffer->uri);
 
-            // platform->Logf("Reading .bin file: '%s'", binFilename);
+            // Log("Reading .bin file: '%s'", binFilename);
 
             binFile = platform->FileReadEntire(binFilename);
             if (!binFile.content)
             {
-                platform->Logf("Unable to parse .bin file '%s'", binFilename);
+                Log("Unable to parse .bin file '%s'", binFilename);
                 Assert(0);
             }
             else
@@ -583,7 +670,7 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
                     }
                     default:
                     {
-                        platform->Logf("Unsupported animation target path");
+                        Log("Unsupported animation target path");
                         Assert(0);
                     }
                     }
@@ -639,7 +726,7 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
                         }
                         default:
                         {
-                            platform->Logf("Unknown animation sampler interpolation");
+                            Log("Unknown animation sampler interpolation");
                             Assert(0);
                         }
                         }
@@ -650,11 +737,11 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
     }
     else
     {
-        platform->Logf("Unable to parse .gltf animations '%s'", gltfFilename);
+        Log("Unable to parse .gltf animations '%s'", gltfFilename);
         Assert(0);
     }
 
-    // platform->Logf("------------------------------------------------------------");
+    // Log("------------------------------------------------------------");
     platform->FileFree(gltfFile.content);
     if (binFile.content)
     {
@@ -701,90 +788,10 @@ internal void JointInitFromGLTFNode(Joint* joint, GLTFNode* gltfNode)
     joint->scale             = gltfNode->scale;
 }
 
-Skeleton* GLTFConvertSkeleton(GLTFModel* gltfModel, Arena* arena)
-{
-    u32 jointCount = (u32)gltfModel->skeleton.joints.size() + 1;
-
-    Skeleton* result            = PushStruct(arena, Skeleton);
-    result->joints              = PushArray(arena, jointCount, Joint);
-    result->jointIndexBindOrder = PushArray(arena, jointCount - 1, u32);
-    result->jointCount          = jointCount;
-
-    Joint* root           = result->joints;
-    u32    nextJointIndex = 1;
-
-    for (u32 nodeIndex = 0; nodeIndex < gltfModel->nodes.size(); nodeIndex++)
-    {
-        b32 isJoint = false;
-        for (int jointIndex : gltfModel->skeleton.joints)
-        {
-            if ((u32)jointIndex == nodeIndex)
-            {
-                isJoint = true;
-                break;
-            }
-        }
-
-        if (isJoint)
-        {
-            Joint*    joint    = result->joints + nextJointIndex;
-            GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
-
-            JointInitFromGLTFNode(joint, gltfNode);
-            nextJointIndex++;
-        }
-        else
-        {
-            // Detect if this node represents the skeleton root.
-            // GLTF convention: the root is a node with no parent that has only one child, and that child is a joint.
-            // This node itself is not a joint, but acts as the parent (transform root) of the joint hierarchy.
-            GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
-
-            if (gltfNode->parentIndex == EMPTY && !gltfNode->childrenIndexes.empty())
-            {
-                Assert(gltfNode->childrenIndexes.size() == 1);
-
-                GLTFNode* gltfChild = &gltfModel->nodes[gltfNode->childrenIndexes[0]];
-                if (gltfChild)
-                {
-                    Joint* childJoint = GLTFNodeGetMappedJoint(result, gltfChild);
-
-                    JointInitFromGLTFNode(root, gltfNode);
-                    root->childrenCount      = 1;
-                    root->childrenIndexes[0] = (u32)(result->joints - childJoint);
-                }
-            }
-        }
-    }
-
-    for (u32 jointIndex = 0; jointIndex < jointCount; jointIndex++)
-    {
-        Joint*    joint    = result->joints + jointIndex;
-        GLTFNode* gltfNode = JointGetMappedGLTFNode(joint, gltfModel);
-        Assert(gltfNode);
-
-        u32 childrenCount    = (u32)gltfNode->childrenIndexes.size();
-        joint->childrenCount = childrenCount;
-
-        for (u32 childrenIndex = 0; childrenIndex < childrenCount; childrenIndex++)
-        {
-            GLTFNode* gltfChildNode = &gltfModel->nodes[gltfNode->childrenIndexes[childrenIndex]];
-
-            Joint* child      = GLTFNodeGetMappedJoint(result, gltfChildNode);
-            s64    childIndex = child - result->joints;
-
-            joint->childrenIndexes[childrenIndex] = (u32)childIndex;
-        }
-    }
-
-    memcpy(result->jointIndexBindOrder, gltfModel->skeleton.joints.data(), sizeof(u32) * jointCount - 1);
-
-    return result;
-}
-
+// TODO: Rename
 Animation* GLTFConvertAnimation(GLTFModel* gltfModel, GLTFAnimation* gltfAnimation, Arena* arena)
 {
-    Skeleton* skeleton = GLTFConvertSkeleton(gltfModel, arena);
+    Skeleton* skeleton = ExtractGLTFSkeleton(gltfModel, arena);
 
     u32 samplerCount = (u32)gltfAnimation->samplers.size();
     u32 channelCount = (u32)gltfAnimation->channels.size();

@@ -15,15 +15,18 @@ Export exports[AssetCount] = {
     // Models
     { "ZombieMale_A_joined.gltf", assetFilenames[Model_ZombieMaleA] },
     { "ZombieFemale_A_joined.gltf", assetFilenames[Model_ZombieFemaleA] },
-    { "stickman.obj", assetFilenames[Model_Stickman] },
-    { "fence.obj", assetFilenames[Model_Fence] },
-    { "chainlink_fence.gltf", assetFilenames[Model_ChainlinkFence] },
+    { "building_0.glb", assetFilenames[Model_Building_0] },
+    { "building_1.glb", assetFilenames[Model_Building_1] },
+    { "building_2.glb", assetFilenames[Model_Building_2] },
+    { "building_3.glb", assetFilenames[Model_Building_3] },
+    { "building_4.glb", assetFilenames[Model_Building_4] },
+    { "building_5.glb", assetFilenames[Model_Building_5] },
+    { "building_6.glb", assetFilenames[Model_Building_6] },
+    { "building_7.glb", assetFilenames[Model_Building_7] },
+    { "building_9.glb", assetFilenames[Model_Building_9] },
 
     // Textures
-    { "zcolors.png", assetFilenames[Texture_Zombie] },
     { "crosshairs.png", assetFilenames[Texture_Crosshair] },
-    { "WoodPlanksOld0242_7_S.jpg", assetFilenames[Texture_Fence] },
-    { "M_Fencing_baseColor.png", assetFilenames[Texture_ChainlinkFence] },
 
     // Zombie male animations
     { "ZombieMale@attack_left_70f.gltf", assetFilenames[Anim_ZombieMaleAttackLeft] },
@@ -54,45 +57,220 @@ Export exports[AssetCount] = {
     { "ZombieFemale@crawling_idle_220f.gltf", assetFilenames[Anim_ZombieFemaleCrawlingIdle] },
 };
 
-void ExportModel(PlatformAPI* platform, Arena* arena, char* filename, Vertex* vertexs, u32* indices, u32 vertexCount,
-                 u32 indexCount, Skeleton* skeleton)
+Skeleton* ExtractGLTFSkeleton(GLTFModel* gltfModel, Arena* arena)
 {
-    TemporaryMemory tempMemory = TemporaryMemoryBegin(arena);
+    u32 jointCount = (u32)gltfModel->skeleton.joints.size() + 1;
+
+    Skeleton* result            = PushStruct(arena, Skeleton);
+    result->joints              = PushArray(arena, jointCount, Joint);
+    result->jointIndexBindOrder = PushArray(arena, jointCount - 1, u32);
+    result->jointCount          = jointCount;
+
+    Joint* root           = result->joints;
+    u32    nextJointIndex = 1;
+
+    for (u32 nodeIndex = 0; nodeIndex < gltfModel->nodes.size(); nodeIndex++)
     {
-        AssetFileHeader*      header      = PushStruct(arena, AssetFileHeader);
-        AssetModelFileHeader* modelHeader = PushStruct(arena, AssetModelFileHeader);
-        Vertex*               vertexs2    = PushArray(arena, vertexCount, Vertex);
-        u32*                  indices2    = PushArray(arena, indexCount, u32);
-
-        header->type              = AssetType_Model;
-        modelHeader->vertexCount  = vertexCount;
-        modelHeader->indicesCount = indexCount;
-        modelHeader->skinned      = skeleton ? true : false;
-
-        memcpy(vertexs2, vertexs, sizeof(Vertex) * vertexCount);
-        memcpy(indices2, indices, sizeof(u32) * indexCount);
-
-        if (skeleton)
+        b32 isJoint = false;
+        for (int jointIndex : gltfModel->skeleton.joints)
         {
-            u32*   jointCount          = PushStruct(arena, u32);
-            Joint* joints              = PushArray(arena, skeleton->jointCount, Joint);
-            u32*   jointIndexBindOrder = PushArray(arena, skeleton->jointCount - 1, u32);
-
-            *jointCount = skeleton->jointCount;
-            for (u32 jointIndex = 0; jointIndex < skeleton->jointCount; jointIndex++)
+            if ((u32)jointIndex == nodeIndex)
             {
-                Joint* joint = joints + jointIndex;
-
-                memcpy(joint, &skeleton->joints[jointIndex], sizeof(Joint));
+                isJoint = true;
+                break;
             }
-
-            memcpy(jointIndexBindOrder, skeleton->jointIndexBindOrder, sizeof(u32) * skeleton->jointCount - 1);
         }
 
-        u8* beginFileContent = (u8*)header;
-        platform->FileWriteEntire(filename, beginFileContent, (arena->ptr) - beginFileContent);
+        if (isJoint)
+        {
+            Joint*    joint    = result->joints + nextJointIndex;
+            GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
+
+            JointInitFromGLTFNode(joint, gltfNode);
+            nextJointIndex++;
+        }
+        else
+        {
+            // Detect if this node represents the skeleton root.
+            // GLTF convention: the root is a node with no parent that has only one child, and that child is a joint.
+            // This node itself is not a joint, but acts as the parent (transform root) of the joint hierarchy.
+            GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
+
+            if (gltfNode->parentIndex == EMPTY && !gltfNode->childrenIndexes.empty())
+            {
+                Assert(gltfNode->childrenIndexes.size() == 1);
+
+                GLTFNode* gltfChild = &gltfModel->nodes[gltfNode->childrenIndexes[0]];
+                if (gltfChild)
+                {
+                    Joint* childJoint = GLTFNodeGetMappedJoint(result, gltfChild);
+
+                    JointInitFromGLTFNode(root, gltfNode);
+                    root->childrenCount      = 1;
+                    root->childrenIndexes[0] = (u32)(result->joints - childJoint);
+                }
+            }
+        }
     }
-    TemporaryMemoryEnd(tempMemory);
+
+    for (u32 jointIndex = 0; jointIndex < jointCount; jointIndex++)
+    {
+        Joint*    joint    = result->joints + jointIndex;
+        GLTFNode* gltfNode = JointGetMappedGLTFNode(joint, gltfModel);
+        Assert(gltfNode);
+
+        u32 childrenCount    = (u32)gltfNode->childrenIndexes.size();
+        joint->childrenCount = childrenCount;
+
+        for (u32 childrenIndex = 0; childrenIndex < childrenCount; childrenIndex++)
+        {
+            GLTFNode* gltfChildNode = &gltfModel->nodes[gltfNode->childrenIndexes[childrenIndex]];
+
+            Joint* child      = GLTFNodeGetMappedJoint(result, gltfChildNode);
+            s64    childIndex = child - result->joints;
+
+            joint->childrenIndexes[childrenIndex] = (u32)childIndex;
+        }
+    }
+
+    memcpy(result->jointIndexBindOrder, gltfModel->skeleton.joints.data(), sizeof(u32) * jointCount - 1);
+
+    return result;
+}
+
+void ExportGLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
+{
+    FILE* file = fopen(filename, "wb");
+    if (file)
+    {
+        // Extract meshes
+        std::vector<GLTFMeshPrimitive> primitives{};
+        // std::vector<glm::mat4>         meshTransforms{};
+        std::vector<glm::vec3> meshTranslations{};
+        std::vector<glm::quat> meshRotations{};
+        std::vector<glm::vec3> meshScales{};
+
+        for (u32 meshIndex = 0; meshIndex < gltfModel->meshes.size(); meshIndex++)
+        {
+            GLTFMesh* gltfMesh = &gltfModel->meshes[meshIndex];
+
+            for (u32 primitiveIndex = 0; primitiveIndex < gltfMesh->primitives.size(); primitiveIndex++)
+            {
+                GLTFMeshPrimitive& gltfPrimitive = gltfMesh->primitives[primitiveIndex];
+                primitives.push_back(gltfPrimitive);
+
+                // Local transform
+                // meshTransforms.push_back(glm::mat4{ 1.0f });
+                meshTranslations.push_back(glm::vec3{ 0.0f, 0.0f, 0.0f });
+                meshRotations.push_back(glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f });
+                meshScales.push_back(glm::vec3{ 1.0f, 1.0f, 1.0f });
+                for (u32 nodeIndex = 0; nodeIndex < gltfModel->nodes.size(); nodeIndex++)
+                {
+                    GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
+                    if ((u32)gltfNode->meshIndex == meshIndex)
+                    {
+                        // meshTransforms[meshTransforms.size() - 1] = gltfNode->transform;
+                        meshTranslations[meshTranslations.size() - 1] = gltfNode->translation;
+                        meshRotations[meshRotations.size() - 1]       = gltfNode->rotation;
+                        meshScales[meshScales.size() - 1]             = gltfNode->scale;
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Model transform
+        glm::vec3 localTranslation{ 0.0f, 0.0f, 0.0f };
+        glm::quat localRotation{ 0.0f, 0.0f, 0.0f, 0.0f };
+        glm::vec3 localScale{ 1.0f, 1.0f, 1.0f };
+        for (u32 nodeIndex = 0; nodeIndex < gltfModel->nodes.size(); nodeIndex++)
+        {
+            GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
+            if (gltfNode->meshIndex == EMPTY && gltfNode->parentIndex == EMPTY)
+            {
+                localTranslation = gltfNode->translation;
+                localRotation    = gltfNode->rotation;
+                localScale       = gltfNode->scale;
+            }
+        }
+
+        AssetFileHeader      header;
+        AssetModelFileHeader modelHeader;
+
+        header.type                  = AssetType_Model;
+        modelHeader.meshCount        = (u32)primitives.size();
+        modelHeader.skinned          = !gltfModel->skeleton.joints.empty();
+        modelHeader.textureCount     = (u32)gltfModel->textures.size();
+        modelHeader.materialCount    = (u32)gltfModel->materials.size();
+        modelHeader.localTranslation = localTranslation;
+        modelHeader.localRotation    = localRotation;
+        modelHeader.localScale       = localScale;
+
+        // Headers
+        fwrite(&header, sizeof(header), 1, file);
+        fwrite(&modelHeader, sizeof(modelHeader), 1, file);
+
+        // Meshes
+        for (u32 primitiveIndex = 0; primitiveIndex < primitives.size(); primitiveIndex++)
+        {
+            GLTFMeshPrimitive* primitive = &primitives[primitiveIndex];
+
+            AssetMeshHeader meshHeader;
+            // meshHeader.name
+            meshHeader.vertexCount      = (u32)primitive->vertexs.size();
+            meshHeader.indicesCount     = (u32)primitive->indices.size();
+            meshHeader.materialIndex    = primitive->materialIndex;
+            meshHeader.localTranslation = meshTranslations[primitiveIndex];
+            meshHeader.localRotation    = meshRotations[primitiveIndex];
+            meshHeader.localScale       = meshScales[primitiveIndex];
+
+            fwrite(&meshHeader, sizeof(meshHeader), 1, file);
+            fwrite(primitive->vertexs.data(), sizeof(Vertex), meshHeader.vertexCount, file);
+            fwrite(primitive->indices.data(), sizeof(u32), meshHeader.indicesCount, file);
+        }
+
+        // Skeleton
+        if (modelHeader.skinned)
+        {
+            Skeleton* skeleton = ExtractGLTFSkeleton(gltfModel, arena);
+
+            fwrite(&skeleton->jointCount, sizeof(skeleton->jointCount), 1, file);
+            fwrite(skeleton->joints, sizeof(Joint), skeleton->jointCount, file);
+            fwrite(skeleton->jointIndexBindOrder, sizeof(u32), skeleton->jointCount - 1, file);
+        }
+
+        // Textures
+        for (u32 textureIndex = 0; textureIndex < modelHeader.textureCount; textureIndex++)
+        {
+            GLTFTexture* gltfTexture = &gltfModel->textures[textureIndex];
+            u32          textureSize = (u32)gltfTexture->data.size();
+
+            AssetTextureHeader textureHeader;
+            textureHeader.size = textureSize;
+            strcpy(textureHeader.name, gltfTexture->name);
+
+            fwrite(&textureHeader, sizeof(textureHeader), 1, file);
+            fwrite(gltfTexture->data.data(), sizeof(u8), textureSize, file);
+        }
+
+        // Materials
+        for (u32 materialIndex = 0; materialIndex < modelHeader.materialCount; materialIndex++)
+        {
+            GLTFMaterial* gltfMaterial = &gltfModel->materials[materialIndex];
+
+            Material material;
+            material.baseColorIndex = gltfMaterial->baseColorIndex;
+
+            fwrite(&material, sizeof(material), 1, file);
+        }
+
+        fclose(file);
+    }
+    else
+    {
+        Assert(0);
+    }
 }
 
 int main(int argc, char** argv)
@@ -108,7 +286,6 @@ int main(int argc, char** argv)
     ArenaInit(&arena, chunkSize, chunk);
 
     PlatformAPI platform;
-    platform.Logf            = LogMsg;
     platform.FileReadEntire  = FileReadEntire;
     platform.FileFree        = FileFree;
     platform.FileWriteEntire = FileWriteEntire;
@@ -128,7 +305,7 @@ int main(int argc, char** argv)
         char    assetFilepath[256] = "../data/original/";
         strcat(assetFilepath, exportAsset->inputFilename);
 
-        platform.Logf("Exporting '%s' from '%s'", exportAsset->outputFilename, exportAsset->inputFilename);
+        Log("Exporting '%s' from '%s'", exportAsset->outputFilename, exportAsset->inputFilename);
 
         // Export animation
         if (exportIndex >= MODEL_COUNT + TEXTURE_COUNT)
@@ -141,7 +318,8 @@ int main(int argc, char** argv)
                     model = &zombieFemaleA;
                 }
 
-                TemporaryMemory tempMemory = TemporaryMemoryBegin(&arena);
+                FILE* file = fopen(exportAsset->outputFilename, "wb");
+                if (file)
                 {
                     std::vector<GLTFAnimation> gltfAnimations = GLTFParseAnimations(assetFilepath, &platform);
                     Assert(gltfAnimations.size() == 1);
@@ -150,38 +328,37 @@ int main(int argc, char** argv)
                     u32 channelCount = animation->channelCount;
                     u32 samplerCount = animation->samplerCount;
 
-                    AssetFileHeader*          header     = PushStruct(&arena, AssetFileHeader);
-                    AssetAnimationFileHeader* animHeader = PushStruct(&arena, AssetAnimationFileHeader);
+                    AssetFileHeader          header;
+                    AssetAnimationFileHeader animHeader;
 
-                    header->type = AssetType_Animation;
-                    strcpy(animHeader->name, animation->name);
-                    animHeader->duration     = animation->duration;
-                    animHeader->channelCount = channelCount;
-                    animHeader->samplerCount = samplerCount;
+                    header.type = AssetType_Animation;
+                    strcpy(animHeader.name, animation->name);
+                    animHeader.duration     = animation->duration;
+                    animHeader.channelCount = channelCount;
+                    animHeader.samplerCount = samplerCount;
+
+                    fwrite(&header, sizeof(header), 1, file);
+                    fwrite(&animHeader, sizeof(animHeader), 1, file);
 
                     // Samplers
                     for (u32 samplerIndex = 0; samplerIndex < animation->samplerCount; samplerIndex++)
                     {
                         AnimationSampler* inSampler = animation->samplers + samplerIndex;
 
-                        u32*       count           = PushStruct(&arena, u32);
-                        f32*       times           = PushArray(&arena, inSampler->count, f32);
-                        glm::vec4* transformations = PushArray(&arena, inSampler->count, glm::vec4);
-
-                        *count = inSampler->count;
-                        memcpy(times, inSampler->times, sizeof(f32) * inSampler->count);
-                        memcpy(transformations, inSampler->transformations, sizeof(glm::vec4) * inSampler->count);
+                        fwrite(&inSampler->count, sizeof(inSampler->count), 1, file);
+                        fwrite(inSampler->times, sizeof(f32), inSampler->count, file);
+                        fwrite(inSampler->transformations, sizeof(glm::vec4), inSampler->count, file);
                     }
 
                     // Channels
-                    AnimationChannel* channels = PushArray(&arena, channelCount, AnimationChannel);
-                    memcpy(channels, animation->channels, sizeof(AnimationChannel) * channelCount);
-
-                    u8* beginFileContent = (u8*)header;
-                    platform.FileWriteEntire(exportAsset->outputFilename, beginFileContent,
-                                             arena.ptr - beginFileContent);
+                    fwrite(animation->channels, sizeof(AnimationChannel), channelCount, file);
+                    fclose(file);
                 }
-                TemporaryMemoryEnd(tempMemory);
+                else
+                {
+                    Log("Unable to open output file");
+                    Assert(0);
+                }
             }
             else
             {
@@ -191,27 +368,22 @@ int main(int argc, char** argv)
         // Export model
         else if (exportIndex < MODEL_COUNT)
         {
-            if (StrEquals(extension, "gltf"))
+            if (StrEquals(extension, "gltf") || StrEquals(extension, "glb"))
             {
-                GLTFModel model = GLTFParse(assetFilepath, &platform);
-                Assert(model.meshes.size() == 1);
-                Assert(model.meshes[0].primitives.size() == 1);
-                GLTFMeshPrimitive* primitive = &model.meshes[0].primitives[0];
-                Skeleton*          skeleton  = GLTFConvertSkeleton(&model, &arena);
-
-                ExportModel(&platform, &arena, exportAsset->outputFilename, primitive->vertexs.data(),
-                            primitive->indices.data(), (u32)primitive->vertexs.size(), (u32)primitive->indices.size(),
-                            skeleton);
+                GLTFModel gltfModel = GLTFParse(assetFilepath, &platform);
+                // ExportGLTFModel(&platform, &arena, exportAsset->outputFilename, &gltfModel);
+                ExportGLTFModel(&arena, exportAsset->outputFilename, &gltfModel);
             }
             else if (StrEquals(extension, "obj"))
             {
-                Obj obj = ObjParse(assetFilepath, &platform, &arena);
-                ExportModel(&platform, &arena, exportAsset->outputFilename, obj.vertexs.data(), obj.indices.data(),
-                            (u32)obj.vertexs.size(), (u32)obj.indices.size(), 0);
+                //     Obj obj = ObjParse(assetFilepath, &platform, &arena);
+                //     ExportModel(&platform, &arena, exportAsset->outputFilename, obj.vertexs.data(),
+                //     obj.indices.data(),
+                //                 (u32)obj.vertexs.size(), (u32)obj.indices.size(), 0);
             }
             else
             {
-                platform.Logf("Invalid file extension: '%s'", extension);
+                Log("Invalid file extension: '%s'", extension);
                 InvalidCodePath;
             }
         }

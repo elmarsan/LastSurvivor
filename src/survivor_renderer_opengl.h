@@ -23,6 +23,7 @@ struct Program
 
 struct Texture
 {
+    char   name[64];
     GLuint id;
     u32    width;
     u32    height;

@@ -734,6 +734,11 @@ internal void TextureAlloc(Renderer* renderer, Texture* texture, void* imageBuff
             internalFormat = format = GL_RED;
             break;
         }
+        case 2:
+        {
+            internalFormat = format = GL_RG;
+            break;
+        }
         case 3:
         {
             internalFormat = format = GL_RGB;
