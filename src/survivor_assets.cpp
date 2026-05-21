@@ -1,11 +1,12 @@
 void AssetsInit(Assets* assets, Arena* baseArena, Renderer* renderer, PlatformAPI* platform)
 {
-    SubArena(&assets->arena, baseArena, Megabytes(10));
+    SubArena(&assets->arena, baseArena, Megabytes(20));
     assets->platform = platform;
     assets->renderer = renderer;
 }
 
-void AssetsLoad(Assets* assets, u32 id)
+// TODO: Load zombie texture only once
+void AssetsLoad(Assets* assets, Asset id)
 {
     PlatformAPI* platform = assets->platform;
     Arena*       arena    = &assets->arena;
@@ -14,9 +15,9 @@ void AssetsLoad(Assets* assets, u32 id)
     char* assetFilename = assetFilenames[id];
     platform->Logf("Loading asset '%s'", assetFilename);
 
-    if (id >= Texture_Zombie && id <= Texture_ChainlinkFence)
+    if (id == Texture_Crosshair)
     {
-        u32 textureId               = id - Texture_Zombie;
+        u32 textureId               = id - Texture_Crosshair;
         assets->textures[textureId] = PushStruct(arena, Texture);
         TextureInit(renderer, assets->textures[textureId], assetFilename);
     }
@@ -40,35 +41,55 @@ void AssetsLoad(Assets* assets, u32 id)
                 AssetModelFileHeader modelHeader;
                 StreamRead(&stream, &modelHeader, sizeof(modelHeader), 1);
 
-                model->vertexCount  = modelHeader.vertexCount;
-                model->indicesCount = modelHeader.indicesCount;
-                model->vertexs      = PushArray(arena, modelHeader.vertexCount, Vertex);
-                model->indices      = PushArray(arena, modelHeader.indicesCount, u32);
+                model->textureCount     = modelHeader.textureCount;
+                model->meshCount        = modelHeader.meshCount;
+                model->materialCount    = modelHeader.materialCount;
+                model->localTranslation = modelHeader.localTranslation;
+                model->localRotation    = modelHeader.localRotation;
+                model->localScale       = modelHeader.localScale;
 
-                StreamRead(&stream, model->vertexs, sizeof(Vertex), modelHeader.vertexCount);
-                StreamRead(&stream, model->indices, sizeof(u32), modelHeader.indicesCount);
-
-                for (u32 vertexIndex = 0; vertexIndex < model->vertexCount; vertexIndex++)
+                // Meshes
+                model->meshes = PushArray(arena, model->meshCount, Mesh);
+                for (u32 meshIndex = 0; meshIndex < model->meshCount; meshIndex++)
                 {
-                    glm::vec3 position = model->vertexs[vertexIndex].position;
+                    AssetMeshHeader meshHeader;
+                    StreamRead(&stream, &meshHeader, sizeof(meshHeader), 1);
 
-                    model->aabb.min.x = Min(model->aabb.min.x, position.x);
-                    model->aabb.min.y = Min(model->aabb.min.y, position.y);
-                    model->aabb.min.z = Min(model->aabb.min.z, position.z);
+                    Mesh* mesh = model->meshes + meshIndex;
 
-                    model->aabb.max.x = Max(model->aabb.max.x, position.x);
-                    model->aabb.max.y = Max(model->aabb.max.y, position.y);
-                    model->aabb.max.z = Max(model->aabb.max.z, position.z);
+                    mesh->vertexCount   = meshHeader.vertexCount;
+                    mesh->indicesCount  = meshHeader.indicesCount;
+                    mesh->materialIndex = meshHeader.materialIndex;
+                    mesh->vertexs       = PushArray(arena, mesh->vertexCount, Vertex);
+                    mesh->indices       = PushArray(arena, mesh->indicesCount, u32);
+
+                    StreamRead(&stream, mesh->vertexs, sizeof(Vertex), mesh->vertexCount);
+                    StreamRead(&stream, mesh->indices, sizeof(u32), mesh->indicesCount);
+
+                    mesh->gpuBuffer = PushStruct(arena, GPUBuffer);
+
+                    GPUBufferInit(renderer, mesh->gpuBuffer);
+                    GPUBufferVBOAlloc(renderer, mesh->gpuBuffer, mesh->vertexs, sizeof(Vertex) * mesh->vertexCount,
+                                      sizeof(Vertex), GL_STATIC_DRAW);
+                    GPUBufferEBOAlloc(renderer, mesh->gpuBuffer, mesh->indices, sizeof(u32) * mesh->indicesCount,
+                                      sizeof(u32), GL_STATIC_DRAW);
+
+                    GPUBufferVertexAttrib(renderer, mesh->gpuBuffer, 0, 3, GL_FLOAT, sizeof(Vertex),
+                                          offsetof(Vertex, position));
+                    GPUBufferVertexAttrib(renderer, mesh->gpuBuffer, 1, 3, GL_FLOAT, sizeof(Vertex),
+                                          offsetof(Vertex, normal));
+                    GPUBufferVertexAttrib(renderer, mesh->gpuBuffer, 2, 2, GL_FLOAT, sizeof(Vertex),
+                                          offsetof(Vertex, uv));
+                    if (modelHeader.skinned)
+                    {
+                        GPUBufferVertexAttrib(renderer, mesh->gpuBuffer, 3, 4, GL_UNSIGNED_INT, sizeof(Vertex),
+                                              offsetof(Vertex, joints));
+                        GPUBufferVertexAttrib(renderer, mesh->gpuBuffer, 4, 4, GL_FLOAT, sizeof(Vertex),
+                                              offsetof(Vertex, weights));
+                    }
                 }
 
-                // TODO: Remove fence simetric hack
-                if (id == Model_Fence)
-                {
-                    model->aabb.max   = model->aabb.max;
-                    model->aabb.min   = -model->aabb.max;
-                    model->aabb.min.y = model->aabb.min.y;
-                }
-
+                // Skeleton
                 if (modelHeader.skinned)
                 {
                     u32 jointCount;
@@ -84,23 +105,29 @@ void AssetsLoad(Assets* assets, u32 id)
                     StreamRead(&stream, model->skeleton->jointIndexBindOrder, sizeof(u32), jointCount - 1);
                 }
 
-                model->gpuBuffer = PushStruct(arena, GPUBuffer);
+                // Textures
+                if (model->textureCount > 0)
+                {
+                    model->textures = PushArray(arena, model->textureCount, Texture);
 
-                GPUBufferInit(renderer, model->gpuBuffer);
-                GPUBufferVBOAlloc(renderer, model->gpuBuffer, model->vertexs, sizeof(Vertex) * model->vertexCount,
-                                  sizeof(Vertex), GL_STATIC_DRAW);
-                GPUBufferEBOAlloc(renderer, model->gpuBuffer, model->indices, sizeof(u32) * model->indicesCount,
-                                  sizeof(u32), GL_STATIC_DRAW);
+                    for (u32 textureIndex = 0; textureIndex < model->textureCount; textureIndex++)
+                    {
+                        AssetTextureHeader textureHeader;
+                        StreamRead(&stream, &textureHeader, sizeof(textureHeader), 1);
 
-                GPUBufferVertexAttrib(renderer, model->gpuBuffer, 0, 3, GL_FLOAT, sizeof(Vertex),
-                                      offsetof(Vertex, position));
-                GPUBufferVertexAttrib(renderer, model->gpuBuffer, 1, 3, GL_FLOAT, sizeof(Vertex),
-                                      offsetof(Vertex, normal));
-                GPUBufferVertexAttrib(renderer, model->gpuBuffer, 2, 2, GL_FLOAT, sizeof(Vertex), offsetof(Vertex, uv));
-                GPUBufferVertexAttrib(renderer, model->gpuBuffer, 3, 4, GL_UNSIGNED_INT, sizeof(Vertex),
-                                      offsetof(Vertex, joints));
-                GPUBufferVertexAttrib(renderer, model->gpuBuffer, 4, 4, GL_FLOAT, sizeof(Vertex),
-                                      offsetof(Vertex, weights));
+                        Texture* texture = model->textures + textureIndex;
+                        strcpy(texture->name, textureHeader.name);
+                        TextureAlloc(renderer, texture, (void*)stream.ptr, textureHeader.size);
+                        StreamSkip(&stream, textureHeader.size);
+                    }
+                }
+
+                // Materials
+                if (model->materialCount > 0)
+                {
+                    model->materials = PushArray(arena, model->materialCount, Material);
+                    StreamRead(&stream, model->materials, sizeof(Material), model->materialCount);
+                }
 
                 break;
             }
@@ -119,9 +146,8 @@ void AssetsLoad(Assets* assets, u32 id)
                 animation->duration     = header.duration;
                 animation->channelCount = header.channelCount;
                 animation->samplerCount = header.samplerCount;
-
-                animation->samplers = PushArray(arena, animation->samplerCount, AnimationSampler);
-                animation->channels = PushArray(arena, animation->channelCount, AnimationChannel);
+                animation->samplers     = PushArray(arena, animation->samplerCount, AnimationSampler);
+                animation->channels     = PushArray(arena, animation->channelCount, AnimationChannel);
 
                 for (u32 samplerIndex = 0; samplerIndex < animation->samplerCount; samplerIndex++)
                 {
@@ -157,19 +183,19 @@ void AssetsLoad(Assets* assets, u32 id)
     }
 }
 
-Model* AssetsModelGet(Assets* assets, u32 id)
+Model* AssetsModelGet(Assets* assets, Asset id)
 {
     Assert(id >= 0 && id <= MODEL_COUNT - 1);
     return assets->models[id];
 }
 
-Texture* AssetsTextureGet(Assets* assets, u32 id)
+Texture* AssetsTextureGet(Assets* assets, Asset id)
 {
-    Assert(id >= Texture_Zombie && id <= Texture_Fence);
-    return assets->textures[id - Texture_Zombie];
+    Assert(id == Texture_Crosshair);
+    return assets->textures[0];
 }
 
-Animation* AssetsAnimationGet(Assets* assets, u32 id)
+Animation* AssetsAnimationGet(Assets* assets, Asset id)
 {
     Assert(id >= 0 && id < AssetCount);
     return assets->animations[id - Anim_ZombieMaleAttackLeft];

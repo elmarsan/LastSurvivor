@@ -18,6 +18,8 @@ struct OpenGL
     PFNGLTEXPARAMETERIPROC           TexParameteri;
     PFNGLTEXPARAMETERIVPROC          TexParameteriv;
     PFNGLBLENDFUNCPROC               BlendFunc;
+    PFNGLGETINTEGERVPROC             GetIntegerv;
+    PFNGLPIXELSTOREIPROC             PixelStorei;
     PFNGLCREATEPROGRAMPROC           CreateProgram;
     PFNGLCREATESHADERPROC            CreateShader;
     PFNGLATTACHSHADERPROC            AttachShader;

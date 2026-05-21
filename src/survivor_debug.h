@@ -1,14 +1,13 @@
 #pragma once
 
-#define DEBUG_COORDINATES 0
-#define DEBUG_AABB        0
+#define DEBUG_COORDINATES 1
+// #define DEBUG_AABB        0
 
 struct GameState;
 
 struct Debug
 {
     GameState* state;
-    cell_index selectedCellIndex;
 };
 
 void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform, glm::mat4 viewProj);

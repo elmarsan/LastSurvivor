@@ -11,7 +11,7 @@ void main()
 {
     if (hasDiffuse)
     {
-        FragColor = texture(diffuseMap, UV) * color;
+        FragColor = texture(diffuseMap, UV);
     }
     else
     {

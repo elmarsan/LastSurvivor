@@ -215,6 +215,16 @@ void RendererFrameEnd(Renderer* renderer)
 
             break;
         }
+        case RenderCommandType_BindTexture:
+        {
+            command += sizeof(BindTexture);
+            BindTexture* command = (BindTexture*)payload;
+
+            gl->ActiveTexture(GL_TEXTURE0 + command->unit);
+            gl->BindTexture(GL_TEXTURE_2D, command->id);
+
+            break;
+        }
             InvalidDefaultCase;
         }
     }
@@ -314,6 +324,13 @@ inline void PushRenderDrawBuffer(Renderer* renderer, GPUBuffer* buffer, GLenum p
     GeometryBufferDraw* command = PushRenderCommand(&renderer->commandQueue, GeometryBufferDraw);
     command->buffer             = *buffer;
     command->primitive          = primitive;
+}
+
+inline void PushRenderBindTexture(Renderer* renderer, Texture* texture, GLuint unit)
+{
+    BindTexture* command = PushRenderCommand(&renderer->commandQueue, BindTexture);
+    command->id          = texture->id;
+    command->unit        = unit;
 }
 
 internal void Batch3DFlush(Renderer* renderer)
@@ -732,6 +749,11 @@ internal void TextureAlloc(Renderer* renderer, Texture* texture, void* imageBuff
         case 1:
         {
             internalFormat = format = GL_RED;
+            break;
+        }
+        case 2:
+        {
+            internalFormat = format = GL_RG;
             break;
         }
         case 3:

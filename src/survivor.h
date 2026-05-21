@@ -9,13 +9,34 @@
 #include "survivor_platform.h"
 #include "survivor_renderer_opengl.h"
 #include "survivor_assets.h"
-#include "survivor_world.h"
 #include "survivor_entity.h"
 #include "survivor_weapon.h"
 #include "survivor_ui.h"
 #if BUILD_TYPE_DEBUG
 #include "survivor_debug.h"
 #endif
+
+// TODO: Remove grid macros
+#define GRID_COLS         30
+#define GRID_ROWS         30
+#define GRID_CELLS        (GRID_COLS * GRID_ROWS)
+#define GRID_RIGHT_LIMIT  (GRID_COLS * 0.5f)
+#define GRID_LEFT_LIMIT   (-GRID_RIGHT_LIMIT)
+#define GRID_BOTTOM_LIMIT (GRID_COLS * 0.5f)
+#define GRID_TOP_LIMIT    (-GRID_BOTTOM_LIMIT)
+#define GRID_MAX_ROW      (GRID_ROWS - 1)
+#define GRID_MIN_ROW      0
+#define GRID_MAX_COL      (GRID_COLS - 1)
+#define GRID_MIN_COL      0
+
+#define CELL_SIZE            1.0f
+#define CELL_HALF            (CELL_SIZE * 0.5f)
+#define CELL_ROW(index)      (index / GRID_ROWS)
+#define CELL_COL(index)      (index % GRID_COLS)
+#define CELL_INDEX(row, col) (col + ((row) * GRID_ROWS))
+#define CELL_EMPTY           0xFFFFFFFF
+
+typedef u32 cell_index;
 
 enum GameMode
 {
@@ -101,7 +122,6 @@ struct GameState
     Arena arena;
 
     Assets*        assets;
-    GPUBuffer*     planeBuffer;
     GPUBuffer*     cubeBuffer;
     AudioClip*     pistolShot;
     AudioClip*     backgroundMusic;

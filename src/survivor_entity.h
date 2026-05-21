@@ -20,7 +20,6 @@ enum EntityType
 {
     EntityType_Player,
     EntityType_Enemy,
-    EntityType_Obstacle,
     EntityType_Count
 };
 
@@ -47,7 +46,6 @@ struct Entity
     EntityType      type;
     glm::vec3       position;
     glm::vec3       velocity;
-    glm::vec3       scale;
     glm::vec3       rotation;
     glm::vec3       forward;
     glm::vec3       wishDir;
@@ -55,7 +53,7 @@ struct Entity
     AABB            aabb;
     u32             flags;
     s32             health;
-    u32             assetID;
+    Asset           assetID;
     Skeleton*       skeleton;
     ActiveAnimation animation;
 };

@@ -3,8 +3,6 @@
 #include "survivor_debug_geometry.cpp"
 #include "survivor_assets.cpp"
 #include "survivor_entity.cpp"
-#include "survivor_world.cpp"
-// #include "survivor_build.cpp"
 #include "survivor_ui.cpp"
 #if BUILD_TYPE_DEBUG
 #include "survivor_debug.cpp"
@@ -13,280 +11,8 @@
 // TODO
 /*
 - (Audio) Make easy to tweak volumes (ignore db conversion)
-- (Game): gamepad controller
 - (Game): game mode transitions
 */
-
-// internal void EnemyUpdate(PlatformAPI* platform, EntityManager* manager, World* world, Entity* entity, f32 delta)
-//{
-//     Assets* assets = manager->assets;
-//     Entity* player = EntityGet(manager, 0);
-
-//    Assert(entity->type == EntityType_Enemy);
-//    // TODO: Can be used for destroy fences
-//    Assert(entity->targetEntity);
-
-//    if (entity->flags & EntityFlag_Climbing)
-//    {
-//        entity->rotation.x = Radians(-90.0f);
-//    }
-
-//    // Animation
-//    {
-//        // Update current animation
-//        if (entity->animation.current)
-//        {
-//            Skeleton*  skeleton  = entity->skeleton;
-//            Animation* animation = entity->animation.current;
-
-//            f32 prevTime    = entity->animation.time;
-//            f32 currentTime = 0.0f;
-//            entity->animation.time += delta;
-//            currentTime = entity->animation.time;
-
-//            if (animation->id == Anim_ZombieMaleAttackLeft)
-//            {
-//                if (prevTime < 0.74f && currentTime >= 0.74f)
-//                {
-//                    entity->flags |= EntityFlag_Hitting;
-//                }
-//                if (prevTime < 0.91f && currentTime >= 0.91f)
-//                {
-//                    platform->Logf("End");
-//                    entity->flags &= ~EntityFlag_Hitting;
-//                }
-//            }
-
-//            // End of the animation
-//            if (entity->animation.time >= animation->duration)
-//            {
-//                entity->animation.time    = 0.0f;
-//                entity->animation.current = 0;
-//            }
-
-//            SkeletonApplyAnimation(skeleton, animation, entity->animation.time);
-//            SkeletonUpdatePose(skeleton);
-//        }
-
-//        // Attack animation
-//        // TODO: Randomize attack animation
-//        if (!entity->animation.current)
-//        {
-//            if (entity->flags & EntityFlag_InAttack)
-//            {
-//                u32 attackAnimationId = 0;
-
-//                if (entity->assetID == Model_ZombieMaleA)
-//                {
-//                    attackAnimationId = Anim_ZombieMaleAttackLeft;
-//                }
-//                else if (entity->assetID == Model_ZombieFemaleA)
-//                {
-//                    attackAnimationId = Anim_ZombieFemaleAttackLeft;
-//                }
-//                else
-//                {
-//                    InvalidCodePath;
-//                }
-
-//                entity->animation.current = AssetsAnimationGet(assets, attackAnimationId);
-//                entity->animation.time    = 0.0f;
-//            }
-//            else if (entity->flags & EntityFlag_Idle)
-//            {
-//                u32 idleAnimationId = 0;
-//                if (entity->assetID == Model_ZombieMaleA)
-//                {
-//                    idleAnimationId = Anim_ZombieMaleIdleAlert;
-//                }
-//                else if (entity->assetID == Model_ZombieFemaleA)
-//                {
-//                    idleAnimationId = Anim_ZombieFemaleIdleAlert;
-//                }
-//                else
-//                {
-//                    InvalidCodePath;
-//                }
-
-//                entity->animation.current = AssetsAnimationGet(assets, idleAnimationId);
-//                entity->animation.time    = 0.0f;
-//            }
-//            else if (entity->flags & EntityFlag_Climbing)
-//            {
-//                u32 climbAnimationId = 0;
-//                if (entity->assetID == Model_ZombieMaleA)
-//                {
-//                    climbAnimationId = Anim_ZombieMaleCrawlingForward;
-//                }
-//                else if (entity->assetID == Model_ZombieFemaleA)
-//                {
-//                    climbAnimationId = Anim_ZombieFemaleCrawlingForward;
-//                }
-//                else
-//                {
-//                    InvalidCodePath;
-//                }
-
-//                entity->animation.current = AssetsAnimationGet(assets, climbAnimationId);
-//                entity->animation.time    = 0.0f;
-//            }
-//        }
-//    }
-
-//    // Attack
-//    {
-//        if (!entity->targetEntity)
-//        {
-//            entity->targetEntity = player;
-//        }
-
-//        if (!(entity->flags & EntityFlag_Climbing))
-//        {
-
-//            glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
-//            lookAt = SafeNorm(lookAt);
-//            glm::vec3 start{ entity->position.x, 0.5f, entity->position.z };
-//            glm::vec3 end = start + (lookAt * enemyStrikingRange);
-
-//            AABB worldAABB = AABBToWorld(entity->targetEntity->aabb, entity->targetEntity->position);
-//            if (AABBSegmentIntersection(worldAABB, start, end))
-//            {
-//                entity->flags |= EntityFlag_InAttack;
-
-//                if (entity->flags & EntityFlag_Hitting)
-//                {
-//                    EntityAttack(manager, entity, &gWeaponHand, entity->velocity);
-//                    entity->flags &= ~EntityFlag_Hitting;
-//                }
-//            }
-//            else
-//            {
-//                entity->flags &= ~EntityFlag_InAttack;
-//            }
-//        }
-//    }
-
-//    //----------------------------------------------------------------------------
-//    // Path finding
-//    glm::vec3 entityDir{ 0.0f, 0.0f, 0.0f };
-
-//    if (entity->flags & EntityFlag_Climbing)
-//    {
-//        entityDir.y = 1.0f;
-//    }
-//    else if (player == entity->targetEntity)
-//    {
-//        cell_index              enemyCellIndex  = WorldPositionToGridCell(entity->position);
-//        cell_index              playerCellIndex = WorldPositionToGridCell(entity->targetEntity->position);
-//        std::vector<cell_index> path            = WorldFindBestPath(world, manager, enemyCellIndex,
-//        playerCellIndex);
-//        // glm::vec3               entityDir{ 0.0f, 0.0f, 0.0f };
-
-//        if (!path.empty())
-//        {
-//            glm::vec3 targetPosition = WorldGridCellToPosition(path[path.size() - 2]);
-//            entityDir                = SafeNorm(targetPosition - entity->position);
-//            entityDir.y              = 0.0f;
-//            //  entity->yaw       = (f32)atan2(entityDir.x, entityDir.z);
-//        }
-//        // TODO: Break obstacles
-//        else
-//        {
-//            entityDir = SafeNorm(entity->targetEntity->position - entity->position);
-//            //   entityDir.y = 0.0f;
-//        }
-//    }
-//    //----------------------------------------------------------------------------
-
-//    //----------------------------------------------------------------------------
-//    // Entity acceleration
-//    if (!(entity->flags & EntityFlag_InKnockback))
-//    {
-//        f32 accel = enemyAcceleration;
-//        if (entity->flags & EntityFlag_Climbing)
-//        {
-//            accel = 0.1f;
-//        }
-
-//        glm::vec3 acceleration = entityDir * enemyAcceleration;
-//        entity->velocity += acceleration * delta;
-//        // TODO: Use constant speed for enemies???
-//        if (glm::length(entity->velocity) > enemyMaxSpeed)
-//        {
-//            entity->velocity = SafeNorm(entity->velocity) * enemyMaxSpeed;
-//        }
-//    }
-//    else
-//    {
-//        // Friction force
-//        entity->velocity *= 0.70f;
-
-//        f32 speed = glm::length(entity->velocity);
-//        if (speed <= 0.01f)
-//        {
-//            entity->velocity = { 0, 0, 0 };
-//            entity->flags &= ~EntityFlag_InKnockback;
-//        }
-
-//        entity->position += entity->velocity * delta;
-//    }
-
-//    glm::vec3 newEntityPosition = entity->position + (entity->velocity * delta);
-//    //----------------------------------------------------------------------------
-
-//    // -----------------------------------------------------------
-//    // Collision detection
-//    glm::vec3 correction{ 0.0f, 0.0f, 0.0f };
-//    glm::vec3 totalCorrection{ 0 };
-
-//    if (!(entity->flags & EntityFlag_Climbing))
-//    {
-//        // Attack logic
-//        // Note: this is not part of collision detection
-//        for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
-//        {
-//            Entity* entityPtr = EntityGet(manager, entityIndex);
-//            if (entityPtr->type == EntityType_Player)
-//            {
-//                glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
-//                lookAt              = SafeNorm(lookAt);
-//                glm::vec3 start     = entity->position;
-//                start.y             = 0.5f;
-//                glm::vec3 end       = start + (lookAt * enemyStrikingRange);
-//                AABB      worldAABB = AABBToWorld(entityPtr->aabb, entityPtr->position);
-
-//                if (AABBSegmentIntersection(worldAABB, start, end))
-//                {
-//                    newEntityPosition = entity->position;
-
-//                    if (!(entity->flags & EntityFlag_InAttack))
-//                    {
-//                        entity->targetEntity = entityPtr;
-//                    }
-//                }
-//            }
-//            else if (entityPtr->type == EntityType_Obstacle)
-//            {
-//                glm::vec3 lookAt{ sinf(entity->rotation.y), 0.0f, cosf(entity->rotation.y) };
-//                lookAt              = SafeNorm(lookAt);
-//                glm::vec3 start     = entity->position;
-//                start.y             = 0.5f;
-//                glm::vec3 end       = start + (lookAt * enemyJumpRange);
-//                AABB      worldAABB = AABBToWorld(entityPtr->aabb, entityPtr->position);
-
-//                if (AABBSegmentIntersection(worldAABB, start, end))
-//                {
-//                    newEntityPosition = entity->position;
-//                    // entity->flags |= EntityFlag_Idle;
-//                    entity->flags |= EntityFlag_Climbing;
-//                }
-//            }
-//        }
-//    }
-
-//    newEntityPosition += totalCorrection;
-//    entity->position = newEntityPosition;
-//}
 
 internal void Shoot(AmmoRound* ammoRound, AmmoRoundType type, glm::vec3 position, glm::vec3 direction)
 {
@@ -331,65 +57,6 @@ internal void Shoot(AmmoRound* ammoRound, AmmoRoundType type, glm::vec3 position
     }
 
         InvalidDefaultCase;
-    }
-}
-
-internal void EntityAttack(EntityManager* manager, Entity* entity, Weapon* weapon, glm::vec3 dir)
-{
-    if (weapon->type == WeaponType_Hand)
-    {
-        Assert(entity->targetEntity);
-
-        entity->targetEntity->velocity = { 0.0f, 0.0f, 0.0f };
-        entity->targetEntity->velocity += dir * weapon->knockbackforce;
-        entity->targetEntity->flags |= EntityFlag_InKnockback;
-        // entity->targetEntity->health -= weapon->damage;
-        entity->targetEntity->health -= weapon->damage * 3;
-
-        if (entity->targetEntity->health <= 0)
-        {
-            // EntityDestroy(manager, entity->targetEntity, world);
-            EntityRemove(manager, entity->targetEntity);
-            entity->targetEntity = EntityGet(manager, 0);
-        }
-    }
-    else
-    {
-        Ray shot;
-        shot.origin = entity->position;
-        shot.dir    = dir;
-
-        for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
-        {
-            Entity* targetEntity = EntityGet(manager, entityIndex);
-            if (targetEntity->type == EntityType_Enemy)
-            {
-                AABB entityWorldAABB = AABBToWorld(targetEntity->aabb, targetEntity->position);
-
-                if (AABBRayIntersection(entityWorldAABB, shot))
-                {
-                    glm::vec3 shotDir = SafeNorm(targetEntity->position - entity->position);
-
-                    targetEntity->flags |= EntityFlag_InKnockback;
-                    targetEntity->velocity += shotDir * weapon->knockbackforce;
-                    targetEntity->health -= weapon->damage;
-#if 0
-                    targetEntity->health = 0;
-#endif
-
-                    // TODO: Move to update ???
-                    if (targetEntity->health <= 0)
-                    {
-                        EntityRemove(manager, targetEntity);
-                        // EntityDestroy(manager, targetEntity, world);
-                    }
-
-                    // Note: break stops the projectile trajectory, this way projectile can only impact once.
-                    // TODO: Decide if allow penetration
-                    break;
-                }
-            }
-        }
     }
 }
 
@@ -579,13 +246,11 @@ internal void UpdateEnemies(EntityManager* manager, Assets* assets, f32 delta)
 
 internal void LoadAssets(Assets* assets)
 {
-    AssetsLoad(assets, Texture_Zombie);
-    AssetsLoad(assets, Texture_Crosshair);
-    AssetsLoad(assets, Texture_Fence);
-    AssetsLoad(assets, Model_Fence);
-    AssetsLoad(assets, Model_ZombieFemaleA);
     AssetsLoad(assets, Model_ZombieMaleA);
-    AssetsLoad(assets, Model_Stickman);
+    AssetsLoad(assets, Model_ZombieFemaleA);
+    AssetsLoad(assets, Model_Parking);
+
+    AssetsLoad(assets, Texture_Crosshair);
 
     AssetsLoad(assets, Anim_ZombieMaleAttackLeft);
     AssetsLoad(assets, Anim_ZombieMaleAttackRight);
@@ -637,7 +302,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         state->program        = PushStruct(arena, Program);
         state->programSkinned = PushStruct(arena, Program);
-        state->planeBuffer    = PushStruct(arena, GPUBuffer);
         state->cubeBuffer     = PushStruct(arena, GPUBuffer);
         state->entityManager  = PushStruct(arena, EntityManager);
         state->renderer       = PushStruct(arena, Renderer);
@@ -645,9 +309,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         state->ui             = PushStruct(arena, UI);
         state->mode           = GameMode_Play;
 #ifdef BUILD_TYPE_DEBUG
-        state->debug                    = PushStruct(arena, Debug);
-        state->debug->state             = state;
-        state->debug->selectedCellIndex = CELL_EMPTY;
+        state->debug        = PushStruct(arena, Debug);
+        state->debug->state = state;
 #endif
 
         Renderer* renderer = state->renderer;
@@ -690,20 +353,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             platform->FileFree(fragmentSourceFile.content);
         }
 
-        // Plane
-        {
-            size_t vertexSize = sizeof(f32) * 8;
-
-            GPUBufferInit(renderer, state->planeBuffer);
-            GPUBufferVBOAlloc(renderer, state->planeBuffer, planeVertexs, sizeof(planeVertexs), vertexSize,
-                              GL_STATIC_DRAW);
-            GPUBufferEBOAlloc(renderer, state->planeBuffer, planeIndices, ArrayCount(planeIndices) * sizeof(u32),
-                              sizeof(u32), GL_STATIC_DRAW);
-            GPUBufferVertexAttrib(renderer, state->planeBuffer, 0, 3, GL_FLOAT, vertexSize, offsetof(Vertex, position));
-            GPUBufferVertexAttrib(renderer, state->planeBuffer, 1, 3, GL_FLOAT, vertexSize, offsetof(Vertex, normal));
-            GPUBufferVertexAttrib(renderer, state->planeBuffer, 2, 2, GL_FLOAT, vertexSize, offsetof(Vertex, uv));
-        }
-
         // Cube
         {
             size_t vertexSize = sizeof(f32) * 8;
@@ -728,10 +377,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         LoadAssets(assets);
 
-        Entity* player  = EntitySpawn(state->entityManager, EntityType_Player, { 0.0f, 0.0f, 0.0f });
+        Entity* player  = EntitySpawn(state->entityManager, EntityType_Player, { -108.0f, 0.0f, 21.15f });
         player->forward = { 0.0f, 0.0f, -1.0f };
 
-        Entity* enemy       = EntitySpawn(state->entityManager, EntityType_Enemy, { 0.0f, 0.0f, -15.0f });
+        Entity* enemy = EntitySpawn(state->entityManager, EntityType_Enemy, { -108.0f, 0.0f, 20.15f });
+
         enemy->targetEntity = player;
 
 #if 0
@@ -865,11 +515,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // ----------------------------------------------------------------------------
     // Draw
-    glm::mat4 projection = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
-    glm::vec3 cameraEye  = player->position + glm::vec3{ 0.0f, 1.5f, 0.0f };
+    glm::mat4 projection = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 500.0f);
+    glm::vec3 cameraEye  = player->position + glm::vec3{ 0.0f, 2.2f, 0.0f };
     glm::mat4 view       = glm::lookAt(cameraEye, cameraEye + player->forward, { 0.0f, 1.0f, 0.0f });
-
-    // glm::lookAt()
 
     glm::mat4 viewProj = projection * view;
     Renderer* renderer = state->renderer;
@@ -885,8 +533,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     case GameMode_Play:
     {
         Texture* crosshairAtlas = AssetsTextureGet(assets, Texture_Crosshair);
-        Texture* zombieTexture  = AssetsTextureGet(assets, Texture_Zombie);
-        Texture* fenceTexture   = AssetsTextureGet(assets, Texture_Fence);
 
         // 2D
         {
@@ -900,119 +546,91 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
 
         // 3D
+        PushRenderProgramUse(renderer, state->program->id);
+        PushRenderUploadUniformMat4x4(renderer, state->program->id, "viewProj", viewProj);
+
+        // Projectile
         {
-            gl->ActiveTexture(GL_TEXTURE0);
-            gl->BindTexture(GL_TEXTURE_2D, fenceTexture->id);
-            gl->ActiveTexture(GL_TEXTURE1);
-            gl->BindTexture(GL_TEXTURE_2D, zombieTexture->id);
-
-            // Floor
+            if (ammoRound->type != UNKNOWN)
             {
-                glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 0.0f, 0.0f, 0.0f });
-                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 50.0f });
-                glm::mat4 model     = translate * scale;
+                glm::mat4 world = glm::translate(glm::mat4{ 1.0f }, ammoRound->particle.position) *
+                                  glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.15f });
 
-                PushRenderProgramUse(renderer, state->program->id);
-                PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
-                PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 0.5f });
-                PushRenderDrawBuffer(renderer, state->planeBuffer);
+                PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", false);
+                PushRenderUploadUniformMat4x4(renderer, state->program->id, "world", world);
+                PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_red);
+                PushRenderDrawBuffer(renderer, state->cubeBuffer);
             }
+        }
 
-            // Shoot
+        // Parking scene
+        {
+            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", true);
+
+            Model* scene = AssetsModelGet(assets, Model_Parking);
+
+            // World matrix
+            glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, { 0.0f, 0.0f, 0.0f }) *
+                                    glm::mat4_cast(scene->localRotation) * glm::scale(glm::mat4{ 1.0f }, MODEL_SCALE);
+
+            for (u32 meshIndex = 0; meshIndex < scene->meshCount; meshIndex++)
             {
-                if (ammoRound->type != UNKNOWN)
-                {
-                    glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, ammoRound->particle.position);
-                    glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.15f });
-                    glm::mat4 model     = translate * scale;
+                Mesh*     mesh      = scene->meshes + meshIndex;
+                Material* material  = scene->materials + mesh->materialIndex;
+                Texture*  baseColor = scene->textures + material->baseColorIndex;
 
-                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                    PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_red);
-                    PushRenderDrawBuffer(renderer, state->cubeBuffer);
-                }
+                PushRenderBindTexture(renderer, baseColor, 0);
+                PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 0);
+                PushRenderUploadUniformMat4x4(renderer, state->program->id, "world", worldMatrix);
+                PushRenderDrawBuffer(renderer, mesh->gpuBuffer);
             }
+        }
 
-            // Entities
+        // Entities
+        {
+            Texture* zombieTexture = AssetsModelGet(assets, Model_ZombieMaleA)->textures;
+
+            PushRenderProgramUse(renderer, state->programSkinned->id);
+            PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "viewProj", viewProj);
+            PushRenderBindTexture(renderer, zombieTexture, 0);
+            PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 0);
+
+            for (u32 entityIndex = 1; entityIndex < entityManager->entityCount; entityIndex++)
             {
-                for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
+                Entity* entity      = &entityManager->entities[entityIndex];
+                Model*  entityModel = AssetsModelGet(assets, entity->assetID);
+
+                glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, entity->position) *
+                                        glm::mat4_cast(glm::quat(entity->rotation)) *
+                                        glm::scale(glm::mat4{ 1.0f }, MODEL_SCALE);
+
+                Assert(entity->type == EntityType_Enemy);
+
+                Skeleton* skeleton = entity->skeleton;
+
+                for (u32 i = 0; i < skeleton->jointCount - 1; i++)
                 {
-                    Entity* entity      = &entityManager->entities[entityIndex];
-                    Model*  entityModel = AssetsModelGet(assets, entity->assetID);
+                    char uniformBuffer[64];
+                    sprintf(uniformBuffer, "%s[%d]", "uJoints", i);
 
-                    glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, entity->position);
-                    glm::mat4 rotate    = glm::mat4_cast(glm::quat(entity->rotation));
-                    glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, entity->scale);
-                    glm::mat4 model     = translate * rotate * scale;
-
-                    // if (entity->type == EntityType_Player)
-                    //{
-                    //     continue;
-                    // }
-
-                    if (entity->type == EntityType_Obstacle)
+                    if (entity->animation.current)
                     {
-                        glm::vec4 tintColor = color_white;
-
-                        if (entity->flags & (EntityFlag_InvalidPosition))
-                        {
-                            tintColor = color_red;
-                        }
-                        else if (entity->flags & (EntityFlag_Positioning | EntityFlag_Snapping))
-                        {
-                            tintColor = color_green;
-                        }
-
-                        PushRenderProgramUse(renderer, state->program->id);
-                        PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
-                        PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 0);
-                        PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                        PushRenderDrawBuffer(renderer, entityModel->gpuBuffer);
-                    }
-                    else if (entity->type == EntityType_Player)
-                    {
-                        // PushRenderProgramUse(renderer, state->program->id);
-                        // PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
-                        // PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                        // PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_green);
-                        // PushRenderDrawBuffer(renderer, entityModel->gpuBuffer);
-                    }
-                    else if (entity->type == EntityType_Enemy)
-                    {
-                        PushRenderProgramUse(renderer, state->programSkinned->id);
-                        PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 1);
-
-                        Skeleton* skeleton = entity->skeleton;
-
-                        for (u32 i = 0; i < skeleton->jointCount - 1; i++)
-                        {
-                            char uniformBuffer[64];
-                            sprintf(uniformBuffer, "%s[%d]", "uJoints", i);
-
-                            if (entity->animation.current)
-                            {
-                                u32       jointIndex  = skeleton->jointIndexBindOrder[i];
-                                glm::mat4 jointMatrix = skeleton->jointMatrices[jointIndex];
-                                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer,
-                                                              jointMatrix);
-                            }
-                            else
-                            {
-                                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer,
-                                                              glm::mat4{ 1.0f });
-                            }
-                        }
-
-                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "mvp", viewProj * model);
-                        PushRenderDrawBuffer(renderer, entityModel->gpuBuffer);
+                        u32       jointIndex  = skeleton->jointIndexBindOrder[i];
+                        glm::mat4 jointMatrix = skeleton->jointMatrices[jointIndex];
+                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer, jointMatrix);
                     }
                     else
                     {
-                        Assert(0);
+                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer,
+                                                      glm::mat4{ 1.0f });
                     }
                 }
+
+                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "world", worldMatrix);
+                PushRenderDrawBuffer(renderer, entityModel->meshes->gpuBuffer);
             }
         }
+
         break;
     }
     case GameMode_Pause:

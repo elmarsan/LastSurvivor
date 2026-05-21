@@ -1,19 +1,16 @@
 #pragma once
 
-enum
+#define MODEL_COUNT     Texture_Crosshair
+#define TEXTURE_COUNT   1
+#define ANIMATION_COUNT AssetCount - TEXTURE_COUNT
+
+enum Asset
 {
     Model_ZombieMaleA,
     Model_ZombieFemaleA,
-    Model_Stickman,
-    Model_Fence,
-    Model_ChainlinkFence,
+    Model_Parking,
 
-    Texture_Zombie,
     Texture_Crosshair,
-    Texture_Fence,
-    Texture_ChainlinkFence,
-
-    // Anim_First,
 
     Anim_ZombieMaleAttackLeft,
     Anim_ZombieMaleAttackRight,
@@ -48,15 +45,10 @@ char* assetFilenames[AssetCount] = {
     // Models
     "../data/zombie_Male_A.svv",
     "../data/zombie_Female_A.svv",
-    "../data/stickman.svv",
-    "../data/fence.svv",
-    ".../data/chainlink_fence.svv",
+    "../data/parking.svv",
 
     // Textures
-    "../data/zombie_diffuse.svv",
     "../data/crosshairs.svv",
-    "../data/fence_diffuse.svv",
-    "../data/chainlink_fence_diffuse.svv",
 
     // Zombie male animations
     "../data/zombie_male_attack_left.svv",
@@ -87,11 +79,8 @@ char* assetFilenames[AssetCount] = {
     "../data/zombie_female_crawling_idle.svv",
 };
 
-#define MODEL_COUNT              5
-#define TEXTURE_COUNT            3
-#define ANIMATION_COUNT          24
 #define JOINT_MAX_CHILDREN_COUNT 4
-#define ZOMBIE_SCALE             glm::vec3{ 0.015f, 0.015f, 0.015f }
+#define MODEL_SCALE              glm::vec3{ 0.015f, 0.015f, 0.015f }
 
 struct Joint
 {
@@ -145,16 +134,33 @@ struct Animation
     AnimationChannel* channels;
 };
 
-struct Model
+struct Mesh
 {
-    u32*       indices;
-    Vertex*    vertexs;
     u32        indicesCount;
     u32        vertexCount;
-    b32        skinned;
-    AABB       aabb;
+    int        materialIndex;
+    u32*       indices;
+    Vertex*    vertexs;
     GPUBuffer* gpuBuffer;
-    Skeleton*  skeleton;
+};
+
+struct Material
+{
+    int baseColorIndex;
+};
+
+struct Model
+{
+    glm::vec3 localTranslation;
+    glm::quat localRotation;
+    glm::vec3 localScale;
+    Mesh*     meshes;
+    u32       meshCount;
+    Texture*  textures;
+    u32       textureCount;
+    Skeleton* skeleton;
+    Material* materials;
+    u32       materialCount;
 };
 
 struct Assets
@@ -176,6 +182,7 @@ enum AssetType
     AssetType_Animation = 5,
 };
 
+#pragma pack(push, 1)
 struct AssetFileHeader
 {
     u8  type;
@@ -185,9 +192,27 @@ struct AssetFileHeader
 
 struct AssetModelFileHeader
 {
-    u32 vertexCount;
-    u32 indicesCount;
-    b32 skinned;
+    u32       meshCount;
+    b32       skinned;
+    u32       textureCount;
+    u32       materialCount;
+    glm::vec3 localTranslation;
+    glm::quat localRotation;
+    glm::vec3 localScale;
+};
+
+struct AssetMeshHeader
+{
+    char name[64];
+    u32  vertexCount;
+    u32  indicesCount;
+    int  materialIndex;
+};
+
+struct AssetTextureHeader
+{
+    char name[64];
+    u32  size;
 };
 
 struct AssetAnimationFileHeader
@@ -197,12 +222,13 @@ struct AssetAnimationFileHeader
     u32  channelCount;
     u32  samplerCount;
 };
+#pragma pack(pop)
 
 void       AssetsInit(Assets* assets, Arena* baseArena, PlatformAPI* platform);
-void       AssetsLoad(Assets* assets, u32 id);
-Model*     AssetsModelGet(Assets* assets, u32 id);
-Animation* AssetsAnimationGet(Assets* assets, u32 id);
-Texture*   AssetsTextureGet(Assets* assets, u32 id);
+void       AssetsLoad(Assets* assets, Asset id);
+Model*     AssetsModelGet(Assets* assets, Asset id);
+Animation* AssetsAnimationGet(Assets* assets, Asset id);
+Texture*   AssetsTextureGet(Assets* assets, Asset id);
 
 void SkeletonUpdatePose(Skeleton* skeleton);
 void SkeletonApplyAnimation(Skeleton* skeleton, Animation* animation, f32 time);

@@ -26,7 +26,7 @@ internal void DebugDrawCircle(Renderer* renderer, glm::vec3 position, f32 radius
         f32 angle1 = angleStep * ((i + 1) % pointCount);
 
         f32 x0 = radius * cos(Radians(angle0));
-        f32 z0 = radius * sin(Radians(angle0));
+        f32 z0 = radius * sin(Radians(angle0)); 
         f32 x1 = radius * cos(Radians(angle1));
         f32 z1 = radius * sin(Radians(angle1));
 
@@ -35,19 +35,6 @@ internal void DebugDrawCircle(Renderer* renderer, glm::vec3 position, f32 radius
 
         DrawLine(renderer, p0, p1, color);
     }
-}
-
-internal void DebugDrawGridCell(Renderer* renderer, cell_index cell, glm::vec4 color)
-{
-    s32 minCol = -(GRID_COLS / 2);
-    s32 minRow = -(GRID_ROWS / 2);
-    s32 row    = CELL_ROW(cell);
-    s32 col    = CELL_COL(cell);
-
-    glm::vec3 cellHalfExtent = { CELL_HALF, 0.0f, CELL_HALF };
-    glm::vec3 worldPosition{ (col + minRow) + cellHalfExtent.x, 0.02f, (f32) - (row + minCol) - cellHalfExtent.z };
-
-    DebugDrawPlane(renderer, worldPosition, cellHalfExtent * 2.0f, color);
 }
 
 internal void DebugDrawAABB(Renderer* renderer, glm::vec3 worldPosition, f32 yRotation, AABB aabb, glm::vec4 color)
@@ -141,10 +128,10 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
             else if (enemy->assetID == Model_ZombieFemaleA)
             {
                 // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleWalk);
-                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleAttackLeft);
+                enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleAttackLeft);
                 // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleIdle);
                 // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleCrawlingIdle);
-                enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleCrawlingForward);
+                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleCrawlingForward);
             }
             else
             {
