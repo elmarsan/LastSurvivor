@@ -1,6 +1,6 @@
 void AssetsInit(Assets* assets, Arena* baseArena, Renderer* renderer, PlatformAPI* platform)
 {
-    SubArena(&assets->arena, baseArena, Megabytes(10));
+    SubArena(&assets->arena, baseArena, Megabytes(20));
     assets->platform = platform;
     assets->renderer = renderer;
 }

@@ -17,6 +17,7 @@ enum Asset
     Model_Building_6,
     Model_Building_7,
     Model_Building_9,
+    Model_Parking,
 
     Texture_Crosshair,
 
@@ -62,6 +63,7 @@ char* assetFilenames[AssetCount] = {
     "../data/building_6.svv",
     "../data/building_7.svv",
     "../data/building_9.svv",
+    "../data/parking.svv",
 
     // Textures
     "../data/crosshairs.svv",

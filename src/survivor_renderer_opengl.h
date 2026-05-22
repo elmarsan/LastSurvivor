@@ -104,16 +104,18 @@ struct Renderer
     PlatformAPI*       platform;
     RenderCommandQueue commandQueue;
     // TODO: Use arena
-    u8           commandQueueMemory[65536];
-    OpenGL*      gl;
-    Batch3D*     batch3D;
-    Batch2D*     batch2D;
-    glm::mat4    viewProj;
+    u8        commandQueueMemory[65536];
+    OpenGL*   gl;
+    Batch3D*  batch3D;
+    Batch2D*  batch2D;
+    glm::mat4 viewProj;
+    // Batch texture queue
     TextureQueue textureQueue;
-    // TODO: Rethink who owns the font atlas
+    // TODO: Move font glyphs and atlas to assets
     TTFGlyph ttfChars[TTF_GLYPH_COUNT];
     Texture  glyphAtlas;
-    Texture  whiteTexture;
+    // TODO: Move to assets
+    Texture whiteTexture;
 };
 
 // ----------------------------------------------------------------------------
@@ -123,7 +125,8 @@ enum RenderCommandType
     RenderCommandType_FramebufferClear,
     RenderCommandType_GeometryBufferDraw,
     RenderCommandType_ProgramUse,
-    RenderCommandType_ProgramUploadUniform
+    RenderCommandType_ProgramUploadUniform,
+    RenderCommandType_BindTexture
 };
 
 struct RenderCommandHeader
@@ -173,6 +176,12 @@ struct ProgramUploadUniform
             int  count;
         };
     };
+};
+
+struct BindTexture
+{
+    GLuint unit;
+    GLuint id;
 };
 //  ----------------------------------------------------------------------------
 

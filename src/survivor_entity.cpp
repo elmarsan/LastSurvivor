@@ -16,10 +16,9 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     case EntityType_Player:
     {
         // Player do not use assetID, is not rendered
-        entity->scale = glm::vec3{ 1.0f, 1.0f, 1.0f };
-        Model* model  = AssetsModelGet(manager->assets, entity->assetID);
+        // Model* model = AssetsModelGet(manager->assets, entity->assetID);
         // entity->aabb  = model->aabb;
-        //  TODO: Push player skeleton to permanent arena
+        // TODO: Push player skeleton to permanent arena
         break;
     }
     case EntityType_Enemy:
@@ -31,7 +30,6 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
         u32    jointCount = model->skeleton->jointCount;
 
         entity->assetID                       = assetID;
-        entity->scale                         = ZOMBIE_SCALE;
         entity->skeleton                      = PushStruct(transientArena, Skeleton);
         entity->skeleton->joints              = PushArray(transientArena, jointCount, Joint);
         entity->skeleton->jointMatrices       = PushArray(transientArena, jointCount, glm::mat4);

@@ -24,6 +24,7 @@ Export exports[AssetCount] = {
     { "building_6.glb", assetFilenames[Model_Building_6] },
     { "building_7.glb", assetFilenames[Model_Building_7] },
     { "building_9.glb", assetFilenames[Model_Building_9] },
+    { "parking.glb", assetFilenames[Model_Parking] },
 
     // Textures
     { "crosshairs.png", assetFilenames[Texture_Crosshair] },
@@ -300,6 +301,11 @@ int main(int argc, char** argv)
 
     for (u32 exportIndex = 0; exportIndex < ArrayCount(exports); exportIndex++)
     {
+        if (exportIndex != 11)
+        {
+            continue;
+        }
+
         Export* exportAsset        = exports + exportIndex;
         char*   extension          = GetFilenameExtension(exportAsset->inputFilename);
         char    assetFilepath[256] = "../data/original/";

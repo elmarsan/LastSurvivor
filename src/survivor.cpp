@@ -308,15 +308,16 @@ internal void LoadAssets(Assets* assets)
     AssetsLoad(assets, Model_ZombieMaleA);
     AssetsLoad(assets, Model_ZombieFemaleA);
 
-    AssetsLoad(assets, Model_Building_0);
-    AssetsLoad(assets, Model_Building_1);
-    AssetsLoad(assets, Model_Building_2);
-    AssetsLoad(assets, Model_Building_3);
-    AssetsLoad(assets, Model_Building_4);
-    AssetsLoad(assets, Model_Building_5);
-    AssetsLoad(assets, Model_Building_6);
-    AssetsLoad(assets, Model_Building_7);
-    AssetsLoad(assets, Model_Building_9);
+    // AssetsLoad(assets, Model_Building_0);
+    // AssetsLoad(assets, Model_Building_1);
+    // AssetsLoad(assets, Model_Building_2);
+    // AssetsLoad(assets, Model_Building_3);
+    // AssetsLoad(assets, Model_Building_4);
+    // AssetsLoad(assets, Model_Building_5);
+    // AssetsLoad(assets, Model_Building_6);
+    // AssetsLoad(assets, Model_Building_7);
+    // AssetsLoad(assets, Model_Building_9);
+    AssetsLoad(assets, Model_Parking);
 
     AssetsLoad(assets, Texture_Crosshair);
 
@@ -354,23 +355,20 @@ internal void DrawModel(Assets* assets, Asset asset, GLuint programId, glm::mat4
     OpenGL*   gl       = renderer->gl;
     Model*    model    = AssetsModelGet(assets, asset);
 
+    // Hacks
+    glm::vec3 scale{ 1.0f, 1.0f, 1.0f };
+    if (asset == Model_ZombieMaleA || asset == Model_ZombieFemaleA || asset == Model_Parking)
+    {
+        scale = ZOMBIE_SCALE;
+    }
+    // position.y = model->localTranslation.y;
+    position.y = 0.0f;
+
     // World matrix
-    position.y            = model->localTranslation.y;
-    glm::mat4 translation = glm::translate(glm::mat4{ 1.0f }, position);
-    glm::mat4 rotationMat = glm::mat4_cast(rotation);
-    glm::mat4 worldMatrix = translation * rotationMat;
-    // glm::mat4 worldMatrix = translation;
+    glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, position) * glm::mat4_cast(model->localRotation) *
+                            glm::scale(glm::mat4{ 1.0f }, scale);
 
-    u32 textureIndex = 1;
-
-    PushRenderProgramUse(renderer, programId);
-
-    // Model local matrix
-    // glm::mat4 modelTranslation    = glm::translate(glm::mat4{ 1.0f }, model->localTranslation);
-    // glm::mat4 modelTranslation    = glm::translate(glm::mat4{ 1.0f }, position);
-    // glm::mat4 modelRotation       = glm::mat4_cast(model->localRotation);
-    // glm::mat4 modelScale          = glm::scale(glm::mat4{ 1.0f }, model->localScale);
-    // glm::mat4 modelLocalTransform = modelTranslation * modelRotation * modelScale;
+    int textureUnit = 0;
 
     for (u32 meshIndex = 0; meshIndex < model->meshCount; meshIndex++)
     {
@@ -378,28 +376,11 @@ internal void DrawModel(Assets* assets, Asset asset, GLuint programId, glm::mat4
         Material* material  = model->materials + mesh->materialIndex;
         Texture*  baseColor = model->textures + material->baseColorIndex;
 
-        // Mesh local matrix
-        // glm::mat4 meshTranslation    = glm::translate(glm::mat4{ 1.0f }, mesh->localTranslation);
-        // glm::mat4 meshRotation       = glm::mat4_cast(mesh->localRotation);
-        // glm::mat4 meshScale          = glm::scale(glm::mat4{ 1.0f }, mesh->localScale);
-        // glm::mat4 meshLocalTransform = meshTranslation * meshRotation * meshScale;
-
-        // glm::mat4 localTransform = modelLocalTransform * meshLocalTransform;
-
-        // glm::mat4 modelMat = worldMatrix * localTransform;
-
-        glm::mat4 modelMat = worldMatrix;
-
-        gl->ActiveTexture(GL_TEXTURE0 + textureIndex);
-        gl->BindTexture(GL_TEXTURE_2D, baseColor->id);
-
+        PushRenderBindTexture(renderer, baseColor, 0);
         PushRenderUploadUniformInt(renderer, programId, "hasDiffuse", 1);
-        PushRenderUploadUniformInt(renderer, programId, "diffuseMap", textureIndex);
-        PushRenderUploadUniformMat4x4(renderer, programId, "mvp", viewProj * modelMat);
-
+        PushRenderUploadUniformInt(renderer, programId, "diffuseMap", 0);
+        PushRenderUploadUniformMat4x4(renderer, programId, "mvp", viewProj * worldMatrix);
         PushRenderDrawBuffer(renderer, mesh->gpuBuffer);
-
-        textureIndex++;
     }
 }
 
@@ -516,10 +497,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         LoadAssets(assets);
 
-        Entity* player  = EntitySpawn(state->entityManager, EntityType_Player, { 0.0f, 0.0f, 0.0f });
+        // Entity* player  = EntitySpawn(state->entityManager, EntityType_Player, { 0.0f, 0.0f, 0.0f });
+        Entity* player  = EntitySpawn(state->entityManager, EntityType_Player, { -108.0f, 0.0f, 21.15f });
         player->forward = { 0.0f, 0.0f, -1.0f };
 
-        Entity* enemy       = EntitySpawn(state->entityManager, EntityType_Enemy, { 0.0f, 0.0f, -15.0f });
+        // Entity* enemy       = EntitySpawn(state->entityManager, EntityType_Enemy, { 0.0f, 0.0f, -15.0f });
+        Entity* enemy = EntitySpawn(state->entityManager, EntityType_Enemy, { -108.0f, 0.0f, 20.15f });
+
         enemy->targetEntity = player;
 
 #if 0
@@ -551,6 +535,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     Entity*        player        = EntityGet(entityManager, 0);
     Assets*        assets        = state->assets;
     UI*            ui            = state->ui;
+
+    // player->position.x = -11.0f;
+    // player->position.y = 10.0f;
 
     // Set current controller
     GameController* keyboard   = GetController(input, CONTROLLER_KEYBOARD);
@@ -684,167 +671,110 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
 
         // 3D
+
+        // World
+        {
+            // <Vector (-67.9289, -82.6967, 9.9961)>
+            // <Quaternion (w=-0.0000, x=0.0000, y=-0.7071, z=0.7071)>
+
+            std::vector<glm::vec3> positions{
+                glm::vec3{ 0.0f, 0.0f, 1.33f },    glm::vec3{ 0.0f, 0.0f, -41.11f },
+                glm::vec3{ 30.0f, 0.0f, -41.11f }, glm::vec3{ -30.0f, 0.0f, -41.11f },
+                glm::vec3{ -30.0f, 0.0f, 10.11f },
+            };
+            std::vector<glm::quat> rotations{
+                glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f }, glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
+                glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f }, glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
+                glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
+            };
+            std::vector<Asset> assetIds{ Model_Building_2, Model_Building_6, Model_Building_3, Model_Building_4,
+                                         Model_Building_1 };
+
+            PushRenderProgramUse(renderer, state->program->id);
+
+            for (u32 i = 0; i < 5; i++)
+            {
+                glm::vec3 eulerDegrees(90.0f, 0.0f, 180.0f);
+                glm::quat rotation = glm::quat(glm::radians(eulerDegrees));
+                // DrawModel(assets, assetIds[i], state->program->id, viewProj, positions[i], rotation);
+            }
+
+            DrawModel(assets, Model_Parking, state->program->id, viewProj, { 0.0f, 0.0f, 0.0f },
+                      { 0.0f, 0.0f, 0.0f, 0.0f });
+        }
+
+        // Floor
+        {
+            glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 0.0f, 0.0f, 0.0f });
+            glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 50.0f });
+            glm::mat4 model     = translate * scale;
+
+            PushRenderProgramUse(renderer, state->program->id);
+            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
+            PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+            PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 1.0f });
+            PushRenderDrawBuffer(renderer, state->planeBuffer);
+        }
+
+#if 1
+        // Shoot
+        {
+            if (ammoRound->type != UNKNOWN)
+            {
+                glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, ammoRound->particle.position);
+                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.15f });
+                glm::mat4 model     = translate * scale;
+
+                PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_red);
+                PushRenderDrawBuffer(renderer, state->cubeBuffer);
+            }
+        }
+
+        // Entities
         {
             Texture* zombieTexture = AssetsModelGet(assets, Model_ZombieMaleA)->textures;
 
-            gl->ActiveTexture(GL_TEXTURE0);
-            gl->BindTexture(GL_TEXTURE_2D, zombieTexture->id);
+            PushRenderProgramUse(renderer, state->programSkinned->id);
+            PushRenderBindTexture(renderer, zombieTexture, 0);
+            PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 0);
 
-            // Building
+            for (u32 entityIndex = 1; entityIndex < entityManager->entityCount; entityIndex++)
             {
-#if 0
-                // Model* model = AssetsModelGet(assets, Model_JapaneseStore);
-                Model* model = AssetsModelGet(assets, Model_Building_9);
+                Entity* entity      = &entityManager->entities[entityIndex];
+                Model*  entityModel = AssetsModelGet(assets, entity->assetID);
 
-                glm::vec3 position{ 0.0f, 0.0f, -10.0f };
-                glm::mat4 baseModelMat = glm::translate(glm::mat4{ 1.0f }, position);
+                glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, entity->position) *
+                                        glm::mat4_cast(glm::quat(entity->rotation)) *
+                                        glm::scale(glm::mat4{ 1.0f }, ZOMBIE_SCALE);
 
-                u32 textureIndex = 1;
+                Assert(entity->type == EntityType_Enemy);
 
-                PushRenderProgramUse(renderer, state->program->id);
+                Skeleton* skeleton = entity->skeleton;
 
-                glm::mat4 modelTranslation    = glm::translate(glm::mat4{ 1.0f }, model->localTranslation);
-                glm::mat4 modelRotation       = glm::mat4_cast(model->localRotation);
-                glm::mat4 modelScale          = glm::scale(glm::mat4{ 1.0f }, model->localScale);
-                glm::mat4 modelLocalTransform = modelTranslation * modelRotation * modelScale;
-
-                for (u32 meshIndex = 0; meshIndex < model->meshCount; meshIndex++)
+                for (u32 i = 0; i < skeleton->jointCount - 1; i++)
                 {
-                    Mesh*     mesh      = model->meshes + meshIndex;
-                    Material* material  = model->materials + mesh->materialIndex;
-                    Texture*  baseColor = model->textures + material->baseColorIndex;
+                    char uniformBuffer[64];
+                    sprintf(uniformBuffer, "%s[%d]", "uJoints", i);
 
-                    glm::mat4 meshTranslation    = glm::translate(glm::mat4{ 1.0f }, mesh->localTranslation);
-                    glm::mat4 meshRotation       = glm::mat4_cast(mesh->localRotation);
-                    glm::mat4 meshScale          = glm::scale(glm::mat4{ 1.0f }, mesh->localScale);
-                    glm::mat4 meshLocalTransform = meshTranslation * meshRotation * meshScale;
-
-                    glm::mat4 localTransform = modelLocalTransform * meshLocalTransform;
-
-                    glm::mat4 modelMat = baseModelMat * localTransform;
-
-                    gl->ActiveTexture(GL_TEXTURE0 + textureIndex);
-                    gl->BindTexture(GL_TEXTURE_2D, baseColor->id);
-
-                    PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 1);
-                    PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", textureIndex);
-                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * modelMat);
-
-                    PushRenderDrawBuffer(renderer, mesh->gpuBuffer);
-
-                    textureIndex++;
-                }
-#endif
-
-                // <Vector (-67.9289, -82.6967, 9.9961)>
-                // <Quaternion (w=-0.0000, x=0.0000, y=-0.7071, z=0.7071)>
-
-                std::vector<glm::vec3> positions{
-                    glm::vec3 { 0.0f, 0.0f, 9.33f },
-                    glm::vec3{36.20f, 0.0f, 11.11f},
-                };
-                std::vector<glm::quat> rotations{
-                    glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
-                    glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
-                };
-                std::vector<Asset> assetIds{ Model_Building_5, Model_Building_6 };
-
-                for (u32 i = 0; i < positions.size(); i++)
-                {
-                    glm::vec3 eulerDegrees(90.0f, 0.0f, 180.0f);
-                    glm::quat rotation = glm::quat(glm::radians(eulerDegrees));
-                    DrawModel(assets, assetIds[i], state->program->id, viewProj, positions[i], rotation);
-                }
-
-                //              Asset     modelId = Model_Building_5;
-                //              Model*    model   = AssetsModelGet(assets, modelId);
-                //              glm::vec3 position{ 0.0f, 0.0f, -6.0f };
-                //              glm::vec3 eulerDegrees(90.0f, 0.0f, 180.0f);
-                //              glm::quat rotation = glm::quat(glm::radians(eulerDegrees));
-
-                //              DrawModel(assets, modelId, state->program->id, viewProj, position, rotation);
-
-                //{
-                //    DrawModel(assets, Model_ZombieMaleA, state->program->id, viewProj, { 0.0f, 0.0f, 5.0 },
-                //              glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f });
-                //}
-            }
-
-            // Floor
-            {
-                glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 0.0f, 0.0f, 0.0f });
-                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 50.0f });
-                glm::mat4 model     = translate * scale;
-
-                PushRenderProgramUse(renderer, state->program->id);
-                PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
-                PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 1.0f });
-                PushRenderDrawBuffer(renderer, state->planeBuffer);
-            }
-
-            // Shoot
-            {
-                if (ammoRound->type != UNKNOWN)
-                {
-                    glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, ammoRound->particle.position);
-                    glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.15f });
-                    glm::mat4 model     = translate * scale;
-
-                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-                    PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_red);
-                    PushRenderDrawBuffer(renderer, state->cubeBuffer);
-                }
-            }
-
-            // Entities
-            {
-                for (u32 entityIndex = 1; entityIndex < entityManager->entityCount; entityIndex++)
-                {
-                    Entity* entity      = &entityManager->entities[entityIndex];
-                    Model*  entityModel = AssetsModelGet(assets, entity->assetID);
-
-                    glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, entity->position);
-                    glm::mat4 rotate    = glm::mat4_cast(glm::quat(entity->rotation));
-                    glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, entity->scale);
-                    glm::mat4 model     = translate * rotate * scale;
-
-                    if (entity->type == EntityType_Enemy)
+                    if (entity->animation.current)
                     {
-                        PushRenderProgramUse(renderer, state->programSkinned->id);
-                        PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 0);
-
-                        Skeleton* skeleton = entity->skeleton;
-
-                        for (u32 i = 0; i < skeleton->jointCount - 1; i++)
-                        {
-                            char uniformBuffer[64];
-                            sprintf(uniformBuffer, "%s[%d]", "uJoints", i);
-
-                            if (entity->animation.current)
-                            {
-                                u32       jointIndex  = skeleton->jointIndexBindOrder[i];
-                                glm::mat4 jointMatrix = skeleton->jointMatrices[jointIndex];
-                                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer,
-                                                              jointMatrix);
-                            }
-                            else
-                            {
-                                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer,
-                                                              glm::mat4{ 1.0f });
-                            }
-                        }
-
-                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "mvp", viewProj * model);
-                        PushRenderDrawBuffer(renderer, entityModel->meshes->gpuBuffer);
+                        u32       jointIndex  = skeleton->jointIndexBindOrder[i];
+                        glm::mat4 jointMatrix = skeleton->jointMatrices[jointIndex];
+                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer, jointMatrix);
                     }
                     else
                     {
-                        Assert(0);
+                        PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer,
+                                                      glm::mat4{ 1.0f });
                     }
                 }
+
+                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "mvp", viewProj * worldMatrix);
+                PushRenderDrawBuffer(renderer, entityModel->meshes->gpuBuffer);
             }
         }
+#endif
         break;
     }
     case GameMode_Pause:
