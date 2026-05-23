@@ -136,10 +136,6 @@ struct Animation
 
 struct Mesh
 {
-    // TODO: Drop local vectors
-    glm::vec3  localTranslation;
-    glm::quat  localRotation;
-    glm::vec3  localScale;
     u32        indicesCount;
     u32        vertexCount;
     int        materialIndex;
@@ -207,13 +203,10 @@ struct AssetModelFileHeader
 
 struct AssetMeshHeader
 {
-    char      name[64];
-    u32       vertexCount;
-    u32       indicesCount;
-    int       materialIndex;
-    glm::vec3 localTranslation;
-    glm::quat localRotation;
-    glm::vec3 localScale;
+    char name[64];
+    u32  vertexCount;
+    u32  indicesCount;
+    int  materialIndex;
 };
 
 struct AssetTextureHeader

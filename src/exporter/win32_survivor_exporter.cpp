@@ -137,11 +137,6 @@ void ExportGLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
     {
         // Extract meshes
         std::vector<GLTFMeshPrimitive> primitives{};
-        // std::vector<glm::mat4>         meshTransforms{};
-        std::vector<glm::vec3> meshTranslations{};
-        std::vector<glm::quat> meshRotations{};
-        std::vector<glm::vec3> meshScales{};
-
         for (u32 meshIndex = 0; meshIndex < gltfModel->meshes.size(); meshIndex++)
         {
             GLTFMesh* gltfMesh = &gltfModel->meshes[meshIndex];
@@ -150,25 +145,6 @@ void ExportGLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
             {
                 GLTFMeshPrimitive& gltfPrimitive = gltfMesh->primitives[primitiveIndex];
                 primitives.push_back(gltfPrimitive);
-
-                // Local transform
-                // meshTransforms.push_back(glm::mat4{ 1.0f });
-                meshTranslations.push_back(glm::vec3{ 0.0f, 0.0f, 0.0f });
-                meshRotations.push_back(glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f });
-                meshScales.push_back(glm::vec3{ 1.0f, 1.0f, 1.0f });
-                for (u32 nodeIndex = 0; nodeIndex < gltfModel->nodes.size(); nodeIndex++)
-                {
-                    GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
-                    if ((u32)gltfNode->meshIndex == meshIndex)
-                    {
-                        // meshTransforms[meshTransforms.size() - 1] = gltfNode->transform;
-                        meshTranslations[meshTranslations.size() - 1] = gltfNode->translation;
-                        meshRotations[meshRotations.size() - 1]       = gltfNode->rotation;
-                        meshScales[meshScales.size() - 1]             = gltfNode->scale;
-
-                        break;
-                    }
-                }
             }
         }
 
@@ -210,12 +186,9 @@ void ExportGLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
 
             AssetMeshHeader meshHeader;
             // meshHeader.name
-            meshHeader.vertexCount      = (u32)primitive->vertexs.size();
-            meshHeader.indicesCount     = (u32)primitive->indices.size();
-            meshHeader.materialIndex    = primitive->materialIndex;
-            meshHeader.localTranslation = meshTranslations[primitiveIndex];
-            meshHeader.localRotation    = meshRotations[primitiveIndex];
-            meshHeader.localScale       = meshScales[primitiveIndex];
+            meshHeader.vertexCount   = (u32)primitive->vertexs.size();
+            meshHeader.indicesCount  = (u32)primitive->indices.size();
+            meshHeader.materialIndex = primitive->materialIndex;
 
             fwrite(&meshHeader, sizeof(meshHeader), 1, file);
             fwrite(primitive->vertexs.data(), sizeof(Vertex), meshHeader.vertexCount, file);

@@ -59,14 +59,11 @@ void AssetsLoad(Assets* assets, Asset id)
 
                     Mesh* mesh = model->meshes + meshIndex;
 
-                    mesh->vertexCount      = meshHeader.vertexCount;
-                    mesh->indicesCount     = meshHeader.indicesCount;
-                    mesh->materialIndex    = meshHeader.materialIndex;
-                    mesh->localTranslation = meshHeader.localTranslation;
-                    mesh->localRotation    = meshHeader.localRotation;
-                    mesh->localScale       = meshHeader.localScale;
-                    mesh->vertexs          = PushArray(arena, mesh->vertexCount, Vertex);
-                    mesh->indices          = PushArray(arena, mesh->indicesCount, u32);
+                    mesh->vertexCount   = meshHeader.vertexCount;
+                    mesh->indicesCount  = meshHeader.indicesCount;
+                    mesh->materialIndex = meshHeader.materialIndex;
+                    mesh->vertexs       = PushArray(arena, mesh->vertexCount, Vertex);
+                    mesh->indices       = PushArray(arena, mesh->indicesCount, u32);
 
                     StreamRead(&stream, mesh->vertexs, sizeof(Vertex), mesh->vertexCount);
                     StreamRead(&stream, mesh->indices, sizeof(u32), mesh->indicesCount);
