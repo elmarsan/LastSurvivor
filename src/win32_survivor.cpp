@@ -945,6 +945,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, PSTR cmdline, int
         gameMemory.opengl.TexParameteriv    = glTexParameteriv;
         gameMemory.opengl.BlendFunc         = glBlendFunc;
         gameMemory.opengl.GetIntegerv       = glGetIntegerv;
+        gameMemory.opengl.PixelStorei       = glPixelStorei;
         gameMemory.opengl.ActiveTexture     = (PFNGLACTIVETEXTUREPROC)wglGetProcAddress("glActiveTexture");
         gameMemory.opengl.CreateProgram     = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
         gameMemory.opengl.CreateShader      = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");

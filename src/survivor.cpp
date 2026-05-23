@@ -368,8 +368,6 @@ internal void DrawModel(Assets* assets, Asset asset, GLuint programId, glm::mat4
     glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, position) * glm::mat4_cast(model->localRotation) *
                             glm::scale(glm::mat4{ 1.0f }, scale);
 
-    int textureUnit = 0;
-
     for (u32 meshIndex = 0; meshIndex < model->meshCount; meshIndex++)
     {
         Mesh*     mesh      = model->meshes + meshIndex;
@@ -377,7 +375,6 @@ internal void DrawModel(Assets* assets, Asset asset, GLuint programId, glm::mat4
         Texture*  baseColor = model->textures + material->baseColorIndex;
 
         PushRenderBindTexture(renderer, baseColor, 0);
-        PushRenderUploadUniformInt(renderer, programId, "hasDiffuse", 1);
         PushRenderUploadUniformInt(renderer, programId, "diffuseMap", 0);
         PushRenderUploadUniformMat4x4(renderer, programId, "mvp", viewProj * worldMatrix);
         PushRenderDrawBuffer(renderer, mesh->gpuBuffer);
@@ -640,7 +637,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     // ----------------------------------------------------------------------------
     // Draw
-    glm::mat4 projection = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 100.0f);
+    glm::mat4 projection = glm::perspective(Radians(45.0f), (f32)windowDim.x / (f32)windowDim.y, 0.1f, 500.0f);
     glm::vec3 cameraEye  = player->position + glm::vec3{ 0.0f, 2.2f, 0.0f };
     glm::mat4 view       = glm::lookAt(cameraEye, cameraEye + player->forward, { 0.0f, 1.0f, 0.0f });
 
@@ -674,34 +671,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // World
         {
-            // <Vector (-67.9289, -82.6967, 9.9961)>
-            // <Quaternion (w=-0.0000, x=0.0000, y=-0.7071, z=0.7071)>
-
-            std::vector<glm::vec3> positions{
-                glm::vec3{ 0.0f, 0.0f, 1.33f },    glm::vec3{ 0.0f, 0.0f, -41.11f },
-                glm::vec3{ 30.0f, 0.0f, -41.11f }, glm::vec3{ -30.0f, 0.0f, -41.11f },
-                glm::vec3{ -30.0f, 0.0f, 10.11f },
-            };
-            std::vector<glm::quat> rotations{
-                glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f }, glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
-                glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f }, glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
-                glm::quat{ 0.0f, 0.0f, 0.0f, 0.0f },
-            };
-            std::vector<Asset> assetIds{ Model_Building_2, Model_Building_6, Model_Building_3, Model_Building_4,
-                                         Model_Building_1 };
-
             PushRenderProgramUse(renderer, state->program->id);
-
-            for (u32 i = 0; i < 5; i++)
-            {
-                glm::vec3 eulerDegrees(90.0f, 0.0f, 180.0f);
-                glm::quat rotation = glm::quat(glm::radians(eulerDegrees));
-                // DrawModel(assets, assetIds[i], state->program->id, viewProj, positions[i], rotation);
-            }
+            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", true);
 
             DrawModel(assets, Model_Parking, state->program->id, viewProj, { 0.0f, 0.0f, 0.0f },
                       { 0.0f, 0.0f, 0.0f, 0.0f });
         }
+
+#if 1
 
         // Floor
         {
@@ -710,13 +687,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             glm::mat4 model     = translate * scale;
 
             PushRenderProgramUse(renderer, state->program->id);
-            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
+            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", false);
             PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
             PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 1.0f });
             PushRenderDrawBuffer(renderer, state->planeBuffer);
         }
 
-#if 1
         // Shoot
         {
             if (ammoRound->type != UNKNOWN)

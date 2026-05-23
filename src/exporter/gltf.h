@@ -330,7 +330,11 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                         }
                         case cgltf_attribute_type_texcoord:
                         {
-                            cgltfTexCoord = cgltfAttribute;
+                            // TODO: Check other uv sets
+                            if (cgltfAttribute->index == 0)
+                            {
+                                cgltfTexCoord = cgltfAttribute;
+                            }
                             break;
                         }
                         case cgltf_attribute_type_joints:
