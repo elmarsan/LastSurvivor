@@ -2,21 +2,12 @@
 
 #define MODEL_COUNT     Texture_Crosshair
 #define TEXTURE_COUNT   1
-#define ANIMATION_COUNT 24
+#define ANIMATION_COUNT AssetCount - TEXTURE_COUNT
 
 enum Asset
 {
     Model_ZombieMaleA,
     Model_ZombieFemaleA,
-    Model_Building_0,
-    Model_Building_1,
-    Model_Building_2,
-    Model_Building_3,
-    Model_Building_4,
-    Model_Building_5,
-    Model_Building_6,
-    Model_Building_7,
-    Model_Building_9,
     Model_Parking,
 
     Texture_Crosshair,
@@ -54,15 +45,6 @@ char* assetFilenames[AssetCount] = {
     // Models
     "../data/zombie_Male_A.svv",
     "../data/zombie_Female_A.svv",
-    "../data/building_0.svv",
-    "../data/building_1.svv",
-    "../data/building_2.svv",
-    "../data/building_3.svv",
-    "../data/building_4.svv",
-    "../data/building_5.svv",
-    "../data/building_6.svv",
-    "../data/building_7.svv",
-    "../data/building_9.svv",
     "../data/parking.svv",
 
     // Textures
@@ -98,7 +80,7 @@ char* assetFilenames[AssetCount] = {
 };
 
 #define JOINT_MAX_CHILDREN_COUNT 4
-#define ZOMBIE_SCALE             glm::vec3{ 0.015f, 0.015f, 0.015f }
+#define MODEL_SCALE              glm::vec3{ 0.015f, 0.015f, 0.015f }
 
 struct Joint
 {

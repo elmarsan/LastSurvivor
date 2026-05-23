@@ -122,7 +122,6 @@ struct GameState
     Arena arena;
 
     Assets*        assets;
-    GPUBuffer*     planeBuffer;
     GPUBuffer*     cubeBuffer;
     AudioClip*     pistolShot;
     AudioClip*     backgroundMusic;

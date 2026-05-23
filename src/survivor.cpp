@@ -348,39 +348,6 @@ internal void LoadAssets(Assets* assets)
     AssetsLoad(assets, Anim_ZombieFemaleCrawlingIdle);
 }
 
-internal void DrawModel(Assets* assets, Asset asset, GLuint programId, glm::mat4 viewProj, glm::vec3 position,
-                        glm::quat rotation)
-{
-    Renderer* renderer = assets->renderer;
-    OpenGL*   gl       = renderer->gl;
-    Model*    model    = AssetsModelGet(assets, asset);
-
-    // Hacks
-    glm::vec3 scale{ 1.0f, 1.0f, 1.0f };
-    if (asset == Model_ZombieMaleA || asset == Model_ZombieFemaleA || asset == Model_Parking)
-    {
-        scale = ZOMBIE_SCALE;
-    }
-    // position.y = model->localTranslation.y;
-    position.y = 0.0f;
-
-    // World matrix
-    glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, position) * glm::mat4_cast(model->localRotation) *
-                            glm::scale(glm::mat4{ 1.0f }, scale);
-
-    for (u32 meshIndex = 0; meshIndex < model->meshCount; meshIndex++)
-    {
-        Mesh*     mesh      = model->meshes + meshIndex;
-        Material* material  = model->materials + mesh->materialIndex;
-        Texture*  baseColor = model->textures + material->baseColorIndex;
-
-        PushRenderBindTexture(renderer, baseColor, 0);
-        PushRenderUploadUniformInt(renderer, programId, "diffuseMap", 0);
-        PushRenderUploadUniformMat4x4(renderer, programId, "mvp", viewProj * worldMatrix);
-        PushRenderDrawBuffer(renderer, mesh->gpuBuffer);
-    }
-}
-
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     Assert(sizeof(GameState) <= memory->permanentStorageSize);
@@ -404,7 +371,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         state->program        = PushStruct(arena, Program);
         state->programSkinned = PushStruct(arena, Program);
-        state->planeBuffer    = PushStruct(arena, GPUBuffer);
         state->cubeBuffer     = PushStruct(arena, GPUBuffer);
         state->entityManager  = PushStruct(arena, EntityManager);
         state->renderer       = PushStruct(arena, Renderer);
@@ -456,20 +422,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             platform->FileFree(fragmentSourceFile.content);
         }
 
-        // Plane
-        {
-            size_t vertexSize = sizeof(f32) * 8;
-
-            GPUBufferInit(renderer, state->planeBuffer);
-            GPUBufferVBOAlloc(renderer, state->planeBuffer, planeVertexs, sizeof(planeVertexs), vertexSize,
-                              GL_STATIC_DRAW);
-            GPUBufferEBOAlloc(renderer, state->planeBuffer, planeIndices, ArrayCount(planeIndices) * sizeof(u32),
-                              sizeof(u32), GL_STATIC_DRAW);
-            GPUBufferVertexAttrib(renderer, state->planeBuffer, 0, 3, GL_FLOAT, vertexSize, offsetof(Vertex, position));
-            GPUBufferVertexAttrib(renderer, state->planeBuffer, 1, 3, GL_FLOAT, vertexSize, offsetof(Vertex, normal));
-            GPUBufferVertexAttrib(renderer, state->planeBuffer, 2, 2, GL_FLOAT, vertexSize, offsetof(Vertex, uv));
-        }
-
         // Cube
         {
             size_t vertexSize = sizeof(f32) * 8;
@@ -494,11 +446,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         LoadAssets(assets);
 
-        // Entity* player  = EntitySpawn(state->entityManager, EntityType_Player, { 0.0f, 0.0f, 0.0f });
         Entity* player  = EntitySpawn(state->entityManager, EntityType_Player, { -108.0f, 0.0f, 21.15f });
         player->forward = { 0.0f, 0.0f, -1.0f };
 
-        // Entity* enemy       = EntitySpawn(state->entityManager, EntityType_Enemy, { 0.0f, 0.0f, -15.0f });
         Entity* enemy = EntitySpawn(state->entityManager, EntityType_Enemy, { -108.0f, 0.0f, 20.15f });
 
         enemy->targetEntity = player;
@@ -532,9 +482,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     Entity*        player        = EntityGet(entityManager, 0);
     Assets*        assets        = state->assets;
     UI*            ui            = state->ui;
-
-    // player->position.x = -11.0f;
-    // player->position.y = 10.0f;
 
     // Set current controller
     GameController* keyboard   = GetController(input, CONTROLLER_KEYBOARD);
@@ -668,42 +615,43 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
 
         // 3D
+        PushRenderProgramUse(renderer, state->program->id);
+        PushRenderUploadUniformMat4x4(renderer, state->program->id, "viewProj", viewProj);
 
-        // World
-        {
-            PushRenderProgramUse(renderer, state->program->id);
-            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", true);
-
-            DrawModel(assets, Model_Parking, state->program->id, viewProj, { 0.0f, 0.0f, 0.0f },
-                      { 0.0f, 0.0f, 0.0f, 0.0f });
-        }
-
-#if 1
-
-        // Floor
-        {
-            glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, { 0.0f, 0.0f, 0.0f });
-            glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 50.0f });
-            glm::mat4 model     = translate * scale;
-
-            PushRenderProgramUse(renderer, state->program->id);
-            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", false);
-            PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
-            PushRenderUploadUniformVec4(renderer, state->program->id, "color", { 1.0f, 1.0f, 1.0f, 1.0f });
-            PushRenderDrawBuffer(renderer, state->planeBuffer);
-        }
-
-        // Shoot
+        // Projectile
         {
             if (ammoRound->type != UNKNOWN)
             {
-                glm::mat4 translate = glm::translate(glm::mat4{ 1.0f }, ammoRound->particle.position);
-                glm::mat4 scale     = glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.15f });
-                glm::mat4 model     = translate * scale;
+                glm::mat4 world = glm::translate(glm::mat4{ 1.0f }, ammoRound->particle.position) *
+                                  glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.15f });
 
-                PushRenderUploadUniformMat4x4(renderer, state->program->id, "mvp", viewProj * model);
+                PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", false);
+                PushRenderUploadUniformMat4x4(renderer, state->program->id, "world", world);
                 PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_red);
                 PushRenderDrawBuffer(renderer, state->cubeBuffer);
+            }
+        }
+
+        // Parking scene
+        {
+            PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", true);
+
+            Model* scene = AssetsModelGet(assets, Model_Parking);
+
+            // World matrix
+            glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, { 0.0f, 0.0f, 0.0f }) *
+                                    glm::mat4_cast(scene->localRotation) * glm::scale(glm::mat4{ 1.0f }, MODEL_SCALE);
+
+            for (u32 meshIndex = 0; meshIndex < scene->meshCount; meshIndex++)
+            {
+                Mesh*     mesh      = scene->meshes + meshIndex;
+                Material* material  = scene->materials + mesh->materialIndex;
+                Texture*  baseColor = scene->textures + material->baseColorIndex;
+
+                PushRenderBindTexture(renderer, baseColor, 0);
+                PushRenderUploadUniformInt(renderer, state->program->id, "diffuseMap", 0);
+                PushRenderUploadUniformMat4x4(renderer, state->program->id, "world", worldMatrix);
+                PushRenderDrawBuffer(renderer, mesh->gpuBuffer);
             }
         }
 
@@ -712,6 +660,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             Texture* zombieTexture = AssetsModelGet(assets, Model_ZombieMaleA)->textures;
 
             PushRenderProgramUse(renderer, state->programSkinned->id);
+            PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "viewProj", viewProj);
             PushRenderBindTexture(renderer, zombieTexture, 0);
             PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 0);
 
@@ -722,7 +671,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
                 glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, entity->position) *
                                         glm::mat4_cast(glm::quat(entity->rotation)) *
-                                        glm::scale(glm::mat4{ 1.0f }, ZOMBIE_SCALE);
+                                        glm::scale(glm::mat4{ 1.0f }, MODEL_SCALE);
 
                 Assert(entity->type == EntityType_Enemy);
 
@@ -746,11 +695,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     }
                 }
 
-                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "mvp", viewProj * worldMatrix);
+                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "world", worldMatrix);
                 PushRenderDrawBuffer(renderer, entityModel->meshes->gpuBuffer);
             }
         }
-#endif
+
         break;
     }
     case GameMode_Pause:

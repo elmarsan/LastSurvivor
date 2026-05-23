@@ -6,7 +6,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
-#define DEBUG_TEXTURES 1
+#define DEBUG_TEXTURES 0
 #if DEBUG_TEXTURES
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>

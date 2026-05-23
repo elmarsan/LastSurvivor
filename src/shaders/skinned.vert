@@ -8,7 +8,8 @@ layout (location = 4) in vec4  aWeights;
 
 out vec2 UV;
 
-uniform mat4 mvp;
+uniform mat4 world;
+uniform mat4 viewProj;
 
 #define MAX_JOINTS 100
 uniform mat4 uJoints[MAX_JOINTS];
@@ -23,5 +24,5 @@ void main()
         + aWeights.w * uJoints[aJoints.w];
 
     vec4 skinnedPos = skinMatrix * vec4(aPos, 1.0);
-    gl_Position     = mvp * skinnedPos;
+    gl_Position     = viewProj * world * skinnedPos;
 }

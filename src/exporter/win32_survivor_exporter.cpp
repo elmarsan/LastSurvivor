@@ -15,15 +15,6 @@ Export exports[AssetCount] = {
     // Models
     { "ZombieMale_A_joined.gltf", assetFilenames[Model_ZombieMaleA] },
     { "ZombieFemale_A_joined.gltf", assetFilenames[Model_ZombieFemaleA] },
-    { "building_0.glb", assetFilenames[Model_Building_0] },
-    { "building_1.glb", assetFilenames[Model_Building_1] },
-    { "building_2.glb", assetFilenames[Model_Building_2] },
-    { "building_3.glb", assetFilenames[Model_Building_3] },
-    { "building_4.glb", assetFilenames[Model_Building_4] },
-    { "building_5.glb", assetFilenames[Model_Building_5] },
-    { "building_6.glb", assetFilenames[Model_Building_6] },
-    { "building_7.glb", assetFilenames[Model_Building_7] },
-    { "building_9.glb", assetFilenames[Model_Building_9] },
     { "parking.glb", assetFilenames[Model_Parking] },
 
     // Textures
@@ -301,11 +292,6 @@ int main(int argc, char** argv)
 
     for (u32 exportIndex = 0; exportIndex < ArrayCount(exports); exportIndex++)
     {
-        if (exportIndex != 11)
-        {
-            continue;
-        }
-
         Export* exportAsset        = exports + exportIndex;
         char*   extension          = GetFilenameExtension(exportAsset->inputFilename);
         char    assetFilepath[256] = "../data/original/";
