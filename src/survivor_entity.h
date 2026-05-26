@@ -3,7 +3,7 @@
 #define MAX_ENTITY_COUNT 128
 
 // TODO: Tweak values
-global_variable f32 playerMaxSpeed         = 8.3f;
+global_variable f32 playerMaxSpeed         = 18.3f;
 global_variable f32 playerFrictionForce    = 20.0f;
 global_variable f32 playerMoveAcceleration = 40.0f;
 global_variable f32 knockbackForce         = 17.0f;

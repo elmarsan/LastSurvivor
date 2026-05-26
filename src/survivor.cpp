@@ -65,8 +65,7 @@ internal void Physics_Update(EntityManager* manager, f32 delta)
 {
     f32 maxSpeed          = 0.0f;
     f32 accelerationSpeed = 0.0f;
-    f32 frictionForce     = 0.0f;
-    f32 damping           = 0.972f;
+    f32 damping           = 0.03f;
 
     for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
     {
@@ -76,13 +75,11 @@ internal void Physics_Update(EntityManager* manager, f32 delta)
         {
             maxSpeed          = playerMaxSpeed;
             accelerationSpeed = playerMoveAcceleration;
-            frictionForce     = playerFrictionForce;
         }
         else if (entity->type == EntityType_Enemy)
         {
             maxSpeed          = enemyMaxSpeed;
             accelerationSpeed = enemyAcceleration;
-            frictionForce     = playerFrictionForce;
         }
         else
         {
@@ -92,19 +89,16 @@ internal void Physics_Update(EntityManager* manager, f32 delta)
         // Update linear position
         entity->position += (entity->velocity * delta);
 
-        // Acceleration
         glm::vec3 acceleration = entity->wishDir * accelerationSpeed;
 
-        // Update linear velocity from acceleration
         entity->velocity += acceleration * delta;
+        entity->velocity *= powf(damping, delta);
+
         f32 speed = glm::length(entity->velocity);
         if (speed > maxSpeed)
         {
             entity->velocity = SafeNorm(entity->velocity) * maxSpeed;
         }
-
-        // Drag
-        entity->velocity *= damping;
     }
 }
 

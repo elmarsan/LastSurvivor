@@ -26,7 +26,7 @@ internal void DebugDrawCircle(Renderer* renderer, glm::vec3 position, f32 radius
         f32 angle1 = angleStep * ((i + 1) % pointCount);
 
         f32 x0 = radius * cos(Radians(angle0));
-        f32 z0 = radius * sin(Radians(angle0)); 
+        f32 z0 = radius * sin(Radians(angle0));
         f32 x1 = radius * cos(Radians(angle1));
         f32 z1 = radius * sin(Radians(angle1));
 
