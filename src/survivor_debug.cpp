@@ -142,7 +142,7 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
 
 #if DEBUG_COORDINATES
     char coordBuffer[64];
-    sprintf(coordBuffer, "(%.2f,%.2f)", player->position.x, player->position.z);
+    sprintf(coordBuffer, "(%d,%d)", (u32)player->position.x, (u32)player->position.z);
     f32       scale    = 0.7f;
     glm::vec2 textSize = UI_GetTextSize(state->ui, coordBuffer, scale);
     DrawText(renderer, coordBuffer, { 0.0f, 8.0f }, color_white, scale);
@@ -239,9 +239,12 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
             }
         }
 
-        // Entity AABB
-#if DEBUG_AABB
-        DebugDrawAABB(renderer, entity->position, entity->rotation.y, entity->aabb, color_red);
+// World collider
+#if DEBUG_COLLIDERS
+        if (entity->type == EntityType_Collider)
+        {
+            DebugDrawAABB(renderer, entity->position, entity->rotation.y, entity->aabb, color_yellow);
+        }
 #endif
 
         // Entity Y orientation

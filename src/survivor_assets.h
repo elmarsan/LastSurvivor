@@ -182,6 +182,12 @@ enum AssetType
     AssetType_Animation = 5,
 };
 
+struct WorldCollider
+{
+    glm::vec3 position;
+    AABB      aabb;
+};
+
 #pragma pack(push, 1)
 struct AssetFileHeader
 {

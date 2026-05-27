@@ -152,6 +152,7 @@ void ExportGLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
         glm::vec3 localTranslation{ 0.0f, 0.0f, 0.0f };
         glm::quat localRotation{ 0.0f, 0.0f, 0.0f, 0.0f };
         glm::vec3 localScale{ 1.0f, 1.0f, 1.0f };
+
         for (u32 nodeIndex = 0; nodeIndex < gltfModel->nodes.size(); nodeIndex++)
         {
             GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
@@ -336,15 +337,7 @@ int main(int argc, char** argv)
             if (StrEquals(extension, "gltf") || StrEquals(extension, "glb"))
             {
                 GLTFModel gltfModel = GLTFParse(assetFilepath, &platform);
-                // ExportGLTFModel(&platform, &arena, exportAsset->outputFilename, &gltfModel);
                 ExportGLTFModel(&arena, exportAsset->outputFilename, &gltfModel);
-            }
-            else if (StrEquals(extension, "obj"))
-            {
-                //     Obj obj = ObjParse(assetFilepath, &platform, &arena);
-                //     ExportModel(&platform, &arena, exportAsset->outputFilename, obj.vertexs.data(),
-                //     obj.indices.data(),
-                //                 (u32)obj.vertexs.size(), (u32)obj.indices.size(), 0);
             }
             else
             {

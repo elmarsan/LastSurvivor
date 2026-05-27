@@ -100,7 +100,7 @@ inline b32 AABBSegmentIntersection(AABB aabb, glm::vec3 p0, glm::vec3 p1)
     return true;
 }
 
-inline b32 AABBIntersection(AABB a, AABB b, AABB* intersection)
+inline b32 AABBOverlaps(AABB a, AABB b, AABB* overlap)
 {
     b32 overlaps = false;
 
@@ -111,10 +111,10 @@ inline b32 AABBIntersection(AABB a, AABB b, AABB* intersection)
     {
         overlaps = true;
 
-        if (intersection)
+        if (overlap)
         {
-            intersection->min = { Max(a.min.x, b.min.x), Max(a.min.y, b.min.y), Max(a.min.z, b.min.z) };
-            intersection->max = { Min(a.max.x, b.max.x), Min(a.max.y, b.max.y), Min(a.max.z, b.max.z) };
+            overlap->min = { Max(a.min.x, b.min.x), Max(a.min.y, b.min.y), Max(a.min.z, b.min.z) };
+            overlap->max = { Min(a.max.x, b.max.x), Min(a.max.y, b.max.y), Min(a.max.z, b.max.z) };
         }
     }
 

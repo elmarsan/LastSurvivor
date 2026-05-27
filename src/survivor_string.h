@@ -33,6 +33,22 @@ inline b32 StrEquals(char* a, char* b)
     return *a == *b;
 }
 
+inline b32 StrStartsWith(char* a, char* prefix)
+{
+    while (*prefix)
+    {
+        if (*a == 0 || *a != *prefix)
+        {
+            return false;
+        }
+
+        a++;
+        prefix++;
+    }
+
+    return true;
+}
+
 inline char* StrCopy(Arena* arena, char* src)
 {
     size_t size = 1 + strlen(src);

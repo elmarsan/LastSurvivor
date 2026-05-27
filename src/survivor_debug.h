@@ -1,7 +1,7 @@
 #pragma once
 
 #define DEBUG_COORDINATES 1
-// #define DEBUG_AABB        0
+#define DEBUG_COLLIDERS   1
 
 struct GameState;
 

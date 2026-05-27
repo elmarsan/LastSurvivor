@@ -15,10 +15,8 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     {
     case EntityType_Player:
     {
-        // Player do not use assetID, is not rendered
-        // Model* model = AssetsModelGet(manager->assets, entity->assetID);
-        // entity->aabb  = model->aabb;
-        // TODO: Push player skeleton to permanent arena
+        entity->aabb.min = { -0.5f, -0.5f, -0.5f };
+        entity->aabb.max = { 0.5f, 0.5f, 0.5f };
         break;
     }
     case EntityType_Enemy:
@@ -47,23 +45,33 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     return entity;
 }
 
-internal void EntityRemove(EntityManager* manager, Entity* entity)
+void Entity_SpawnCollider(EntityManager* manager, WorldCollider worldCollider)
 {
-    u32 index = 0;
-    for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
-    {
-        if (entity == &manager->entities[entityIndex])
-        {
-            index = entityIndex;
-            break;
-        }
-    }
+    Assert(manager->entityCount < ArrayCount(manager->entities));
 
-    while (index < manager->entityCount)
-    {
-        manager->entities[index] = manager->entities[index + 1];
-        index++;
-    }
-
-    manager->entityCount--;
+    Entity* entity   = &manager->entities[manager->entityCount++];
+    entity->type     = EntityType_Collider;
+    entity->position = worldCollider.position;
+    entity->aabb     = worldCollider.aabb;
 }
+
+// internal void EntityRemove(EntityManager* manager, Entity* entity)
+//{
+//     u32 index = 0;
+//     for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
+//     {
+//         if (entity == &manager->entities[entityIndex])
+//         {
+//             index = entityIndex;
+//             break;
+//         }
+//     }
+
+//    while (index < manager->entityCount)
+//    {
+//        manager->entities[index] = manager->entities[index + 1];
+//        index++;
+//    }
+
+//    manager->entityCount--;
+//}
