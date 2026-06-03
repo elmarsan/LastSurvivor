@@ -1,4 +1,42 @@
-void AssetsInit(Assets* assets, Arena* baseArena, Renderer* renderer, PlatformAPI* platform)
+internal void Assets_ReadAnimation(PlatformAPI* platform, Stream* stream, Animation* animation, Arena* arena)
+{
+    AssetFileHeader          header;
+    AssetAnimationFileHeader animHeader;
+    StreamRead(stream, &header, sizeof(header), 1);
+    StreamRead(stream, &animHeader, sizeof(animHeader), 1);
+
+    strcpy(animation->name, animHeader.name);
+    platform->Logf("Reading animation %s ...", animation->name);
+
+    animation->duration     = animHeader.duration;
+    animation->channelCount = animHeader.channelCount;
+    animation->samplerCount = animHeader.samplerCount;
+    animation->samplers     = PushArray(arena, animation->samplerCount, AnimationSampler);
+    animation->channels     = PushArray(arena, animation->channelCount, AnimationChannel);
+
+    for (u32 samplerIndex = 0; samplerIndex < animation->samplerCount; samplerIndex++)
+    {
+        AnimationSampler* sampler = animation->samplers + samplerIndex;
+
+        // Note: read in the following order
+        // 1. Sampler count
+        // 2. Interpolation type (step or linear)
+        // 3. Sampler times
+        // 3. Sampler transformations
+        StreamRead(stream, &sampler->count, sizeof(sampler->count), 1);
+
+        sampler->times           = PushArray(arena, sampler->count, f32);
+        sampler->transformations = PushArray(arena, sampler->count, glm::vec4);
+
+        StreamRead(stream, &sampler->interpolation, sizeof(sampler->interpolation), 1);
+        StreamRead(stream, sampler->times, sizeof(f32), sampler->count);
+        StreamRead(stream, sampler->transformations, sizeof(glm::vec4), sampler->count);
+    }
+
+    StreamRead(stream, animation->channels, sizeof(AnimationChannel), animation->channelCount);
+}
+
+void Assets_Init(Assets* assets, Arena* baseArena, Renderer* renderer, PlatformAPI* platform)
 {
     SubArena(&assets->arena, baseArena, Megabytes(20));
     assets->platform = platform;
@@ -6,7 +44,7 @@ void AssetsInit(Assets* assets, Arena* baseArena, Renderer* renderer, PlatformAP
 }
 
 // TODO: Load zombie texture only once
-void AssetsLoad(Assets* assets, Asset id)
+void Assets_Load(Assets* assets, Asset id)
 {
     PlatformAPI* platform = assets->platform;
     Arena*       arena    = &assets->arena;
@@ -44,6 +82,7 @@ void AssetsLoad(Assets* assets, Asset id)
                 model->textureCount     = modelHeader.textureCount;
                 model->meshCount        = modelHeader.meshCount;
                 model->materialCount    = modelHeader.materialCount;
+                model->animationCount   = modelHeader.animationCount;
                 model->localTranslation = modelHeader.localTranslation;
                 model->localRotation    = modelHeader.localRotation;
                 model->localScale       = modelHeader.localScale;
@@ -97,12 +136,14 @@ void AssetsLoad(Assets* assets, Asset id)
 
                     model->skeleton                      = PushStruct(arena, Skeleton);
                     model->skeleton->joints              = PushArray(arena, jointCount, Joint);
-                    model->skeleton->jointMatrices       = PushArray(arena, jointCount, glm::mat4);
-                    model->skeleton->jointIndexBindOrder = PushArray(arena, jointCount - 1, u32);
-                    model->skeleton->jointCount          = jointCount;
+                    model->skeleton->jointSkinMatrices   = PushArray(arena, jointCount, glm::mat4);
+                    model->skeleton->jointGlobalMatrices = PushArray(arena, jointCount, glm::mat4);
+                    model->skeleton->jointIndexBindOrder = PushArray(arena, jointCount, u32);
+
+                    model->skeleton->jointCount = jointCount;
 
                     StreamRead(&stream, model->skeleton->joints, sizeof(Joint), jointCount);
-                    StreamRead(&stream, model->skeleton->jointIndexBindOrder, sizeof(u32), jointCount - 1);
+                    StreamRead(&stream, model->skeleton->jointIndexBindOrder, sizeof(u32), jointCount);
                 }
 
                 // Textures
@@ -129,6 +170,19 @@ void AssetsLoad(Assets* assets, Asset id)
                     StreamRead(&stream, model->materials, sizeof(Material), model->materialCount);
                 }
 
+                // Animations
+                if (model->animationCount > 0)
+                {
+                    model->animations = PushArray(arena, model->animationCount, Animation);
+
+                    for (u32 animationIndex = 0; animationIndex < modelHeader.animationCount; animationIndex++)
+                    {
+                        Animation* animation = model->animations + animationIndex;
+                        Assets_ReadAnimation(platform, &stream, animation, arena);
+                        int x = 10;
+                    }
+                }
+
                 break;
             }
             case AssetType_Animation:
@@ -137,15 +191,20 @@ void AssetsLoad(Assets* assets, Asset id)
 
                 assets->animations[animationId] = PushStruct(arena, Animation);
                 Animation* animation            = assets->animations[animationId];
+                // Assets_ReadAnimation(platform, &stream, animation, arena);
 
-                AssetAnimationFileHeader header;
-                StreamRead(&stream, &header, sizeof(header), 1);
+                // TODO: Duplicated snippet
+                // AssetFileHeader          header;
+                AssetAnimationFileHeader animHeader;
+                // StreamRead(stream, &header, sizeof(header), 1);
+                StreamRead(&stream, &animHeader, sizeof(animHeader), 1);
 
-                strcpy(animation->name, header.name);
-                animation->id           = animationId;
-                animation->duration     = header.duration;
-                animation->channelCount = header.channelCount;
-                animation->samplerCount = header.samplerCount;
+                strcpy(animation->name, animHeader.name);
+                platform->Logf("Reading animation %s ...", animation->name);
+
+                animation->duration     = animHeader.duration;
+                animation->channelCount = animHeader.channelCount;
+                animation->samplerCount = animHeader.samplerCount;
                 animation->samplers     = PushArray(arena, animation->samplerCount, AnimationSampler);
                 animation->channels     = PushArray(arena, animation->channelCount, AnimationChannel);
 
@@ -153,20 +212,22 @@ void AssetsLoad(Assets* assets, Asset id)
                 {
                     AnimationSampler* sampler = animation->samplers + samplerIndex;
 
+                    // Note: read in the following order
+                    // 1. Sampler count
+                    // 2. Interpolation type (step or linear)
+                    // 3. Sampler times
+                    // 3. Sampler transformations
                     StreamRead(&stream, &sampler->count, sizeof(sampler->count), 1);
 
-                    f32*       times           = PushArray(arena, sampler->count, f32);
-                    glm::vec4* transformations = PushArray(arena, sampler->count, glm::vec4);
+                    sampler->times           = PushArray(arena, sampler->count, f32);
+                    sampler->transformations = PushArray(arena, sampler->count, glm::vec4);
 
-                    StreamRead(&stream, times, sizeof(f32), sampler->count);
-                    StreamRead(&stream, transformations, sizeof(glm::vec4), sampler->count);
-
-                    sampler->times           = times;
-                    sampler->transformations = transformations;
+                    StreamRead(&stream, &sampler->interpolation, sizeof(sampler->interpolation), 1);
+                    StreamRead(&stream, sampler->times, sizeof(f32), sampler->count);
+                    StreamRead(&stream, sampler->transformations, sizeof(glm::vec4), sampler->count);
                 }
 
                 StreamRead(&stream, animation->channels, sizeof(AnimationChannel), animation->channelCount);
-
                 break;
             }
 
@@ -183,19 +244,19 @@ void AssetsLoad(Assets* assets, Asset id)
     }
 }
 
-Model* AssetsModelGet(Assets* assets, Asset id)
+Model* Assets_GetModel(Assets* assets, Asset id)
 {
     Assert(id >= 0 && id <= MODEL_COUNT - 1);
     return assets->models[id];
 }
 
-Texture* AssetsTextureGet(Assets* assets, Asset id)
+Texture* Assets_GetTexture(Assets* assets, Asset id)
 {
     Assert(id == Texture_Crosshair);
     return assets->textures[0];
 }
 
-Animation* AssetsAnimationGet(Assets* assets, Asset id)
+Animation* Assets_GetAnimation(Assets* assets, Asset id)
 {
     Assert(id >= 0 && id < AssetCount);
     return assets->animations[id - Anim_ZombieMaleAttackLeft];
@@ -205,11 +266,19 @@ internal void SkeletonComputeJointMatrices(Skeleton* skeleton, u32 fromJointInde
 {
     Joint* joint = skeleton->joints + fromJointIndex;
 
+    // Local transform (joint space relative to parent joint)
     glm::mat4 local = glm::translate(glm::mat4(1.0f), joint->translation) * glm::mat4_cast(joint->rotation) *
                       glm::scale(glm::mat4(1.0f), joint->scale);
 
-    glm::mat4 global                        = parent * local;
-    skeleton->jointMatrices[fromJointIndex] = global * joint->inverseBindMatrix;
+    // Global transform (joint space -> model space, in bind/animated pose)
+    glm::mat4 global = parent * local;
+
+    // Skinning matrix:
+    // transforms from model space into current joint space AND applies animation
+    skeleton->jointSkinMatrices[fromJointIndex] = global * joint->inverseBindMatrix;
+
+    // IMPORTANT: store world matrix for debug
+    skeleton->jointGlobalMatrices[fromJointIndex] = global;
 
     for (u32 childrenIndex = 0; childrenIndex < joint->childrenCount; childrenIndex++)
     {
@@ -217,15 +286,22 @@ internal void SkeletonComputeJointMatrices(Skeleton* skeleton, u32 fromJointInde
     }
 }
 
-void SkeletonUpdatePose(Skeleton* skeleton) { SkeletonComputeJointMatrices(skeleton, 0, glm::mat4{ 1.0f }); }
+// Note: This might ignore some joints (it's ok for zombies)
+// TODO: Compute joint matrices from every joint with no parent
+void Skeleton_UpdatePose(Skeleton* skeleton) { SkeletonComputeJointMatrices(skeleton, 0, glm::mat4{ 1.0f }); }
 
-void SkeletonApplyAnimation(Skeleton* skeleton, Animation* animation, f32 time)
+void Skeleton_ApplyAnimation(Skeleton* skeleton, Animation* animation, f32 time)
 {
     for (u32 channelIndex = 0; channelIndex < animation->channelCount; channelIndex++)
     {
         AnimationChannel* channel = animation->channels + channelIndex;
         AnimationSampler* sampler = animation->samplers + channel->samplerIndex;
         Joint*            joint   = skeleton->joints + channel->jointIndex;
+
+        if (channel->jointIndex >= skeleton->jointCount)
+        {
+            continue;
+        }
 
         for (u32 timeIndex = 0; timeIndex + 1 < sampler->count; timeIndex++)
         {
@@ -234,24 +310,50 @@ void SkeletonApplyAnimation(Skeleton* skeleton, Animation* animation, f32 time)
 
             if (time >= t0 && time <= t1)
             {
-                f32 a = (time - t0) / (t1 - t0);
+                switch (sampler->interpolation)
+                {
+                case AnimationSamplerInterpolation_Linear:
+                {
+                    f32 a = (time - t0) / (t1 - t0);
 
-                glm::vec4 v0 = sampler->transformations[timeIndex];
-                glm::vec4 v1 = sampler->transformations[timeIndex + 1];
+                    glm::vec4 v0 = sampler->transformations[timeIndex];
+                    glm::vec4 v1 = sampler->transformations[timeIndex + 1];
+                    if (channel->path == AnimationChannelPath_Rotation)
+                    {
+                        glm::quat q0{ v0.x, v0.y, v0.z, v0.w };
+                        glm::quat q1{ v1.x, v1.y, v1.z, v1.w };
+                        joint->rotation = glm::normalize(glm::slerp(q0, q1, a));
+                    }
+                    else if (channel->path == AnimationChannelPath_Translation)
+                    {
+                        joint->translation = glm::mix(v0, v1, a);
+                    }
+                    else if (channel->path == AnimationChannelPath_Scale)
+                    {
+                        joint->scale = glm::mix(v0, v1, a);
+                    }
 
-                if (channel->path == AnimationChannelPath_Rotation)
-                {
-                    glm::quat q0{ v0.x, v0.y, v0.z, v0.w };
-                    glm::quat q1{ v1.x, v1.y, v1.z, v1.w };
-                    joint->rotation = glm::normalize(glm::slerp(q0, q1, a));
+                    break;
                 }
-                else if (channel->path == AnimationChannelPath_Translation)
+                case AnimationSamplerInterpolation_Step:
                 {
-                    joint->translation = glm::mix(v0, v1, a);
+                    glm::vec4 v0 = sampler->transformations[timeIndex];
+
+                    if (channel->path == AnimationChannelPath_Rotation)
+                    {
+                        joint->rotation = glm::quat{ v0.x, v0.y, v0.z, v0.w };
+                    }
+                    else if (channel->path == AnimationChannelPath_Translation)
+                    {
+                        joint->translation = v0;
+                    }
+                    else if (channel->path == AnimationChannelPath_Scale)
+                    {
+                        joint->scale = v0;
+                    }
+
+                    break;
                 }
-                else if (channel->path == AnimationChannelPath_Scale)
-                {
-                    joint->scale = glm::mix(v0, v1, a);
                 }
 
                 break;

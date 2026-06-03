@@ -104,40 +104,44 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
     }
 #endif
 
-    // Debug animations
+    // Debug zombie animations
     if (ButtonIsPressed(input->debug.f3))
     {
-        Entity* enemy = EntityGet(entityManager, 1);
+        Entity* enemy = Entity_Get(entityManager, 1);
 
         enemy->animation.time = 0.0f;
         if (enemy->animation.current)
         {
             enemy->animation.current = 0;
+            platform->Logf("Stop animation");
         }
         else
         {
             if (enemy->assetID == Model_ZombieMaleA)
             {
-                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleAttackLeft);
-                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleRunning);
-                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleWalkLimp);
-
-                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleCrawlingIdle);
-                enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieMaleCrawlingForward);
+                enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieMaleRunning);
+                // enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieMaleAttackLeft);
+                // enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieMaleWalkLimp);
+                // enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieMaleCrawlingIdle);
+                // enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieMaleCrawlingForward);
             }
             else if (enemy->assetID == Model_ZombieFemaleA)
             {
-                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleWalk);
-                enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleAttackLeft);
-                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleIdle);
-                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleCrawlingIdle);
-                // enemy->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleCrawlingForward);
+                enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieFemaleAttackLeft);
+                // enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieFemaleWalk);
+                // enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieFemaleIdle);
+                // enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieFemaleCrawlingIdle);
+                // enemy->animation.current = Assets_GetAnimation(assets, Anim_ZombieFemaleCrawlingForward);
             }
             else
             {
                 Assert(0);
             }
         }
+    }
+    // Debug pistol animations
+    if (ButtonIsPressed(input->debug.f2))
+    {
     }
 
 #if DEBUG_COORDINATES
@@ -225,7 +229,7 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
     // Debug entities
     for (u32 entityIndex = 0; entityIndex < entityManager->entityCount; entityIndex++)
     {
-        Entity* entity = EntityGet(entityManager, entityIndex);
+        Entity* entity = Entity_Get(entityManager, entityIndex);
 
         // Entity rotation
         {
@@ -247,6 +251,8 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
         }
 #endif
 
+// Cylinder collider
+#if 0
         // Entity Y orientation
         // if (entity->type == EntityType_Enemy || entity->type == EntityType_Player)
         if (entity->type == EntityType_Enemy)
@@ -271,5 +277,6 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
             // Bottom
             DrawLine(renderer, { start.x, 0.0f, start.z + radius }, { start.x, 2.0f, start.z + radius }, color);
         }
+#endif
     }
 }

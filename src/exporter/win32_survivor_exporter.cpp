@@ -49,13 +49,13 @@ Export exports[AssetCount] = {
     { "ZombieFemale@crawling_idle_220f.gltf", assetFilenames[Anim_ZombieFemaleCrawlingIdle] },
 };
 
-Skeleton* ExtractGLTFSkeleton(GLTFModel* gltfModel, Arena* arena)
+Skeleton* GLTF_ExtractSkeleton(GLTFModel* gltfModel, Arena* arena)
 {
     u32 jointCount = (u32)gltfModel->skeleton.joints.size() + 1;
 
     Skeleton* result            = PushStruct(arena, Skeleton);
     result->joints              = PushArray(arena, jointCount, Joint);
-    result->jointIndexBindOrder = PushArray(arena, jointCount - 1, u32);
+    result->jointIndexBindOrder = PushArray(arena, jointCount, u32);
     result->jointCount          = jointCount;
 
     Joint* root           = result->joints;
@@ -63,44 +63,29 @@ Skeleton* ExtractGLTFSkeleton(GLTFModel* gltfModel, Arena* arena)
 
     for (u32 nodeIndex = 0; nodeIndex < gltfModel->nodes.size(); nodeIndex++)
     {
-        b32 isJoint = false;
         for (int jointIndex : gltfModel->skeleton.joints)
         {
+            // Is joints
             if ((u32)jointIndex == nodeIndex)
             {
-                isJoint = true;
-                break;
-            }
-        }
+                Joint*    joint    = result->joints + nextJointIndex;
+                GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
 
-        if (isJoint)
-        {
-            Joint*    joint    = result->joints + nextJointIndex;
-            GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
+                JointInitFromGLTFNode(joint, gltfNode);
+                nextJointIndex++;
 
-            JointInitFromGLTFNode(joint, gltfNode);
-            nextJointIndex++;
-        }
-        else
-        {
-            // Detect if this node represents the skeleton root.
-            // GLTF convention: the root is a node with no parent that has only one child, and that child is a joint.
-            // This node itself is not a joint, but acts as the parent (transform root) of the joint hierarchy.
-            GLTFNode* gltfNode = &gltfModel->nodes[nodeIndex];
-
-            if (gltfNode->parentIndex == EMPTY && !gltfNode->childrenIndexes.empty())
-            {
-                Assert(gltfNode->childrenIndexes.size() == 1);
-
-                GLTFNode* gltfChild = &gltfModel->nodes[gltfNode->childrenIndexes[0]];
-                if (gltfChild)
+                // Note: Zombie armature root
+                if (gltfNode->parentIndex != EMPTY)
                 {
-                    Joint* childJoint = GLTFNodeGetMappedJoint(result, gltfChild);
-
-                    JointInitFromGLTFNode(root, gltfNode);
-                    root->childrenCount      = 1;
-                    root->childrenIndexes[0] = (u32)(result->joints - childJoint);
+                    GLTFNode* gltfParentNode = &gltfModel->nodes[gltfNode->parentIndex];
+                    if (StrEquals(gltfParentNode->name, "rig_CharRoot"))
+                    {
+                        Assert(gltfParentNode->parentIndex == EMPTY);
+                        JointInitFromGLTFNode(root, gltfParentNode);
+                    }
                 }
+
+                break;
             }
         }
     }
@@ -111,26 +96,61 @@ Skeleton* ExtractGLTFSkeleton(GLTFModel* gltfModel, Arena* arena)
         GLTFNode* gltfNode = JointGetMappedGLTFNode(joint, gltfModel);
         Assert(gltfNode);
 
-        u32 childrenCount    = (u32)gltfNode->childrenIndexes.size();
-        joint->childrenCount = childrenCount;
+        std::vector<u32> childrenJoints = GLTFNodeGetJointChildrenIndexes(gltfModel, gltfNode);
+        joint->childrenCount            = (u32)childrenJoints.size();
+        // Log("%d", joint->childrenCount);
+        Assert(joint->childrenCount <= JOINT_MAX_CHILDREN_COUNT);
 
-        for (u32 childrenIndex = 0; childrenIndex < childrenCount; childrenIndex++)
+        u32 nextChildIndex = 0;
+        for (u32 childIndex : childrenJoints)
         {
-            GLTFNode* gltfChildNode = &gltfModel->nodes[gltfNode->childrenIndexes[childrenIndex]];
+            GLTFNode* gltfChildNode = &gltfModel->nodes[childIndex];
+            Joint*    child         = GLTFNodeGetMappedJoint(result, gltfChildNode);
+            Assert(child);
+            s64 jointIndex = child - result->joints;
 
-            Joint* child      = GLTFNodeGetMappedJoint(result, gltfChildNode);
-            s64    childIndex = child - result->joints;
-
-            joint->childrenIndexes[childrenIndex] = (u32)childIndex;
+            joint->childrenIndexes[nextChildIndex++] = (u32)jointIndex;
         }
     }
 
-    memcpy(result->jointIndexBindOrder, gltfModel->skeleton.joints.data(), sizeof(u32) * jointCount - 1);
+    memcpy(result->jointIndexBindOrder, gltfModel->skeleton.joints.data(), sizeof(u32) * jointCount);
 
     return result;
 }
 
-void ExportGLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
+// TODO: Asset pipeline
+internal void Exporter_WriteAnimation(Animation* animation, FILE* file)
+{
+    // Log("Exporting animation %s ...", animation->name);
+
+    AssetFileHeader          header;
+    AssetAnimationFileHeader animHeader;
+
+    header.type = AssetType_Animation;
+    strcpy(animHeader.name, animation->name);
+    animHeader.duration     = animation->duration;
+    animHeader.channelCount = animation->channelCount;
+    animHeader.samplerCount = animation->samplerCount;
+
+    fwrite(&header, sizeof(header), 1, file);
+    fwrite(&animHeader, sizeof(animHeader), 1, file);
+
+    // Samplers
+    for (u32 samplerIndex = 0; samplerIndex < animation->samplerCount; samplerIndex++)
+    {
+        AnimationSampler* inSampler = animation->samplers + samplerIndex;
+
+        fwrite(&inSampler->count, sizeof(inSampler->count), 1, file);
+        fwrite(&inSampler->interpolation, sizeof(inSampler->interpolation), 1, file);
+        fwrite(inSampler->times, sizeof(f32), inSampler->count, file);
+        fwrite(inSampler->transformations, sizeof(glm::vec4), inSampler->count, file);
+    }
+
+    // Channels
+    fwrite(animation->channels, sizeof(AnimationChannel), animHeader.channelCount, file);
+}
+
+void Exporter_GLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
 {
     FILE* file = fopen(filename, "wb");
     if (file)
@@ -172,6 +192,7 @@ void ExportGLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
         modelHeader.skinned          = !gltfModel->skeleton.joints.empty();
         modelHeader.textureCount     = (u32)gltfModel->textures.size();
         modelHeader.materialCount    = (u32)gltfModel->materials.size();
+        modelHeader.animationCount   = (u32)gltfModel->animations.size();
         modelHeader.localTranslation = localTranslation;
         modelHeader.localRotation    = localRotation;
         modelHeader.localScale       = localScale;
@@ -199,11 +220,11 @@ void ExportGLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
         // Skeleton
         if (modelHeader.skinned)
         {
-            Skeleton* skeleton = ExtractGLTFSkeleton(gltfModel, arena);
+            Skeleton* skeleton = GLTF_ExtractSkeleton(gltfModel, arena);
 
             fwrite(&skeleton->jointCount, sizeof(skeleton->jointCount), 1, file);
             fwrite(skeleton->joints, sizeof(Joint), skeleton->jointCount, file);
-            fwrite(skeleton->jointIndexBindOrder, sizeof(u32), skeleton->jointCount - 1, file);
+            fwrite(skeleton->jointIndexBindOrder, sizeof(u32), skeleton->jointCount, file);
         }
 
         // Textures
@@ -231,7 +252,21 @@ void ExportGLTFModel(Arena* arena, char* filename, GLTFModel* gltfModel)
             fwrite(&material, sizeof(material), 1, file);
         }
 
+        // Animations
+        if (modelHeader.animationCount > 0)
+        {
+            for (u32 animationIndex = 0; animationIndex < modelHeader.animationCount; animationIndex++)
+            {
+                GLTFAnimation* gltfAnimation = &gltfModel->animations[animationIndex];
+                Animation*     animation     = GLTF_ConvertAnimation(gltfModel, gltfAnimation, arena);
+
+                Exporter_WriteAnimation(animation, file);
+            }
+        }
+
         fclose(file);
+
+        // Log("Asset exported");
     }
     else
     {
@@ -289,35 +324,9 @@ int main(int argc, char** argv)
                 {
                     std::vector<GLTFAnimation> gltfAnimations = GLTFParseAnimations(assetFilepath, &platform);
                     Assert(gltfAnimations.size() == 1);
-                    Animation* animation = GLTFConvertAnimation(model, &gltfAnimations[0], &arena);
+                    Animation* animation = GLTF_ConvertAnimation(model, &gltfAnimations[0], &arena);
 
-                    u32 channelCount = animation->channelCount;
-                    u32 samplerCount = animation->samplerCount;
-
-                    AssetFileHeader          header;
-                    AssetAnimationFileHeader animHeader;
-
-                    header.type = AssetType_Animation;
-                    strcpy(animHeader.name, animation->name);
-                    animHeader.duration     = animation->duration;
-                    animHeader.channelCount = channelCount;
-                    animHeader.samplerCount = samplerCount;
-
-                    fwrite(&header, sizeof(header), 1, file);
-                    fwrite(&animHeader, sizeof(animHeader), 1, file);
-
-                    // Samplers
-                    for (u32 samplerIndex = 0; samplerIndex < animation->samplerCount; samplerIndex++)
-                    {
-                        AnimationSampler* inSampler = animation->samplers + samplerIndex;
-
-                        fwrite(&inSampler->count, sizeof(inSampler->count), 1, file);
-                        fwrite(inSampler->times, sizeof(f32), inSampler->count, file);
-                        fwrite(inSampler->transformations, sizeof(glm::vec4), inSampler->count, file);
-                    }
-
-                    // Channels
-                    fwrite(animation->channels, sizeof(AnimationChannel), channelCount, file);
+                    Exporter_WriteAnimation(animation, file);
                     fclose(file);
                 }
                 else
@@ -337,7 +346,7 @@ int main(int argc, char** argv)
             if (StrEquals(extension, "gltf") || StrEquals(extension, "glb"))
             {
                 GLTFModel gltfModel = GLTFParse(assetFilepath, &platform);
-                ExportGLTFModel(&arena, exportAsset->outputFilename, &gltfModel);
+                Exporter_GLTFModel(&arena, exportAsset->outputFilename, &gltfModel);
             }
             else
             {
@@ -351,4 +360,6 @@ int main(int argc, char** argv)
             // TODO
         }
     }
+
+    Log("Exporter finished");
 }

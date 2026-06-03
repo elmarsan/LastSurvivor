@@ -6,7 +6,7 @@
 		<SyncFiles>true</SyncFiles>
 		<Recursive>true</Recursive>
 		<ShowEmptyFolders>true</ShowEmptyFolders>
-		<IncludeFilesWithoutExt>false</IncludeFilesWithoutExt>
+		<IncludeFilesWithoutExt>true</IncludeFilesWithoutExt>
 		<IsFolder>false</IsFolder>
 		<UseVisualStudioEnvBat>true</UseVisualStudioEnvBat>
 		<CaptureExeOutput>true</CaptureExeOutput>

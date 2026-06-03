@@ -1,4 +1,4 @@
-Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
+Entity* Entity_Spawn(EntityManager* manager, EntityType type, glm::vec3 position)
 {
     Assert(manager->entityCount < ArrayCount(manager->entities));
 
@@ -21,22 +21,23 @@ Entity* EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position)
     }
     case EntityType_Enemy:
     {
-        u32    min        = Model_ZombieMaleA;
-        u32    max        = Model_ZombieFemaleA;
-        Asset  assetID    = (Asset)(rand() % (max + 1 - min) + min);
-        Model* model      = AssetsModelGet(manager->assets, assetID);
+        // u32    min        = Model_ZombieMaleA;
+        // u32    max        = Model_ZombieFemaleA;
+        // Asset  assetID    = (Asset)(rand() % (max + 1 - min) + min);
+        Asset  assetID    = Model_ZombieMaleA;
+        Model* model      = Assets_GetModel(manager->assets, assetID);
         u32    jointCount = model->skeleton->jointCount;
 
         entity->assetID                       = assetID;
         entity->skeleton                      = PushStruct(transientArena, Skeleton);
         entity->skeleton->joints              = PushArray(transientArena, jointCount, Joint);
-        entity->skeleton->jointMatrices       = PushArray(transientArena, jointCount, glm::mat4);
-        entity->skeleton->jointIndexBindOrder = PushArray(transientArena, jointCount - 1, u32);
+        entity->skeleton->jointSkinMatrices   = PushArray(transientArena, jointCount, glm::mat4);
+        entity->skeleton->jointGlobalMatrices = PushArray(transientArena, jointCount, glm::mat4);
+        entity->skeleton->jointIndexBindOrder = PushArray(transientArena, jointCount, u32);
         entity->skeleton->jointCount          = jointCount;
 
         memcpy(entity->skeleton->joints, model->skeleton->joints, sizeof(Joint) * jointCount);
-        memcpy(entity->skeleton->jointIndexBindOrder, model->skeleton->jointIndexBindOrder,
-               sizeof(u32) * jointCount - 1);
+        memcpy(entity->skeleton->jointIndexBindOrder, model->skeleton->jointIndexBindOrder, sizeof(u32) * jointCount);
 
         break;
     }

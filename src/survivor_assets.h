@@ -1,8 +1,10 @@
 #pragma once
 
-#define MODEL_COUNT     Texture_Crosshair
-#define TEXTURE_COUNT   1
-#define ANIMATION_COUNT AssetCount - TEXTURE_COUNT
+#define MODEL_COUNT              Texture_Crosshair
+#define TEXTURE_COUNT            1
+#define ANIMATION_COUNT          AssetCount - TEXTURE_COUNT
+#define JOINT_MAX_CHILDREN_COUNT 10
+#define MODEL_SCALE              glm::vec3{ 0.015f, 0.015f, 0.015f }
 
 enum Asset
 {
@@ -12,6 +14,10 @@ enum Asset
 
     Texture_Crosshair,
 
+    // TODO: Asset pipeline: group animation into files.
+    // Example zombie male with (attackt_left, attackt_right, walk, etc...)
+    // Example zombie FEmale with (attackt_left, attackt_right, walk, etc...)
+    // Same for special zombies
     Anim_ZombieMaleAttackLeft,
     Anim_ZombieMaleAttackRight,
     Anim_ZombieMaleIdle,
@@ -79,34 +85,42 @@ char* assetFilenames[AssetCount] = {
     "../data/zombie_female_crawling_idle.svv",
 };
 
-#define JOINT_MAX_CHILDREN_COUNT 4
-#define MODEL_SCALE              glm::vec3{ 0.015f, 0.015f, 0.015f }
-
 struct Joint
 {
     char      name[256];
     u32       childrenIndexes[JOINT_MAX_CHILDREN_COUNT];
     u32       childrenCount;
+    int       parentIndex;
     glm::mat4 inverseBindMatrix;
     glm::vec3 translation;
     glm::quat rotation;
     glm::vec3 scale;
-    glm::mat4 matrix;
 };
 
 struct Skeleton
 {
-    u32        jointCount;
-    Joint*     joints;
-    glm::mat4* jointMatrices;
-    u32*       jointIndexBindOrder;
+    u32    jointCount;
+    Joint* joints;
+    // Final skinning matrices used by the GPU
+    // Converts vertices from bind pose into animated pose
+    glm::mat4* jointSkinMatrices;
+    // Bone transforms in model space (hierarchy result)
+    glm::mat4* jointGlobalMatrices;
+    // Mapping used to match joint order with mesh skinning order
+    u32* jointIndexBindOrder;
 };
 
-enum AnimationChannelPath
+enum AnimationChannelPath : u32
 {
     AnimationChannelPath_Translation,
     AnimationChannelPath_Rotation,
     AnimationChannelPath_Scale
+};
+
+enum AnimationSamplerInterpolation : u32
+{
+    AnimationSamplerInterpolation_Linear,
+    AnimationSamplerInterpolation_Step
 };
 
 struct AnimationChannel
@@ -118,9 +132,10 @@ struct AnimationChannel
 
 struct AnimationSampler
 {
-    u32        count;
-    f32*       times;
-    glm::vec4* transformations;
+    u32                           count;
+    AnimationSamplerInterpolation interpolation;
+    f32*                          times;
+    glm::vec4*                    transformations;
 };
 
 struct Animation
@@ -151,16 +166,18 @@ struct Material
 
 struct Model
 {
-    glm::vec3 localTranslation;
-    glm::quat localRotation;
-    glm::vec3 localScale;
-    Mesh*     meshes;
-    u32       meshCount;
-    Texture*  textures;
-    u32       textureCount;
-    Skeleton* skeleton;
-    Material* materials;
-    u32       materialCount;
+    glm::vec3  localTranslation;
+    glm::quat  localRotation;
+    glm::vec3  localScale;
+    Mesh*      meshes;
+    u32        meshCount;
+    Texture*   textures;
+    u32        textureCount;
+    Skeleton*  skeleton;
+    Material*  materials;
+    u32        materialCount;
+    Animation* animations;
+    u32        animationCount;
 };
 
 struct Assets
@@ -202,6 +219,7 @@ struct AssetModelFileHeader
     b32       skinned;
     u32       textureCount;
     u32       materialCount;
+    u32       animationCount;
     glm::vec3 localTranslation;
     glm::quat localRotation;
     glm::vec3 localScale;
@@ -230,11 +248,11 @@ struct AssetAnimationFileHeader
 };
 #pragma pack(pop)
 
-void       AssetsInit(Assets* assets, Arena* baseArena, PlatformAPI* platform);
-void       AssetsLoad(Assets* assets, Asset id);
-Model*     AssetsModelGet(Assets* assets, Asset id);
-Animation* AssetsAnimationGet(Assets* assets, Asset id);
-Texture*   AssetsTextureGet(Assets* assets, Asset id);
+void       Assets_Init(Assets* assets, Arena* baseArena, PlatformAPI* platform);
+void       Assets_Load(Assets* assets, Asset id);
+Model*     Assets_GetModel(Assets* assets, Asset id);
+Animation* Assets_GetAnimation(Assets* assets, Asset id);
+Texture*   Assets_GetTexture(Assets* assets, Asset id);
 
-void SkeletonUpdatePose(Skeleton* skeleton);
-void SkeletonApplyAnimation(Skeleton* skeleton, Animation* animation, f32 time);
+void Skeleton_UpdatePose(Skeleton* skeleton);
+void Skeleton_ApplyAnimation(Skeleton* skeleton, Animation* animation, f32 time);

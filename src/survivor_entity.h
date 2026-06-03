@@ -76,8 +76,8 @@ inline void EntityManagerInit(EntityManager* manager, Arena* arena, Assets* asse
     manager->assets = assets;
 }
 
-inline Entity* EntityGet(EntityManager* manager, u32 index) { return &manager->entities[index]; }
-Entity*        EntitySpawn(EntityManager* manager, EntityType type, glm::vec3 position);
+inline Entity* Entity_Get(EntityManager* manager, u32 index) { return &manager->entities[index]; }
+Entity*        Entity_Spawn(EntityManager* manager, EntityType type, glm::vec3 position);
 void           Entity_SpawnCollider(EntityManager* manager, WorldCollider worldCollider);
 
 // inline void EntityManagerFreeTransient(EntityManager* manager)

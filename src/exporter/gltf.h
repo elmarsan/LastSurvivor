@@ -76,6 +76,7 @@ struct GLTFMeshPrimitive
 
 struct GLTFMesh
 {
+    char                           name[256];
     std::vector<GLTFMeshPrimitive> primitives;
 };
 
@@ -84,6 +85,7 @@ struct GLTFNode
     char             name[256];
     int              meshIndex;
     int              parentIndex;
+    int              index;
     std::vector<int> childrenIndexes;
     glm::mat4        inverseBindMatrix;
     glm::vec3        translation;
@@ -96,25 +98,137 @@ struct GLTFSkeleton
 {
     char                   name[256];
     std::vector<int>       joints;
-    std::vector<glm::mat4> jointMatrices;
-    int                    meshNodeIndex;
+    std::vector<glm::mat4> inverseBindMatrices;
 };
 
 struct GLTFModel
 {
-    std::vector<int>          rootNodeIndexes;
-    std::vector<GLTFNode>     nodes;
-    std::vector<GLTFMesh>     meshes;
-    std::vector<GLTFMaterial> materials;
-    std::vector<GLTFTexture>  textures;
-    GLTFSkeleton              skeleton;
-    std::vector<glm::mat4>    nodeGlobalMatrices;
+    std::vector<int>           rootNodeIndexes;
+    std::vector<GLTFNode>      nodes;
+    std::vector<GLTFMesh>      meshes;
+    std::vector<GLTFMaterial>  materials;
+    std::vector<GLTFTexture>   textures;
+    GLTFSkeleton               skeleton;
+    std::vector<glm::mat4>     nodeGlobalMatrices;
+    std::vector<GLTFAnimation> animations;
 };
 
 GLTFModel                  GLTFParse(char* gltfFilename, PlatformAPI* platform);
 std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* platform);
-Skeleton*                  ExtractGLTFSkeleton(GLTFModel* model, Arena* arena);
-Animation*                 GLTFConvertAnimation(GLTFModel* model, GLTFAnimation* animation, Arena* arena);
+Skeleton*                  GLTF_ExtractSkeleton(GLTFModel* model, Arena* arena);
+Animation*                 GLTF_ConvertAnimation(GLTFModel* model, GLTFAnimation* animation, Arena* arena);
+
+void GLTFModel_ReadAnimations(GLTFModel* model, cgltf_data* cgltfData)
+{
+    model->animations.resize(cgltfData->animations_count);
+    for (cgltf_size animationIndex = 0; animationIndex < cgltfData->animations_count; animationIndex++)
+    {
+        cgltf_animation* cgltfAnimation = &cgltfData->animations[animationIndex];
+        GLTFAnimation&   animation      = model->animations[animationIndex];
+
+        // Name
+        if (cgltfAnimation->name)
+        {
+            strcpy(animation.name, cgltfAnimation->name);
+        }
+        else
+        {
+            sprintf(animation.name, "animation_%zu", animationIndex);
+        }
+
+        // Channels
+        animation.channels.resize(cgltfAnimation->channels_count);
+        for (cgltf_size channelIndex = 0; channelIndex < cgltfAnimation->channels_count; channelIndex++)
+        {
+            cgltf_animation_channel* cgltfChannel = &cgltfAnimation->channels[channelIndex];
+            GLTFAnimationChannel&    channel      = animation.channels[channelIndex];
+
+            channel.nodeIndex    = (int)cgltf_node_index(cgltfData, cgltfChannel->target_node);
+            channel.samplerIndex = (int)cgltf_animation_sampler_index(cgltfAnimation, cgltfChannel->sampler);
+
+            switch (cgltfChannel->target_path)
+            {
+            case cgltf_animation_path_type_translation:
+            {
+                channel.path = GLTFAnimationChannelPath_Translation;
+                break;
+            }
+            case cgltf_animation_path_type_rotation:
+            {
+                channel.path = GLTFAnimationChannelPath_Rotation;
+                break;
+            }
+            case cgltf_animation_path_type_scale:
+            {
+                channel.path = GLTFAnimationChannelPath_Scale;
+                break;
+            }
+            default:
+            {
+                Log("Unsupported animation target path");
+                Assert(0);
+            }
+            }
+
+            // Samplers
+            animation.duration = 0.0f;
+            animation.samplers.resize(cgltfAnimation->samplers_count);
+            for (cgltf_size samplerIndex = 0; samplerIndex < cgltfAnimation->samplers_count; samplerIndex++)
+            {
+                cgltf_animation_sampler* cgltfSampler = &cgltfAnimation->samplers[samplerIndex];
+                cgltf_accessor*          cgltfInput   = cgltfSampler->input;
+                cgltf_accessor*          cgltfOutput  = cgltfSampler->output;
+
+                GLTFAnimationSampler& sampler = animation.samplers[samplerIndex];
+                sampler.times.resize(cgltfInput->count);
+                sampler.transformations.resize(cgltfOutput->count);
+
+                Assert(cgltfInput->count == cgltfOutput->count);
+                for (cgltf_size accessorIndex = 0; accessorIndex < cgltfOutput->count; accessorIndex++)
+                {
+                    if (!cgltf_accessor_read_float(cgltfInput, accessorIndex, &sampler.times[accessorIndex], 1))
+                    {
+                        Assert(0);
+                    }
+                    if (!cgltf_accessor_read_float(cgltfOutput, accessorIndex,
+                                                   &sampler.transformations[accessorIndex].x, 4))
+                    {
+                        Assert(0);
+                    }
+
+                    if (sampler.times[accessorIndex] > animation.duration)
+                    {
+                        animation.duration = sampler.times[accessorIndex];
+                    }
+                }
+
+                switch (cgltfSampler->interpolation)
+                {
+                case cgltf_interpolation_type_linear:
+                {
+                    sampler.interpolation = GLTFAnimationSamplerInterpolation_Linear;
+                    break;
+                }
+                case cgltf_interpolation_type_step:
+                {
+                    sampler.interpolation = GLTFAnimationSamplerInterpolation_Step;
+                    break;
+                }
+                case cgltf_interpolation_type_cubic_spline:
+                {
+                    sampler.interpolation = GLTFAnimationSamplerInterpolation_CubicSpline;
+                    break;
+                }
+                default:
+                {
+                    Log("Unknown animation sampler interpolation");
+                    Assert(0);
+                }
+                }
+            }
+        }
+    }
+}
 
 GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
 {
@@ -274,12 +388,9 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                 {
                     node.meshIndex = EMPTY;
                 }
-                // Skin
-                if (cgltfNode->skin)
-                {
-                    result.skeleton.meshNodeIndex = (int)cgltf_skin_index(cgltfData, cgltfNode->skin);
-                }
-                // Parent
+                // Node index
+                node.index = (int)cgltf_node_index(cgltfData, cgltfNode);
+                // Parent index
                 if (cgltfNode->parent)
                 {
                     node.parentIndex = (int)cgltf_node_index(cgltfData, cgltfNode->parent);
@@ -298,6 +409,15 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
             {
                 cgltf_mesh* cgltfMesh = &cgltfData->meshes[meshIndex];
                 GLTFMesh&   mesh      = result.meshes[meshIndex];
+
+                if (cgltfMesh->name)
+                {
+                    strcpy(mesh.name, cgltfMesh->name);
+                }
+                else
+                {
+                    sprintf(mesh.name, "Mesh %zu", meshIndex);
+                }
 
                 mesh.primitives.resize(cgltfMesh->primitives_count);
                 for (cgltf_size primitiveIndex = 0; primitiveIndex < cgltfMesh->primitives_count; primitiveIndex++)
@@ -438,7 +558,7 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                     sprintf(skeleton.name, "%s", "skeleton_0");
                 }
 
-                skeleton.jointMatrices.resize(cgltfSkin->joints_count);
+                skeleton.inverseBindMatrices.resize(cgltfSkin->joints_count);
                 skeleton.joints.resize(cgltfSkin->joints_count);
                 for (cgltf_size jointIndex = 0; jointIndex < cgltfSkin->joints_count; jointIndex++)
                 {
@@ -562,6 +682,125 @@ GLTFModel GLTFParse(char* gltfFilename, PlatformAPI* platform)
                 }
             }
         }
+
+        // TODO: Duplicated code
+        // Parse animations
+        {
+            GLTFModel_ReadAnimations(&result, cgltfData);
+        }
+
+        //{
+        //          result.animations.resize(cgltfData->animations_count);
+        //          for (cgltf_size animationIndex = 0; animationIndex < cgltfData->animations_count; animationIndex++)
+        //          {
+        //              cgltf_animation* cgltfAnimation = &cgltfData->animations[animationIndex];
+        //              GLTFAnimation&   animation      = result.animations[animationIndex];
+
+        //              if (cgltfAnimation->name)
+        //              {
+        //                  strcpy(animation.name, cgltfAnimation->name);
+        //              }
+        //              else
+        //              {
+        //                  sprintf(animation.name, "animation_%zu", animationIndex);
+        //              }
+
+        //              // Channels
+        //              animation.channels.resize(cgltfAnimation->channels_count);
+        //              for (cgltf_size channelIndex = 0; channelIndex < cgltfAnimation->channels_count; channelIndex++)
+        //              {
+        //                  cgltf_animation_channel* cgltfChannel = &cgltfAnimation->channels[channelIndex];
+        //                  GLTFAnimationChannel&    channel      = animation.channels[channelIndex];
+
+        //                  channel.nodeIndex    = (int)cgltf_node_index(cgltfData, cgltfChannel->target_node);
+        //                  channel.samplerIndex = (int)cgltf_animation_sampler_index(cgltfAnimation,
+        //                  cgltfChannel->sampler);
+
+        //                  switch (cgltfChannel->target_path)
+        //                  {
+        //                  case cgltf_animation_path_type_translation:
+        //                  {
+        //                      channel.path = GLTFAnimationChannelPath_Translation;
+        //                      break;
+        //                  }
+        //                  case cgltf_animation_path_type_rotation:
+        //                  {
+        //                      channel.path = GLTFAnimationChannelPath_Rotation;
+        //                      break;
+        //                  }
+        //                  case cgltf_animation_path_type_scale:
+        //                  {
+        //                      channel.path = GLTFAnimationChannelPath_Scale;
+        //                      break;
+        //                  }
+        //                  default:
+        //                  {
+        //                      Log("Unsupported animation target path");
+        //                      Assert(0);
+        //                  }
+        //                  }
+
+        //                  // Samplers
+        //                  animation.duration = 0.0f;
+        //                  animation.samplers.resize(cgltfAnimation->samplers_count);
+        //                  for (cgltf_size samplerIndex = 0; samplerIndex < cgltfAnimation->samplers_count;
+        //                  samplerIndex++)
+        //                  {
+        //                      cgltf_animation_sampler* cgltfSampler = &cgltfAnimation->samplers[samplerIndex];
+        //                      cgltf_accessor*          cgltfInput   = cgltfSampler->input;
+        //                      cgltf_accessor*          cgltfOutput  = cgltfSampler->output;
+
+        //                      GLTFAnimationSampler& sampler = animation.samplers[samplerIndex];
+        //                      sampler.times.resize(cgltfInput->count);
+        //                      sampler.transformations.resize(cgltfOutput->count);
+
+        //                      Assert(cgltfInput->count == cgltfOutput->count);
+        //                      for (cgltf_size accessorIndex = 0; accessorIndex < cgltfOutput->count; accessorIndex++)
+        //                      {
+        //                          if (!cgltf_accessor_read_float(cgltfInput, accessorIndex,
+        //                          &sampler.times[accessorIndex], 1))
+        //                          {
+        //                              Assert(0);
+        //                          }
+        //                          if (!cgltf_accessor_read_float(cgltfOutput, accessorIndex,
+        //                                                         &sampler.transformations[accessorIndex].x, 4))
+        //                          {
+        //                              Assert(0);
+        //                          }
+
+        //                          if (sampler.times[accessorIndex] > animation.duration)
+        //                          {
+        //                              animation.duration = sampler.times[accessorIndex];
+        //                          }
+        //                      }
+
+        //                      switch (cgltfSampler->interpolation)
+        //                      {
+        //                      case cgltf_interpolation_type_linear:
+        //                      {
+        //                          sampler.interpolation = GLTFAnimationSamplerInterpolation_Linear;
+        //                          break;
+        //                      }
+        //                      case cgltf_interpolation_type_step:
+        //                      {
+        //                          sampler.interpolation = GLTFAnimationSamplerInterpolation_Step;
+        //                          break;
+        //                      }
+        //                      case cgltf_interpolation_type_cubic_spline:
+        //                      {
+        //                          sampler.interpolation = GLTFAnimationSamplerInterpolation_CubicSpline;
+        //                          break;
+        //                      }
+        //                      default:
+        //                      {
+        //                          Log("Unknown animation sampler interpolation");
+        //                          Assert(0);
+        //                      }
+        //                      }
+        //                  }
+        //              }
+        //          }
+        //      }
     }
     else
     {
@@ -630,6 +869,8 @@ std::vector<GLTFAnimation> GLTFParseAnimations(char* gltfFilename, PlatformAPI* 
 
         // Parse animations
         {
+            // GLTFModel_ReadAnimations(result, cgltfData);
+
             result.resize(cgltfData->animations_count);
             for (cgltf_size animationIndex = 0; animationIndex < cgltfData->animations_count; animationIndex++)
             {
@@ -792,10 +1033,29 @@ internal void JointInitFromGLTFNode(Joint* joint, GLTFNode* gltfNode)
     joint->scale             = gltfNode->scale;
 }
 
-// TODO: Rename
-Animation* GLTFConvertAnimation(GLTFModel* gltfModel, GLTFAnimation* gltfAnimation, Arena* arena)
+internal std::vector<u32> GLTFNodeGetJointChildrenIndexes(GLTFModel* gltfModel, GLTFNode* gltfNode)
 {
-    Skeleton* skeleton = ExtractGLTFSkeleton(gltfModel, arena);
+    std::vector<u32> result{};
+
+    for (int childIndex : gltfNode->childrenIndexes)
+    {
+        for (int jointIndex : gltfModel->skeleton.joints)
+        {
+            if (jointIndex == childIndex)
+            {
+                result.push_back(childIndex);
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
+// TODO: Rename
+Animation* GLTF_ConvertAnimation(GLTFModel* gltfModel, GLTFAnimation* gltfAnimation, Arena* arena)
+{
+    Skeleton* skeleton = GLTF_ExtractSkeleton(gltfModel, arena);
 
     u32 samplerCount = (u32)gltfAnimation->samplers.size();
     u32 channelCount = (u32)gltfAnimation->channels.size();
@@ -822,8 +1082,31 @@ Animation* GLTFConvertAnimation(GLTFModel* gltfModel, GLTFAnimation* gltfAnimati
 
         memcpy(sampler->times, gltfSampler->times.data(), sizeof(f32) * count);
         memcpy(sampler->transformations, gltfSampler->transformations.data(), sizeof(glm::vec4) * count);
+
+        switch (gltfSampler->interpolation)
+        {
+        case GLTFAnimationSamplerInterpolation_Linear:
+        {
+            sampler->interpolation = AnimationSamplerInterpolation_Linear;
+            break;
+        }
+        case GLTFAnimationSamplerInterpolation_Step:
+        {
+
+            sampler->interpolation = AnimationSamplerInterpolation_Step;
+            break;
+        }
+        case GLTFAnimationSamplerInterpolation_CubicSpline:
+        {
+            Log("Unsupported gltf animation sampler cubic spline interpolation");
+            Assert(0);
+            break;
+        }
+            InvalidDefaultCase;
+        }
     }
 
+    // TODO: comment this joint look up
     memcpy(result->channels, gltfAnimation->channels.data(), sizeof(AnimationChannel) * channelCount);
     for (u32 channelIndex = 0; channelIndex < channelCount; channelIndex++)
     {

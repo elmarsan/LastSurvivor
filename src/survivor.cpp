@@ -142,7 +142,7 @@ internal void Physics_Update(EntityManager* manager, f32 delta)
 
     for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
     {
-        Entity* entity = EntityGet(manager, entityIndex);
+        Entity* entity = Entity_Get(manager, entityIndex);
 
         if (entity->type == EntityType_Player)
         {
@@ -175,7 +175,7 @@ internal void Physics_Update(EntityManager* manager, f32 delta)
     }
 }
 
-internal void UpdatePlayer(Entity* player, GameController* controller, EntityManager* manager)
+internal void UpdatePlayer(Entity* player, GameController* controller, EntityManager* manager, f32 delta)
 {
     Assert(player->type == EntityType_Player);
 
@@ -269,7 +269,7 @@ internal void UpdatePlayer(Entity* player, GameController* controller, EntityMan
 
     for (u32 entityIndex = 0; entityIndex < manager->entityCount; entityIndex++)
     {
-        Entity* entity = EntityGet(manager, entityIndex);
+        Entity* entity = Entity_Get(manager, entityIndex);
         if (entity->type == EntityType_Collider)
         {
             AABB worldAABB = AABBToWorld(entity->aabb, entity->position);
@@ -302,13 +302,19 @@ internal void UpdatePlayer(Entity* player, GameController* controller, EntityMan
         }
     }
     /////////////////////////////////////////////////////////////////////////////////
+
+    /////////////////////////////////////////////////////////////////////////////////
+    // Animation
+    {
+    }
+    /////////////////////////////////////////////////////////////////////////////////
 }
 
 internal void UpdateEnemies(EntityManager* manager, Assets* assets, f32 delta)
 {
     for (u32 entityIndex = 1; entityIndex < manager->entityCount; entityIndex++)
     {
-        Entity* entity = EntityGet(manager, entityIndex);
+        Entity* entity = Entity_Get(manager, entityIndex);
 
         if (entity->type != EntityType_Enemy)
         {
@@ -326,31 +332,33 @@ internal void UpdateEnemies(EntityManager* manager, Assets* assets, f32 delta)
 
         // Animation
         {
+            Skeleton* skeleton = entity->skeleton;
+            Skeleton_UpdatePose(skeleton);
+
             // Update current animation
             if (entity->animation.current)
             {
-                Skeleton*  skeleton  = entity->skeleton;
                 Animation* animation = entity->animation.current;
 
-                // f32 prevTime    = entity->animation.time;d
-                // f32 currentTime = 0.0f;
                 entity->animation.time += delta;
-                // currentTime = entity->animation.time;
 
-                // Loop
+                // Loop: start the animation again from the beginning.
                 if (entity->animation.time >= animation->duration)
                 {
                     entity->animation.time = 0.0f;
                 }
 
-                SkeletonApplyAnimation(skeleton, animation, entity->animation.time);
-                SkeletonUpdatePose(skeleton);
+                Skeleton_ApplyAnimation(skeleton, animation, entity->animation.time);
             }
-
-            else if (!entity->animation.current && glm::length(entity->velocity) > 0.0f)
+            else
             {
-                entity->animation.current = AssetsAnimationGet(assets, Anim_ZombieFemaleWalk);
-                entity->animation.time    = 0.0f;
+                // Set joints to bind pos
+                for (u32 jointIndex = 0; jointIndex < skeleton->jointCount; jointIndex++)
+                {
+                    Joint* joint = skeleton->joints + jointIndex;
+
+                    skeleton->jointGlobalMatrices[jointIndex] = glm::inverse(joint->inverseBindMatrix);
+                }
             }
         }
     }
@@ -358,37 +366,37 @@ internal void UpdateEnemies(EntityManager* manager, Assets* assets, f32 delta)
 
 internal void LoadAssets(Assets* assets)
 {
-    AssetsLoad(assets, Model_ZombieMaleA);
-    AssetsLoad(assets, Model_ZombieFemaleA);
-    AssetsLoad(assets, Model_Parking);
+    Assets_Load(assets, Model_ZombieMaleA);
+    Assets_Load(assets, Model_ZombieFemaleA);
+    Assets_Load(assets, Model_Parking);
 
-    AssetsLoad(assets, Texture_Crosshair);
+    Assets_Load(assets, Texture_Crosshair);
 
-    AssetsLoad(assets, Anim_ZombieMaleAttackLeft);
-    AssetsLoad(assets, Anim_ZombieMaleAttackRight);
-    AssetsLoad(assets, Anim_ZombieMaleIdle);
-    AssetsLoad(assets, Anim_ZombieMaleIdleAlert);
-    AssetsLoad(assets, Anim_ZombieMaleIdle2);
-    AssetsLoad(assets, Anim_ZombieMaleRunning);
-    AssetsLoad(assets, Anim_ZombieMaleSlowWalk);
-    AssetsLoad(assets, Anim_ZombieMaleWalk);
-    AssetsLoad(assets, Anim_ZombieMaleWalkAgressive);
-    AssetsLoad(assets, Anim_ZombieMaleWalkLimp);
-    AssetsLoad(assets, Anim_ZombieMaleCrawlingForward);
-    AssetsLoad(assets, Anim_ZombieMaleCrawlingIdle);
+    Assets_Load(assets, Anim_ZombieMaleAttackLeft);
+    Assets_Load(assets, Anim_ZombieMaleAttackRight);
+    Assets_Load(assets, Anim_ZombieMaleIdle);
+    Assets_Load(assets, Anim_ZombieMaleIdleAlert);
+    Assets_Load(assets, Anim_ZombieMaleIdle2);
+    Assets_Load(assets, Anim_ZombieMaleRunning);
+    Assets_Load(assets, Anim_ZombieMaleSlowWalk);
+    Assets_Load(assets, Anim_ZombieMaleWalk);
+    Assets_Load(assets, Anim_ZombieMaleWalkAgressive);
+    Assets_Load(assets, Anim_ZombieMaleWalkLimp);
+    Assets_Load(assets, Anim_ZombieMaleCrawlingForward);
+    Assets_Load(assets, Anim_ZombieMaleCrawlingIdle);
 
-    AssetsLoad(assets, Anim_ZombieFemaleAttackLeft);
-    AssetsLoad(assets, Anim_ZombieFemaleAttackRight);
-    AssetsLoad(assets, Anim_ZombieFemaleIdle);
-    AssetsLoad(assets, Anim_ZombieFemaleIdleAlert);
-    AssetsLoad(assets, Anim_ZombieFemaleIdle2);
-    AssetsLoad(assets, Anim_ZombieFemaleRunning);
-    AssetsLoad(assets, Anim_ZombieFemaleSlowWalk);
-    AssetsLoad(assets, Anim_ZombieFemaleWalk);
-    AssetsLoad(assets, Anim_ZombieFemaleWalkAgressive);
-    AssetsLoad(assets, Anim_ZombieFemaleWalkLimp);
-    AssetsLoad(assets, Anim_ZombieFemaleCrawlingForward);
-    AssetsLoad(assets, Anim_ZombieFemaleCrawlingIdle);
+    Assets_Load(assets, Anim_ZombieFemaleAttackLeft);
+    Assets_Load(assets, Anim_ZombieFemaleAttackRight);
+    Assets_Load(assets, Anim_ZombieFemaleIdle);
+    Assets_Load(assets, Anim_ZombieFemaleIdleAlert);
+    Assets_Load(assets, Anim_ZombieFemaleIdle2);
+    Assets_Load(assets, Anim_ZombieFemaleRunning);
+    Assets_Load(assets, Anim_ZombieFemaleSlowWalk);
+    Assets_Load(assets, Anim_ZombieFemaleWalk);
+    Assets_Load(assets, Anim_ZombieFemaleWalkAgressive);
+    Assets_Load(assets, Anim_ZombieFemaleWalkLimp);
+    Assets_Load(assets, Anim_ZombieFemaleCrawlingForward);
+    Assets_Load(assets, Anim_ZombieFemaleCrawlingIdle);
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
@@ -429,7 +437,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         Assets*   assets   = state->assets;
 
         RendererInit(renderer, arena, gl, platform);
-        AssetsInit(assets, arena, renderer, platform);
+        Assets_Init(assets, arena, renderer, platform);
         EntityManagerInit(state->entityManager, arena, assets);
         UI_Init(state->ui, arena, renderer, platform);
 
@@ -489,10 +497,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         LoadAssets(assets);
 
-        Entity* player  = EntitySpawn(state->entityManager, EntityType_Player, { -108.0f, 0.0f, 21.15f });
+        Entity* player  = Entity_Spawn(state->entityManager, EntityType_Player, { -108.0f, 0.0f, 21.15f });
         player->forward = { 0.0f, 0.0f, -1.0f };
 
-        Entity* enemy       = EntitySpawn(state->entityManager, EntityType_Enemy, { -108.0f, 0.0f, 20.15f });
+        Entity* enemy       = Entity_Spawn(state->entityManager, EntityType_Enemy, { -108.0f, 0.0f, 20.15f });
         enemy->targetEntity = player;
 
         for (u32 colliderIndex = 0; colliderIndex < ArrayCount(gWorldColliders); colliderIndex++)
@@ -504,11 +512,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         for (u32 i = 0; i < 20; i++)
         {
             {
-                Entity* enemy1       = EntitySpawn(state->entityManager, EntityType_Enemy, { (f32)i, 0.0f, -12.0f });
+                Entity* enemy1       = Entity_Spawn(state->entityManager, EntityType_Enemy, { (f32)i, 0.0f, -12.0f });
                 enemy1->targetEntity = player;
             }
             {
-                Entity* enemy1       = EntitySpawn(state->entityManager, EntityType_Enemy, { (f32)i, 0.0f, 12.0f });
+                Entity* enemy1       = Entity_Spawn(state->entityManager, EntityType_Enemy, { (f32)i, 0.0f, 12.0f });
                 enemy1->targetEntity = player;
             }
         }
@@ -526,7 +534,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     glm::uvec2     windowDim     = platform->WindowGetDimension();
     EntityManager* entityManager = state->entityManager;
-    Entity*        player        = EntityGet(entityManager, 0);
+    Entity*        player        = Entity_Get(entityManager, 0);
+    Entity*        enemy1        = Entity_Get(entityManager, 1);
     Assets*        assets        = state->assets;
     UI*            ui            = state->ui;
 
@@ -583,7 +592,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             state->mode = GameMode_Pause;
         }
 
-        UpdatePlayer(player, controller, entityManager);
+        UpdatePlayer(player, controller, entityManager, delta);
         UpdateEnemies(entityManager, assets, delta);
         Physics_Update(entityManager, delta);
 
@@ -648,7 +657,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
     case GameMode_Play:
     {
-        Texture* crosshairAtlas = AssetsTextureGet(assets, Texture_Crosshair);
+        Texture* crosshairAtlas = Assets_GetTexture(assets, Texture_Crosshair);
 
         // 2D
         {
@@ -681,9 +690,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // Parking scene
         {
+            PushRenderProgramUse(renderer, state->program->id);
             PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", true);
 
-            Model* scene = AssetsModelGet(assets, Model_Parking);
+            Model* scene = Assets_GetModel(assets, Model_Parking);
 
             // World matrix
             glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, scene->localTranslation) *
@@ -704,12 +714,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         // Entities
         {
-            Texture* zombieTexture = AssetsModelGet(assets, Model_ZombieMaleA)->textures;
-
-            PushRenderProgramUse(renderer, state->programSkinned->id);
-            PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "viewProj", viewProj);
-            PushRenderBindTexture(renderer, zombieTexture, 0);
-            PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 0);
+            Texture* zombieTexture = Assets_GetModel(assets, Model_ZombieMaleA)->textures;
 
             for (u32 entityIndex = 1; entityIndex < entityManager->entityCount; entityIndex++)
             {
@@ -720,7 +725,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     continue;
                 }
 
-                Model* entityModel = AssetsModelGet(assets, entity->assetID);
+                PushRenderProgramUse(renderer, state->programSkinned->id);
+                PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "viewProj", viewProj);
+                PushRenderBindTexture(renderer, zombieTexture, 0);
+                PushRenderUploadUniformInt(renderer, state->programSkinned->id, "diffuseMap", 0);
+
+                Model* entityModel = Assets_GetModel(assets, entity->assetID);
 
                 glm::mat4 worldMatrix = glm::translate(glm::mat4{ 1.0f }, entity->position) *
                                         glm::mat4_cast(glm::quat(entity->rotation)) *
@@ -728,7 +738,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
                 Skeleton* skeleton = entity->skeleton;
 
-                for (u32 i = 0; i < skeleton->jointCount - 1; i++)
+                for (u32 i = 0; i < skeleton->jointCount; i++)
                 {
                     char uniformBuffer[64];
                     sprintf(uniformBuffer, "%s[%d]", "uJoints", i);
@@ -736,7 +746,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                     if (entity->animation.current)
                     {
                         u32       jointIndex  = skeleton->jointIndexBindOrder[i];
-                        glm::mat4 jointMatrix = skeleton->jointMatrices[jointIndex];
+                        glm::mat4 jointMatrix = skeleton->jointSkinMatrices[jointIndex];
                         PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, uniformBuffer, jointMatrix);
                     }
                     else
@@ -748,6 +758,38 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
                 PushRenderUploadUniformMat4x4(renderer, state->programSkinned->id, "world", worldMatrix);
                 PushRenderDrawBuffer(renderer, entityModel->meshes->gpuBuffer);
+
+                // Debug skeleton
+#if 0
+                {
+                    PushRenderProgramUse(renderer, state->program->id);
+
+                    PushRenderUploadUniformMat4x4(renderer, state->program->id, "viewProj", viewProj);
+                    PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", 0);
+                    PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_white);
+
+                    for (u32 jointIndex = 0; jointIndex < skeleton->jointCount; jointIndex++)
+                    {
+                        Joint* joint = &skeleton->joints[jointIndex];
+
+                        glm::mat4 worldPos = worldMatrix * skeleton->jointGlobalMatrices[jointIndex];
+
+                        PushRenderUploadUniformMat4x4(renderer, state->program->id, "world", worldPos);
+                        PushRenderDrawBuffer(renderer, state->cubeBuffer, GL_TRIANGLES);
+
+                        glm::vec3 p0 = { worldPos[3][0], worldPos[3][1], worldPos[3][2] };
+
+                        for (u32 childJointIndex = 0; childJointIndex < joint->childrenCount; childJointIndex++)
+                        {
+                            u32       jointIndex    = joint->childrenIndexes[childJointIndex];
+                            glm::mat4 childWorldPos = worldMatrix * skeleton->jointGlobalMatrices[jointIndex];
+                            glm::vec3 p1            = { childWorldPos[3][0], childWorldPos[3][1], childWorldPos[3][2] };
+
+                            DrawLine(renderer, p0, p1, color_green);
+                        }
+                    }
+                }
+#endif
             }
         }
 
