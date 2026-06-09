@@ -133,6 +133,7 @@ struct GameState
     // TODO: Move sprite and audio clips to assets
     Sprite2D*  pistolSprite;
     Sprite2D*  shotgunSprite;
+    Sprite2D*  bloodSprite;
     AudioClip* pistolShot;
     AudioClip* backgroundMusic;
 

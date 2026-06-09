@@ -147,7 +147,7 @@ global_variable WorldCollider gWorldColliders[] = {
 
 // Physics system tick
 // TODO: Move collision solving/detection to this function
-internal void Physics_Update(EntityManager* manager, f32 delta)
+internal void Physics_Update(EntityManager* manager, PlatformAPI* platform, f32 delta)
 {
     f32 maxSpeed          = 0.0f;
     f32 accelerationSpeed = 0.0f;
@@ -161,6 +161,12 @@ internal void Physics_Update(EntityManager* manager, f32 delta)
         {
             maxSpeed          = playerMaxSpeed;
             accelerationSpeed = playerMoveAcceleration;
+
+            // Is shooting
+            if (entity->weapon->playingAnimation)
+            {
+                // platform->Logf("Player shooting");
+            }
         }
         else if (entity->type == EntityType_Enemy)
         {
@@ -416,6 +422,7 @@ internal void LoadAssets(Assets* assets)
     Assets_Load(assets, Texture_Crosshair);
     Assets_Load(assets, Texture_ShotgunSprite);
     Assets_Load(assets, Texture_PistolSprite);
+    Assets_Load(assets, Texture_BloodSprite);
 
     Assets_Load(assets, Anim_ZombieMaleAttackLeft);
     Assets_Load(assets, Anim_ZombieMaleAttackRight);
@@ -694,6 +701,46 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             shotgunSprite->sizes[13].y     = 80.0f;
         }
 
+        {
+
+            state->bloodSprite    = PushStruct(arena, Sprite2D);
+            Sprite2D* bloodSprite = state->bloodSprite;
+
+            bloodSprite->texture          = Assets_GetTexture(assets, Texture_BloodSprite);
+            bloodSprite->frameCount       = 4;
+            bloodSprite->sizes            = PushArray(arena, bloodSprite->frameCount, glm::vec2);
+            bloodSprite->positions        = PushArray(arena, bloodSprite->frameCount, glm::vec2);
+            bloodSprite->frameIndex       = 0;
+            bloodSprite->playingAnimation = false;
+            bloodSprite->timer            = 0.0f;
+            bloodSprite->animSpeedSeconds = 0.05f;
+            bloodSprite->drawSize         = glm::vec2{ 256.0, 256.0f };
+
+            // Frame 0
+            bloodSprite->positions[0].x = 16.0f;
+            bloodSprite->positions[0].y = 16.0f;
+            bloodSprite->sizes[0].x     = 64.0f;
+            bloodSprite->sizes[0].y     = 64.0f;
+
+            // Frame 1
+            bloodSprite->positions[1].x = 16.0f;
+            bloodSprite->positions[1].y = 116.0f;
+            bloodSprite->sizes[1].x     = 64.0f;
+            bloodSprite->sizes[1].y     = 64.0f;
+
+            // Frame 2
+            bloodSprite->positions[2].x = 16.0f;
+            bloodSprite->positions[2].y = 216.0f;
+            bloodSprite->sizes[2].x     = 64.0f;
+            bloodSprite->sizes[2].y     = 64.0f;
+
+            // Frame 3
+            bloodSprite->positions[3].x = 16.0f;
+            bloodSprite->positions[3].y = 316.0f;
+            bloodSprite->sizes[3].x     = 64.0f;
+            bloodSprite->sizes[3].y     = 64.0f;
+        }
+
         // player->weapon = state->pistolSprite;
         player->weapon = state->shotgunSprite;
 
@@ -761,7 +808,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         UpdatePlayer(state, input, platform, delta);
         UpdateEnemies(entityManager, assets, delta);
-        Physics_Update(entityManager, delta);
+        Physics_Update(entityManager, platform, delta);
 
         break;
     }

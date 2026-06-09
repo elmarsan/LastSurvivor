@@ -21,6 +21,7 @@ Export exports[AssetCount] = {
     { "crosshairs.png", assetFilenames[Texture_Crosshair] },
     { "sprite_shotgun_modified.png", assetFilenames[Texture_ShotgunSprite] },
     { "sprite_pistol_modified.png", assetFilenames[Texture_PistolSprite] },
+    { "sprite_blood.png", assetFilenames[Texture_BloodSprite] },
 
     // Zombie male animations
     { "ZombieMale@attack_left_70f.gltf", assetFilenames[Anim_ZombieMaleAttackLeft] },

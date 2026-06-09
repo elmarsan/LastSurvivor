@@ -1,7 +1,7 @@
 #pragma once
 
 #define MODEL_COUNT              Texture_Crosshair
-#define TEXTURE_COUNT            3
+#define TEXTURE_COUNT            4
 #define ANIMATION_COUNT          AssetCount - TEXTURE_COUNT
 #define JOINT_MAX_CHILDREN_COUNT 10
 #define MODEL_SCALE              glm::vec3{ 0.015f, 0.015f, 0.015f }
@@ -15,6 +15,7 @@ enum Asset
     Texture_Crosshair,
     Texture_ShotgunSprite,
     Texture_PistolSprite,
+    Texture_BloodSprite,
 
     // TODO: Asset pipeline: group animation into files.
     // Example zombie male with (attackt_left, attackt_right, walk, etc...)
@@ -59,6 +60,7 @@ char* assetFilenames[AssetCount] = {
     "../data/crosshairs.svv",
     "../data/sprite_shotgun_modified.svv",
     "../data/sprite_pistol_modified.svv",
+    "../data/sprite_blood.svv",
 
     // Zombie male animations
     "../data/zombie_male_attack_left.svv",
