@@ -14,6 +14,19 @@
 - (Game): game mode transitions
 */
 
+internal GameController* GetPlayerController(GameInput* input)
+{
+    GameController* keyboard   = GetController(input, CONTROLLER_KEYBOARD);
+    GameController* gamepad    = GetController(input, CONTROLLER_GAMEPAD);
+    GameController* controller = keyboard;
+    if (gamepad->lastTick > keyboard->lastTick)
+    {
+        controller = gamepad;
+    }
+
+    return controller;
+}
+
 internal WorldCollider BuildWorldCollider(glm::vec3 position, glm::vec3 min, glm::vec3 max)
 {
     WorldCollider collider;
@@ -86,51 +99,51 @@ global_variable WorldCollider gWorldColliders[] = {
     BuildWorldCollider({ -212.8f, 1.2f, 47.1f }, { -0.5f, -1.0f, -0.3f }, { 0.05f, 1.0f, 0.2f }),
 };
 
-internal void Shoot(AmmoRound* ammoRound, AmmoRoundType type, glm::vec3 position, glm::vec3 direction)
-{
-    Particle* particle = &ammoRound->particle;
+// internal void Shoot(AmmoRound* ammoRound, AmmoRoundType type, glm::vec3 position, glm::vec3 direction)
+//{
+//     Particle* particle = &ammoRound->particle;
 
-    direction            = SafeNorm(direction);
-    ammoRound->type      = type;
-    particle->position   = position;
-    particle->forceAccum = glm::vec3{ 0.0f, 0.0f, 0.0f };
+//    direction            = SafeNorm(direction);
+//    ammoRound->type      = type;
+//    particle->position   = position;
+//    particle->forceAccum = glm::vec3{ 0.0f, 0.0f, 0.0f };
 
-    switch (ammoRound->type)
-    {
-    case PISTOL:
-    {
-        f32 speed = 35.0f; // 35m/s
+//    switch (ammoRound->type)
+//    {
+//    case PISTOL:
+//    {
+//        f32 speed = 35.0f; // 35m/s
 
-        Particle_SetMass(particle, 2.0f); // 2.0kg
-        particle->velocity     = direction * speed;
-        particle->acceleration = GRAVITY;
-        particle->damping      = 0.99f;
-        break;
-    }
-    // case ARTILLERY:
-    //{
-    //     Particle_SetMass(particle, 200.0f); // 200.0kg
-    //     particle->velocity     = glm::vec3{ 0.0f, 30.0f, -40.0f };
-    //     particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
-    //     particle->damping      = 0.99f;
-    //     break;
-    // }
-    case GRENADE:
-    {
-        f32 speed = 10.0f; // 10m/s
+//        Particle_SetMass(particle, 2.0f); // 2.0kg
+//        particle->velocity     = direction * speed;
+//        particle->acceleration = GRAVITY;
+//        particle->damping      = 0.99f;
+//        break;
+//    }
+//    // case ARTILLERY:
+//    //{
+//    //     Particle_SetMass(particle, 200.0f); // 200.0kg
+//    //     particle->velocity     = glm::vec3{ 0.0f, 30.0f, -40.0f };
+//    //     particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
+//    //     particle->damping      = 0.99f;
+//    //     break;
+//    // }
+//    case GRENADE:
+//    {
+//        f32 speed = 10.0f; // 10m/s
 
-        Particle_SetMass(particle, 1.0f); // 1.0kg
-        particle->velocity     = direction * speed;
-        particle->velocity.y   = 10.0f;
-        particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
-        particle->damping      = 0.8f;
+//        Particle_SetMass(particle, 1.0f); // 1.0kg
+//        particle->velocity     = direction * speed;
+//        particle->velocity.y   = 10.0f;
+//        particle->acceleration = glm::vec3{ 0.0f, -20.0f, 0.0f };
+//        particle->damping      = 0.8f;
 
-        break;
-    }
+//        break;
+//    }
 
-        InvalidDefaultCase;
-    }
-}
+//        InvalidDefaultCase;
+//    }
+//}
 
 // Physics system tick
 // TODO: Move collision solving/detection to this function
@@ -175,13 +188,18 @@ internal void Physics_Update(EntityManager* manager, f32 delta)
     }
 }
 
-internal void UpdatePlayer(Entity* player, GameController* controller, EntityManager* manager, f32 delta)
+internal void UpdatePlayer(GameState* state, GameInput* input, PlatformAPI* platform, f32 delta)
 {
+    EntityManager*  manager    = state->entityManager;
+    Entity*         player     = Entity_Get(manager, 0);
+    GameController* controller = GetPlayerController(input);
+    Assets*         assets     = state->assets;
+
+    // Note: player must be first entity
     Assert(player->type == EntityType_Player);
 
     f32 xOffset = 0.0f;
     f32 yOffset = 0.0f;
-
     // TODO: Config mouse/gamepad sensitivity
     if (controller->type == ControllerType_Keyboard)
     {
@@ -235,8 +253,12 @@ internal void UpdatePlayer(Entity* player, GameController* controller, EntityMan
     glm::vec3 right = glm::normalize(glm::cross(moveForward, worldUp));
 
     player->wishDir = { 0.0f, 0.0f, 0.0f };
+    b32 shoot       = false;
+
     if (controller->type == ControllerType_Keyboard)
     {
+        Mouse* mouse = &controller->mouse;
+
         if (ButtonIsDown(controller->moveUp))
         {
             player->wishDir += moveForward;
@@ -253,14 +275,41 @@ internal void UpdatePlayer(Entity* player, GameController* controller, EntityMan
         {
             player->wishDir += right;
         }
+
+        if (ButtonIsPressed(mouse->middle))
+        {
+            if (player->weapon == state->pistolSprite)
+            {
+                player->weapon = state->shotgunSprite;
+            }
+            else
+            {
+                player->weapon = state->pistolSprite;
+            }
+        }
+        else if (ButtonIsPressed(mouse->left))
+        {
+            shoot = true;
+        }
     }
     else /* Gamepad */
     {
         Gamepad gamepad = controller->gamepad;
         player->wishDir += moveForward * gamepad.leftStick.y;
         player->wishDir += right * gamepad.leftStick.x;
+
+        if (ButtonIsPressed(controller->rightTrigger))
+        {
+            shoot = true;
+        }
     }
     player->wishDir = SafeNorm(player->wishDir);
+
+    if (shoot)
+    {
+        platform->AudioClipPlay(state->pistolShot, 0);
+        player->weapon->playingAnimation = true;
+    }
     /////////////////////////////////////////////////////////////////////////////////
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -300,12 +349,6 @@ internal void UpdatePlayer(Entity* player, GameController* controller, EntityMan
                 }
             }
         }
-    }
-    /////////////////////////////////////////////////////////////////////////////////
-
-    /////////////////////////////////////////////////////////////////////////////////
-    // Animation
-    {
     }
     /////////////////////////////////////////////////////////////////////////////////
 }
@@ -371,6 +414,8 @@ internal void LoadAssets(Assets* assets)
     Assets_Load(assets, Model_Parking);
 
     Assets_Load(assets, Texture_Crosshair);
+    Assets_Load(assets, Texture_ShotgunSprite);
+    Assets_Load(assets, Texture_PistolSprite);
 
     Assets_Load(assets, Anim_ZombieMaleAttackLeft);
     Assets_Load(assets, Anim_ZombieMaleAttackRight);
@@ -522,7 +567,135 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
 #endif
 
-        // WorldComputeStaticNodes(state->world, state->entityManager);
+        {
+            state->pistolSprite                   = PushStruct(arena, Sprite2D);
+            state->pistolSprite->texture          = Assets_GetTexture(assets, Texture_PistolSprite);
+            state->pistolSprite->frameCount       = 5;
+            state->pistolSprite->sizes            = PushArray(arena, state->pistolSprite->frameCount, glm::vec2);
+            state->pistolSprite->positions        = PushArray(arena, state->pistolSprite->frameCount, glm::vec2);
+            state->pistolSprite->frameIndex       = 0;
+            state->pistolSprite->playingAnimation = false;
+            state->pistolSprite->timer            = 0.0f;
+            state->pistolSprite->animSpeedSeconds = 0.02f;
+            state->pistolSprite->drawSize         = glm::vec2{ 256.0f, 256.0f };
+
+            for (u32 frameIndex = 0; frameIndex < state->pistolSprite->frameCount; frameIndex++)
+            {
+                state->pistolSprite->sizes[frameIndex].x = 118.0f;
+                state->pistolSprite->sizes[frameIndex].y = 118.0f;
+
+                state->pistolSprite->positions[frameIndex].x = (118.0f * (f32)frameIndex);
+                state->pistolSprite->positions[frameIndex].y = 0;
+            }
+        }
+
+        {
+            state->shotgunSprite    = PushStruct(arena, Sprite2D);
+            Sprite2D* shotgunSprite = state->shotgunSprite;
+
+            shotgunSprite->texture          = Assets_GetTexture(assets, Texture_ShotgunSprite);
+            shotgunSprite->frameCount       = 15;
+            shotgunSprite->sizes            = PushArray(arena, shotgunSprite->frameCount, glm::vec2);
+            shotgunSprite->positions        = PushArray(arena, shotgunSprite->frameCount, glm::vec2);
+            shotgunSprite->frameIndex       = 0;
+            shotgunSprite->playingAnimation = false;
+            shotgunSprite->timer            = 0.0f;
+            shotgunSprite->animSpeedSeconds = 0.05f;
+            shotgunSprite->drawSize         = glm::vec2{ 256.0, 256.0f };
+
+            // Frame 0
+            shotgunSprite->positions[0].x = 0.0f;
+            shotgunSprite->positions[0].y = 0.0f;
+            shotgunSprite->sizes[0].x     = 81.0f;
+            shotgunSprite->sizes[0].y     = 102.0f;
+
+            // Frame 1
+            shotgunSprite->positions[1].x = 81.0f;
+            shotgunSprite->positions[1].y = 0.0f;
+            shotgunSprite->sizes[1].x     = 93.0f;
+            shotgunSprite->sizes[1].y     = 112.0f;
+
+            // Frame 2
+            shotgunSprite->positions[2].x = 174.0f;
+            shotgunSprite->positions[2].y = 0.0f;
+            shotgunSprite->sizes[2].x     = 108.0f;
+            shotgunSprite->sizes[2].y     = 112.0f;
+
+            // Frame 3
+            shotgunSprite->positions[3].x = 296.0f;
+            shotgunSprite->positions[3].y = 0.0f;
+            shotgunSprite->sizes[3].x     = 103.0f;
+            shotgunSprite->sizes[3].y     = 113.0f;
+
+            // Frame 4
+            shotgunSprite->positions[4].x = 0.0f;
+            shotgunSprite->positions[4].y = 113.0f;
+            shotgunSprite->sizes[4].x     = 103.0f;
+            shotgunSprite->sizes[4].y     = 114.0f;
+
+            // Frame 5
+            shotgunSprite->positions[5].x = 131.0f;
+            shotgunSprite->positions[5].y = 113.0f;
+            shotgunSprite->sizes[5].x     = 106.0f;
+            shotgunSprite->sizes[5].y     = 111.0f;
+
+            // Frame 6
+            shotgunSprite->positions[6].x = 257.0f;
+            shotgunSprite->positions[6].y = 114.0f;
+            shotgunSprite->sizes[6].x     = 145.0f;
+            shotgunSprite->sizes[6].y     = 105.0f;
+
+            // Frame 7
+            shotgunSprite->positions[7].x = 0.0f;
+            shotgunSprite->positions[7].y = 228.0f;
+            shotgunSprite->sizes[7].x     = 146.0f;
+            shotgunSprite->sizes[7].y     = 105.0f;
+
+            // Frame 8
+            shotgunSprite->positions[8].x = 152.0f;
+            shotgunSprite->positions[8].y = 228.0f;
+            shotgunSprite->sizes[8].x     = 123.0f;
+            shotgunSprite->sizes[8].y     = 105.0f;
+
+            // Frame 9
+            shotgunSprite->positions[9].x = 294.0f;
+            shotgunSprite->positions[9].y = 225.0f;
+            shotgunSprite->sizes[9].x     = 140.0f;
+            shotgunSprite->sizes[9].y     = 119.0f;
+
+            // Frame 10
+            shotgunSprite->positions[10].x = 0.0f;
+            shotgunSprite->positions[10].y = 347.0f;
+            shotgunSprite->sizes[10].x     = 120.0f;
+            shotgunSprite->sizes[10].y     = 127.0f;
+
+            // Frame 11
+            shotgunSprite->positions[11].x = 147.0f;
+            shotgunSprite->positions[11].y = 351.0f;
+            shotgunSprite->sizes[11].x     = 120.0f;
+            shotgunSprite->sizes[11].y     = 120.0f;
+
+            // Frame 12
+            shotgunSprite->positions[12].x = 291.0f;
+            shotgunSprite->positions[12].y = 351.0f;
+            shotgunSprite->sizes[12].x     = 125.0f;
+            shotgunSprite->sizes[12].y     = 114.0f;
+
+            // Frame 13
+            shotgunSprite->positions[13].x = 23.0f;
+            shotgunSprite->positions[13].y = 495.0f;
+            shotgunSprite->sizes[13].x     = 127.0f;
+            shotgunSprite->sizes[13].y     = 78.0f;
+
+            // Frame 14
+            shotgunSprite->positions[13].x = 162.0f;
+            shotgunSprite->positions[13].y = 496.0f;
+            shotgunSprite->sizes[13].x     = 128.0f;
+            shotgunSprite->sizes[13].y     = 80.0f;
+        }
+
+        // player->weapon = state->pistolSprite;
+        player->weapon = state->shotgunSprite;
 
         platform->CursorHide();
     }
@@ -540,13 +713,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     UI*            ui            = state->ui;
 
     // Set current controller
-    GameController* keyboard   = GetController(input, CONTROLLER_KEYBOARD);
-    GameController* gamepad    = GetController(input, CONTROLLER_GAMEPAD);
-    GameController* controller = keyboard;
-    if (gamepad->lastTick > keyboard->lastTick)
-    {
-        controller = gamepad;
-    }
+    GameController* controller = GetPlayerController(input);
 
     if (player->health <= 0)
     {
@@ -560,7 +727,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
     case GameMode_Pause:
     {
-        if (controller == keyboard)
+        if (controller->type == ControllerType_Keyboard)
         {
             platform->CursorShow();
         }
@@ -592,7 +759,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             state->mode = GameMode_Pause;
         }
 
-        UpdatePlayer(player, controller, entityManager, delta);
+        UpdatePlayer(state, input, platform, delta);
         UpdateEnemies(entityManager, assets, delta);
         Physics_Update(entityManager, delta);
 
@@ -600,41 +767,41 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
     }
 
-    AmmoRound* ammoRound = &state->ammoRound;
+    //    AmmoRound* ammoRound = &state->ammoRound;
 
-    // Ballistic test
-    {
-        // Shoot
-        if (ammoRound->type == UNKNOWN)
-        {
-            glm::vec3 position{ player->position.x, 1.5f, player->position.z };
-            glm::vec3 direction{ sinf(player->rotation.y), 0.0f, cosf(player->rotation.y) };
+    //    // Ballistic test
+    //    {
+    //        // Shoot
+    //        if (ammoRound->type == UNKNOWN)
+    //        {
+    //            glm::vec3 position{ player->position.x, 1.5f, player->position.z };
+    //            glm::vec3 direction = player->forward;
 
-#if BUILD_TYPE_DEBUG
+    // #if BUILD_TYPE_DEBUG
 
-            if (ButtonIsPressed(input->debug.f1))
-            {
-                platform->Logf("Shooting....");
-                Shoot(ammoRound, PISTOL, position, direction);
-            }
-            else if (ButtonIsPressed(input->debug.f2))
-            {
-                platform->Logf("Shooting....");
-                Shoot(ammoRound, GRENADE, position, direction);
-            }
-#endif
-        }
+    //            if (ButtonIsPressed(input->debug.f1))
+    //            {
+    //                platform->Logf("Shooting....");
+    //                Shoot(ammoRound, PISTOL, position, sdirection);
+    //            }
+    //            else if (ButtonIsPressed(input->debug.f2))
+    //            {
+    //                platform->Logf("Shooting....");
+    //                Shoot(ammoRound, GRENADE, position, direction);
+    //            }
+    // #endif
+    //        }
 
-        // Update
-        Particle_Integrate(&ammoRound->particle, delta);
-        if (ammoRound->type != UNKNOWN &&
-            (ammoRound->particle.position.z < -50.0f || ammoRound->particle.position.z > 50.0f ||
-             ammoRound->particle.position.y < 0.0f))
-        {
-            platform->Logf("Ammo round destroyed");
-            ammoRound->type = UNKNOWN;
-        }
-    }
+    //        // Update
+    //        Particle_Integrate(&ammoRound->particle, delta);
+    //        if (ammoRound->type != UNKNOWN &&
+    //            (ammoRound->particle.position.z < -50.0f || ammoRound->particle.position.z > 50.0f ||
+    //             ammoRound->particle.position.y < 0.0f))
+    //        {
+    //            platform->Logf("Ammo round destroyed");
+    //            ammoRound->type = UNKNOWN;
+    //        }
+    //    }
 
     // ----------------------------------------------------------------------------
 
@@ -668,25 +835,58 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
             // TODO: Pass tint color
             DrawRect(renderer, aimingDotPos, aimingDotSize, crosshairAtlas, { 0.0f, 0.0f }, crosshairSpriteSize);
+
+            // Pistol sprite
+            {
+                Sprite2D* weapon = player->weapon;
+
+                if (weapon->playingAnimation)
+                {
+                    weapon->timer += delta;
+                    if (weapon->timer >= weapon->animSpeedSeconds)
+                    {
+                        weapon->timer = 0.0f;
+                        weapon->frameIndex++;
+
+                        if (weapon->frameIndex >= (s32)weapon->frameCount)
+                        {
+                            weapon->frameIndex       = 0;
+                            weapon->playingAnimation = false;
+                        }
+                    }
+                }
+
+                //////////////////////
+                // Draw animation
+                glm::vec2 frameTexturePos  = weapon->positions[weapon->frameIndex];
+                glm::vec2 frameTextureSize = weapon->sizes[weapon->frameIndex];
+
+                glm::vec2 weaponScreenPos{ (windowDim.x * 0.5f) - (weapon->drawSize.x * 0.5f),
+                                           windowDim.y - weapon->drawSize.y };
+
+                DrawRect(renderer, weaponScreenPos, weapon->drawSize, weapon->texture, frameTexturePos,
+                         frameTextureSize);
+                //////////////////////
+            }
         }
 
         // 3D
         PushRenderProgramUse(renderer, state->program->id);
         PushRenderUploadUniformMat4x4(renderer, state->program->id, "viewProj", viewProj);
 
-        // Projectile
-        {
-            if (ammoRound->type != UNKNOWN)
-            {
-                glm::mat4 world = glm::translate(glm::mat4{ 1.0f }, ammoRound->particle.position) *
-                                  glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.15f });
+        //      // Projectile
+        //      {
+        //          if (ammoRound->type != UNKNOWN)
+        //          {
+        //              glm::mat4 world = glm::translate(glm::mat4{ 1.0f }, ammoRound->particle.position) *
+        //                                glm::scale(glm::mat4{ 1.0f }, glm::vec3{ 0.15f });
 
-                PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", false);
-                PushRenderUploadUniformMat4x4(renderer, state->program->id, "world", world);
-                PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_red);
-                PushRenderDrawBuffer(renderer, state->cubeBuffer);
-            }
-        }
+        //              PushRenderUploadUniformInt(renderer, state->program->id, "hasDiffuse", false);
+        //              PushRenderUploadUniformMat4x4(renderer, state->program->id, "world", world);
+        //              PushRenderUploadUniformVec4(renderer, state->program->id, "color", color_red);
+        //              PushRenderDrawBuffer(renderer, state->cubeBuffer);
+        //          }
+        //      }
 
         // Parking scene
         {

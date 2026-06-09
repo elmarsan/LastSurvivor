@@ -139,10 +139,6 @@ void DebugUpdateAndRender(Debug* debug, GameInput* input, PlatformAPI* platform)
             }
         }
     }
-    // Debug pistol animations
-    if (ButtonIsPressed(input->debug.f2))
-    {
-    }
 
 #if DEBUG_COORDINATES
     char coordBuffer[64];

@@ -53,7 +53,7 @@ void Assets_Load(Assets* assets, Asset id)
     char* assetFilename = assetFilenames[id];
     platform->Logf("Loading asset '%s'", assetFilename);
 
-    if (id == Texture_Crosshair)
+    if (id >= Texture_Crosshair && id < Anim_ZombieMaleAttackLeft)
     {
         u32 textureId               = id - Texture_Crosshair;
         assets->textures[textureId] = PushStruct(arena, Texture);
@@ -252,8 +252,8 @@ Model* Assets_GetModel(Assets* assets, Asset id)
 
 Texture* Assets_GetTexture(Assets* assets, Asset id)
 {
-    Assert(id == Texture_Crosshair);
-    return assets->textures[0];
+    Assert(id >= Texture_Crosshair && id < Anim_ZombieMaleAttackLeft);
+    return assets->textures[id - Texture_Crosshair];
 }
 
 Animation* Assets_GetAnimation(Assets* assets, Asset id)

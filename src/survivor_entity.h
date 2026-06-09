@@ -57,6 +57,7 @@ struct Entity
     Asset           assetID;
     Skeleton*       skeleton;
     ActiveAnimation animation;
+    Sprite2D*       weapon;
 };
 
 struct EntityManager

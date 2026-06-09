@@ -1,7 +1,7 @@
 #pragma once
 
 #define MODEL_COUNT              Texture_Crosshair
-#define TEXTURE_COUNT            1
+#define TEXTURE_COUNT            3
 #define ANIMATION_COUNT          AssetCount - TEXTURE_COUNT
 #define JOINT_MAX_CHILDREN_COUNT 10
 #define MODEL_SCALE              glm::vec3{ 0.015f, 0.015f, 0.015f }
@@ -13,6 +13,8 @@ enum Asset
     Model_Parking,
 
     Texture_Crosshair,
+    Texture_ShotgunSprite,
+    Texture_PistolSprite,
 
     // TODO: Asset pipeline: group animation into files.
     // Example zombie male with (attackt_left, attackt_right, walk, etc...)
@@ -55,6 +57,8 @@ char* assetFilenames[AssetCount] = {
 
     // Textures
     "../data/crosshairs.svv",
+    "../data/sprite_shotgun_modified.svv",
+    "../data/sprite_pistol_modified.svv",
 
     // Zombie male animations
     "../data/zombie_male_attack_left.svv",
@@ -203,6 +207,19 @@ struct WorldCollider
 {
     glm::vec3 position;
     AABB      aabb;
+};
+
+struct Sprite2D
+{
+    Texture*   texture;
+    u32        frameCount;
+    glm::vec2* positions;
+    glm::vec2* sizes;
+    s32        frameIndex;
+    b32        playingAnimation;
+    glm::vec2  drawSize;
+    f32        timer;
+    f32        animSpeedSeconds;
 };
 
 #pragma pack(push, 1)
